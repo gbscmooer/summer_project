@@ -40,6 +40,13 @@ const routes = [
     // 需要登录
     meta: { title: '我的', requiresAuth: true }
   },
+  {
+    path: '/orders',
+    name: 'Orders',
+    component: () => import('@/views/Orders.vue'),
+    // 需要登录
+    meta: { title: '我的订单', requiresAuth: true }
+  },
   // 兜底：未匹配路由回首页
   {
     path: '/:pathMatch(.*)*',
