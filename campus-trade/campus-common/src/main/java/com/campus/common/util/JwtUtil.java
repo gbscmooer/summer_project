@@ -1,0 +1,44 @@
+package com.campus.common.util;
+
+import io.jsonwebtoken.*;
+import io.jsonwebtoken.io.Decoders;
+import io.jsonwebtoken.security.Keys;
+
+import javax.crypto.SecretKey;
+import java.util.Date;
+
+public class JwtUtil {
+
+    private static final String SECRET = "campus-trade-secret-key-at-least-32-bytes-long";
+    private static final long EXPIRATION_MS = 7 * 24 * 60 * 60 * 1000L; // 7天
+    private static final String USER_ID_CLAIM = "userId";
+
+    private static final SecretKey KEY = Keys.hmacShaKeyFor(SECRET.getBytes());
+
+    public static String generateToken(Long userId) {
+        return Jwts.builder()
+                .claim(USER_ID_CLAIM, userId)
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + EXPIRATION_MS))
+                .signWith(KEY)
+                .compact();
+    }
+
+    public static Long parseUserId(String token) {
+        Claims claims = Jwts.parser()
+                .verifyWith(KEY)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
+        return claims.get(USER_ID_CLAIM, Long.class);
+    }
+
+    public static boolean isValid(String token) {
+        try {
+            parseUserId(token);
+            return true;
+        } catch (JwtException | IllegalArgumentException e) {
+            return false;
+        }
+    }
+}
