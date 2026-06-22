@@ -62,9 +62,11 @@
               type="danger"
               size="large"
               :icon="ShoppingCart"
+              :loading="buying"
+              :disabled="detail.status !== 1"
               @click="onBuy"
             >
-              立即购买
+              {{ detail.status === 1 ? '立即购买' : '已售/已下架' }}
             </el-button>
           </div>
         </div>
@@ -79,15 +81,20 @@
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Picture, ShoppingCart } from '@element-plus/icons-vue'
 import { getProductDetail } from '@/api/product'
+import { createOrder } from '@/api/order'
+import { useUserStore } from '@/store/user'
 import { getStatusText, getStatusType } from '@/constants/product'
 
 const route = useRoute()
+const router = useRouter()
+const userStore = useUserStore()
 const loading = ref(false)
 const detail = ref(null)
+const buying = ref(false)
 
 const images = computed(() => {
   if (!detail.value || !Array.isArray(detail.value.images)) return []
@@ -113,9 +120,25 @@ async function fetchDetail() {
   }
 }
 
-// 订单功能尚未开发，先占位提示
-function onBuy() {
-  ElMessage.info('订单功能开发中')
+// 立即购买：未登录跳登录页（带 redirect 回跳）；已登录则真实下单，成功后进订单页
+async function onBuy() {
+  if (!userStore.isLogin) {
+    router.push({ path: '/login', query: { redirect: route.fullPath } })
+    return
+  }
+  if (buying.value) return
+  const productId = detail.value && detail.value.productId
+  if (!productId) return
+  buying.value = true
+  try {
+    const res = await createOrder({ productId })
+    ElMessage.success(res.message || '下单成功')
+    router.push('/orders')
+  } catch (e) {
+    // 失败的具体业务提示（库存不足/已售/不能买自己的等）已由响应拦截器 ElMessage 弹出
+  } finally {
+    buying.value = false
+  }
 }
 
 // 支持在详情页之间切换（路由参数变化时重新拉取）

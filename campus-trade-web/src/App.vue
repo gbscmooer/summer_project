@@ -20,6 +20,7 @@
         >
           <el-menu-item index="/">首页</el-menu-item>
           <el-menu-item index="/publish">发布</el-menu-item>
+          <el-menu-item v-if="userStore.isLogin" index="/orders">我的订单</el-menu-item>
           <el-menu-item index="/my">我的</el-menu-item>
         </el-menu>
 
@@ -69,7 +70,7 @@ const userStore = useUserStore()
 // 当前激活菜单项：仅在这三个主菜单路径下高亮
 const activeMenu = computed(() => {
   const path = route.path
-  if (path === '/' || path === '/publish' || path === '/my') {
+  if (path === '/' || path === '/publish' || path === '/my' || path === '/orders') {
     return path
   }
   return ''
