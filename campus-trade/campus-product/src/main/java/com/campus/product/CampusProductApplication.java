@@ -2,9 +2,11 @@ package com.campus.product;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
 import org.springframework.context.annotation.ComponentScan;
 
 @SpringBootApplication
+@EnableDiscoveryClient
 @ComponentScan(basePackages = {"com.campus.product", "com.campus.common"})
 public class CampusProductApplication {
     public static void main(String[] args) {
