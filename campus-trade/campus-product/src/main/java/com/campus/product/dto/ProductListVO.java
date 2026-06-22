@@ -1,0 +1,32 @@
+package com.campus.product.dto;
+
+import com.campus.product.entity.Product;
+import lombok.Data;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+@Data
+public class ProductListVO {
+    private Long productId;
+    private String title;
+    private BigDecimal price;
+    private String cover;
+    private String category;
+    private Integer status;
+    private LocalDateTime createTime;
+
+    public static ProductListVO from(Product p) {
+        ProductListVO vo = new ProductListVO();
+        vo.setProductId(p.getId());
+        vo.setTitle(p.getTitle());
+        vo.setPrice(p.getPrice());
+        vo.setCategory(p.getCategory());
+        vo.setStatus(p.getStatus());
+        vo.setCreateTime(p.getCreateTime());
+        if (p.getImages() != null && !p.getImages().isBlank()) {
+            vo.setCover(p.getImages().split(",")[0].trim());
+        }
+        return vo;
+    }
+}
