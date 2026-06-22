@@ -1,9 +1,11 @@
 package com.campus.user.service.impl;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.campus.common.exception.BizException;
 import com.campus.common.result.ResultCode;
+import com.campus.common.util.JwtUtil;
+import com.campus.user.dto.LoginRequest;
+import com.campus.user.dto.LoginResponse;
 import com.campus.user.dto.RegisterRequest;
 import com.campus.user.entity.User;
 import com.campus.user.mapper.UserMapper;
@@ -35,5 +37,17 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
         save(user);
         return user.getId();
+    }
+
+    @Override
+    public LoginResponse login(LoginRequest request) {
+        User user = lambdaQuery()
+                .eq(User::getUsername, request.getUsername())
+                .one();
+        if (user == null || !passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+            throw new BizException(ResultCode.USERNAME_OR_PASSWORD_ERROR);
+        }
+        String token = JwtUtil.generateToken(user.getId());
+        return new LoginResponse(token, user.getId(), user.getNickname(), user.getAvatar());
     }
 }
