@@ -1,0 +1,15 @@
+{
+  "worktree": {
+    "baseRef": "head"
+  },
+  "permissions": {
+    "allow": [
+      "Bash(git *)",
+      "Bash(mvn *)",
+      "Bash(docker *)",
+      "Bash(mkdir *)",
+      "Bash(ls *)",
+      "Bash(find *)"
+    ]
+  }
+}
