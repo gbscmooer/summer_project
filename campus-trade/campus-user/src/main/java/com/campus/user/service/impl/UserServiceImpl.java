@@ -4,15 +4,17 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.campus.common.exception.BizException;
 import com.campus.common.result.ResultCode;
 import com.campus.common.util.JwtUtil;
-import com.campus.user.dto.LoginRequest;
-import com.campus.user.dto.LoginResponse;
-import com.campus.user.dto.RegisterRequest;
+import com.campus.user.dto.*;
 import com.campus.user.entity.User;
 import com.campus.user.mapper.UserMapper;
 import com.campus.user.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
+
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -49,5 +51,32 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         }
         String token = JwtUtil.generateToken(user.getId());
         return new LoginResponse(token, user.getId(), user.getNickname(), user.getAvatar());
+    }
+
+    @Override
+    public UserInfoResponse getUserInfo(Long userId) {
+        User user = getById(userId);
+        if (user == null) {
+            throw new BizException(ResultCode.NOT_FOUND);
+        }
+        return UserInfoResponse.from(user);
+    }
+
+    @Override
+    public void updateUserInfo(Long userId, UpdateUserRequest request) {
+        User user = new User();
+        user.setId(userId);
+        if (StringUtils.hasText(request.getNickname())) user.setNickname(request.getNickname());
+        if (StringUtils.hasText(request.getAvatar())) user.setAvatar(request.getAvatar());
+        if (StringUtils.hasText(request.getPhone())) user.setPhone(request.getPhone());
+        updateById(user);
+    }
+
+    @Override
+    public List<UserBriefVO> batchGetUsers(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) return List.of();
+        return listByIds(ids).stream()
+                .map(u -> new UserBriefVO(u.getId(), u.getNickname(), u.getPhone()))
+                .collect(Collectors.toList());
     }
 }
