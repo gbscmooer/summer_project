@@ -8,6 +8,15 @@ spring:
     url: jdbc:mysql://localhost:3306/campus_trade?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
     username: campus
     password: campus123
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+  data:
+    redis:
+      host: localhost
+      port: 6379
   cloud:
     nacos:
       discovery:

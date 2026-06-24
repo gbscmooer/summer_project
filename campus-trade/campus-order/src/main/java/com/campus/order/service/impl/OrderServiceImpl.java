@@ -19,7 +19,16 @@ import com.campus.order.service.OrderService;
 import com.campus.order.util.OrderNoGenerator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
+
+import com.campus.order.config.RabbitMQConfig;
+import com.campus.order.dto.OrderNotifyMessage;
+import com.campus.order.dto.SeckillMessage;
+import com.campus.order.dto.SeckillResultVO;
+
+import java.time.Duration;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -43,6 +52,8 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
 
     private final ProductFeignClient productFeign;
     private final UserFeignClient userFeign;
+    private final RabbitTemplate rabbitTemplate;
+    private final RedisTemplate<String, Object> redisTemplate;
 
     // ==================== 状态常量 ====================
     private static final int STATUS_UNPAID = 0;
@@ -79,7 +90,21 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         order.setStatus(STATUS_UNPAID);
         save(order);
 
-        // TODO P6: 发送下单通知到 RabbitMQ
+        // 7. 发送下单通知到 RabbitMQ
+        // 使用专用 DTO（避免 Order 实体中 LocalDateTime 的序列化问题）
+        OrderNotifyMessage notifyMessage = new OrderNotifyMessage(
+                order.getOrderNo(),
+                order.getProductId(),
+                order.getProductTitle(),
+                order.getPrice(),
+                order.getBuyerId(),
+                order.getSellerId()
+        );
+        rabbitTemplate.convertAndSend(
+                RabbitMQConfig.ORDER_EXCHANGE,
+                RabbitMQConfig.ORDER_NOTIFY_ROUTING_KEY,
+                notifyMessage);
+
         return CreateOrderVO.from(order);
     }
 
@@ -245,5 +270,157 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         return users.stream()
                 .filter(u -> u.getUserId() != null)
                 .collect(Collectors.toMap(UserBriefDTO::getUserId, UserBriefDTO::getNickname, (a, b) -> a));
+    }
+
+    @Override
+    public String seckill(Long buyerId, Long productId) {
+        String stockKey = "seckill:stock:" + productId;
+        String productKey = "seckill:product:" + productId;
+        String resultKey = "seckill:result:" + productId + ":" + buyerId;
+
+        // 1. 缓存预热
+        preheatStock(productId, stockKey, productKey);
+
+        // 2. 基本规则校验
+        ProductDTO product = (ProductDTO) redisTemplate.opsForValue().get(productKey);
+        if (product == null) {
+            throw new BizException(ResultCode.PRODUCT_NOT_FOUND);
+        }
+        if (buyerId.equals(product.getSellerId())) {
+            throw new BizException(ResultCode.ORDER_CANNOT_BUY_OWN);
+        }
+
+        // 3. 重复秒杀检验
+        Boolean hasParticipated = redisTemplate.hasKey(resultKey);
+        if (Boolean.TRUE.equals(hasParticipated)) {
+            throw new BizException(ResultCode.BAD_REQUEST.getCode(), "请勿重复提交秒杀请求");
+        }
+
+        // 4. Redis 预扣库存
+        Long stock = redisTemplate.opsForValue().decrement(stockKey);
+        if (stock == null || stock < 0) {
+            redisTemplate.opsForValue().increment(stockKey); // 还原
+            throw new BizException(ResultCode.PRODUCT_STOCK_INSUFFICIENT);
+        }
+
+        // 5. 设置排队中状态
+        redisTemplate.opsForValue().set(resultKey, "queuing", java.time.Duration.ofMinutes(15));
+
+        // 6. 发送秒杀消息入队列
+        com.campus.order.dto.SeckillMessage seckillMessage = new com.campus.order.dto.SeckillMessage(productId, buyerId);
+        rabbitTemplate.convertAndSend(
+                RabbitMQConfig.SECKILL_EXCHANGE,
+                RabbitMQConfig.SECKILL_ROUTING_KEY,
+                seckillMessage);
+
+        return productId + "_" + buyerId;
+    }
+
+    private void preheatStock(Long productId, String stockKey, String productKey) {
+        if (!redisTemplate.hasKey(stockKey) || !redisTemplate.hasKey(productKey)) {
+            String lockKey = "seckill:lock:preheat:" + productId;
+            Boolean acquired = redisTemplate.opsForValue().setIfAbsent(lockKey, "1", java.time.Duration.ofSeconds(5));
+            if (Boolean.TRUE.equals(acquired)) {
+                try {
+                    if (!redisTemplate.hasKey(stockKey) || !redisTemplate.hasKey(productKey)) {
+                        ProductDTO product = unwrap(productFeign.getProduct(productId));
+                        if (product == null) {
+                            throw new BizException(ResultCode.PRODUCT_NOT_FOUND);
+                        }
+                        if (product.getStatus() == null || product.getStatus() != 1) {
+                            throw new BizException(ResultCode.PRODUCT_OFF_SHELF);
+                        }
+                        // 预热 stock 与 product 详情，TTL 24小时
+                        redisTemplate.opsForValue().set(stockKey, String.valueOf(product.getStock()), java.time.Duration.ofHours(24));
+                        redisTemplate.opsForValue().set(productKey, product, java.time.Duration.ofHours(24));
+                    }
+                } finally {
+                    redisTemplate.delete(lockKey);
+                }
+            } else {
+                int retries = 5;
+                try {
+                    while (retries > 0 && (!redisTemplate.hasKey(stockKey) || !redisTemplate.hasKey(productKey))) {
+                        Thread.sleep(50);
+                        retries--;
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                if (!redisTemplate.hasKey(stockKey) || !redisTemplate.hasKey(productKey)) {
+                    throw new BizException(ResultCode.INTERNAL_ERROR.getCode(), "系统繁忙，请稍后再试");
+                }
+            }
+        }
+    }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
+    public String createSeckillOrder(Long buyerId, Long productId) {
+        ProductDTO product = unwrap(productFeign.getProduct(productId));
+        if (product == null) {
+            throw new BizException(ResultCode.PRODUCT_NOT_FOUND);
+        }
+
+        boolean deducted = false;
+        try {
+            // 扣减 DB 库存
+            unwrap(productFeign.deductStock(productId));
+            deducted = true;
+
+            // 创建订单并落库
+            Order order = new Order();
+            order.setOrderNo(OrderNoGenerator.generate());
+            order.setProductId(productId);
+            order.setProductTitle(product.getTitle());
+            order.setPrice(product.getPrice());
+            order.setBuyerId(buyerId);
+            order.setSellerId(product.getSellerId());
+            order.setStatus(STATUS_UNPAID);
+            save(order);
+
+            // 发送普通下单 RabbitMQ 通知
+            OrderNotifyMessage notifyMessage = new OrderNotifyMessage(
+                    order.getOrderNo(),
+                    order.getProductId(),
+                    order.getProductTitle(),
+                    order.getPrice(),
+                    order.getBuyerId(),
+                    order.getSellerId()
+            );
+            rabbitTemplate.convertAndSend(
+                    RabbitMQConfig.ORDER_EXCHANGE,
+                    RabbitMQConfig.ORDER_NOTIFY_ROUTING_KEY,
+                    notifyMessage);
+
+            return order.getOrderNo();
+        } catch (Exception e) {
+            log.error("创建秒杀订单异常，启动远程库存回滚。buyerId={}, productId={}", buyerId, productId, e);
+            if (deducted) {
+                try {
+                    productFeign.restoreStock(productId);
+                } catch (Exception ex) {
+                    log.error("CRITICAL: 秒杀库存回滚失败，productId={}", productId, ex);
+                }
+            }
+            throw e;
+        }
+    }
+
+    @Override
+    public com.campus.order.dto.SeckillResultVO getSeckillResult(Long buyerId, Long productId) {
+        String resultKey = "seckill:result:" + productId + ":" + buyerId;
+        Object val = redisTemplate.opsForValue().get(resultKey);
+        if (val == null) {
+            return new com.campus.order.dto.SeckillResultVO(-1, null);
+        }
+        String statusStr = val.toString();
+        if ("queuing".equals(statusStr)) {
+            return new com.campus.order.dto.SeckillResultVO(0, null);
+        } else if ("failed".equals(statusStr)) {
+            return new com.campus.order.dto.SeckillResultVO(-1, null);
+        } else {
+            return new com.campus.order.dto.SeckillResultVO(1, statusStr);
+        }
     }
 }

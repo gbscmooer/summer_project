@@ -30,4 +30,13 @@ public interface OrderService {
 
     /** 取消：仅买家本人，状态 0→3，并回滚商品库存。 */
     void cancel(Long buyerId, Long orderId);
+
+    /** 秒杀预扣与排队。 */
+    String seckill(Long buyerId, Long productId);
+
+    /** 异步消费秒杀消息并落库，带补偿事务。 */
+    String createSeckillOrder(Long buyerId, Long productId);
+
+    /** 查询秒杀排队与下单结果。 */
+    com.campus.order.dto.SeckillResultVO getSeckillResult(Long buyerId, Long productId);
 }

@@ -29,6 +29,23 @@ public class OrderController {
         return Result.success("下单成功", orderService.createOrder(buyerId, request.getProductId()));
     }
 
+    /** 秒杀下单。body {productId}，X-User-Id = buyerId。 */
+    @PostMapping("/seckill")
+    public Result<java.util.Map<String, String>> seckill(
+            @RequestHeader("X-User-Id") Long buyerId,
+            @Valid @RequestBody CreateOrderRequest request) {
+        String queueId = orderService.seckill(buyerId, request.getProductId());
+        return Result.success("排队中，请稍候", java.util.Map.of("queueId", queueId));
+    }
+
+    /** 查询秒杀结果。 */
+    @GetMapping("/seckill/result/{productId}")
+    public Result<com.campus.order.dto.SeckillResultVO> getSeckillResult(
+            @RequestHeader("X-User-Id") Long buyerId,
+            @PathVariable Long productId) {
+        return Result.success(orderService.getSeckillResult(buyerId, productId));
+    }
+
     /** 订单详情（需登录，仅买卖家可见）。 */
     @GetMapping("/{id}")
     public Result<OrderDetailVO> detail(

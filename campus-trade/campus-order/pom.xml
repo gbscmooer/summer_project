@@ -55,6 +55,11 @@
             <groupId>com.campus</groupId>
             <artifactId>campus-common</artifactId>
         </dependency>
+        <!-- Redis Starter -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
     </dependencies>
 
     <build>
