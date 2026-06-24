@@ -57,3 +57,12 @@ export function getMyProducts(params) {
     params
   })
 }
+
+// 搜索商品（走 ES 检索，无需登录）：params { pageNum, pageSize, keyword?, category?, minPrice?, maxPrice?, sort? }
+export function searchProducts(params) {
+  return request({
+    url: '/product/search',
+    method: 'get',
+    params
+  })
+}

@@ -60,6 +60,23 @@ CREATE TABLE IF NOT EXISTS t_order (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='订单表';
 
 -- ============================================================
+-- 通知表（campus-order 服务使用，MQ 消费者写入）
+-- ============================================================
+CREATE TABLE IF NOT EXISTS t_notification (
+    id          BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '通知ID',
+    user_id     BIGINT       NOT NULL COMMENT '接收人用户ID（卖家）',
+    type        VARCHAR(50)  NOT NULL DEFAULT 'ORDER_CREATED' COMMENT '通知类型',
+    title       VARCHAR(100) NOT NULL COMMENT '通知标题',
+    content     VARCHAR(500) NOT NULL COMMENT '通知内容',
+    order_no    VARCHAR(32)  COMMENT '关联订单号',
+    is_read     TINYINT      DEFAULT 0 COMMENT '0-未读 1-已读',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_user_id   (user_id),
+    INDEX idx_is_read   (is_read),
+    INDEX idx_user_read (user_id, is_read)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='通知表';
+
+-- ============================================================
 -- 测试数据：用户（密码明文均为 123456）
 -- BCrypt("123456") = $2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBpwTTyRTceFGK
 -- ============================================================

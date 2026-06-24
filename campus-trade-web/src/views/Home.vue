@@ -1,5 +1,59 @@
 <template>
   <div class="page-container">
+    <!-- 搜索与筛选面板 -->
+    <div class="search-panel">
+      <div class="search-row">
+        <el-input
+          v-model="keyword"
+          placeholder="请输入商品标题或描述进行搜索..."
+          clearable
+          class="search-input"
+          @keyup.enter="handleSearch"
+        >
+          <template #prefix>
+            <el-icon><Search /></el-icon>
+          </template>
+        </el-input>
+        <el-button type="primary" class="search-btn" @click="handleSearch">搜索</el-button>
+      </div>
+
+      <div class="filter-row">
+        <!-- 价格区间 -->
+        <div class="filter-item price-filter">
+          <span class="filter-label">价格区间：</span>
+          <el-input-number
+            v-model="minPrice"
+            :min="0"
+            :precision="2"
+            :controls="false"
+            placeholder="最低价"
+            class="price-input"
+          />
+          <span class="price-split">-</span>
+          <el-input-number
+            v-model="maxPrice"
+            :min="0"
+            :precision="2"
+            :controls="false"
+            placeholder="最高价"
+            class="price-input"
+          />
+          <el-button size="small" style="margin-left: 8px" @click="handleSearch">确定</el-button>
+          <el-button size="small" type="info" plain @click="clearPriceFilter">重置</el-button>
+        </div>
+
+        <!-- 排序方式 -->
+        <div class="filter-item sort-filter">
+          <span class="filter-label">排序方式：</span>
+          <el-select v-model="sort" placeholder="排序" size="small" style="width: 120px" @change="handleSearch">
+            <el-option label="默认时间" value="" />
+            <el-option label="价格升序" value="price_asc" />
+            <el-option label="价格降序" value="price_desc" />
+          </el-select>
+        </div>
+      </div>
+    </div>
+
     <!-- 分类筛选 Tab -->
     <el-tabs v-model="activeCategory" class="category-tabs" @tab-change="onCategoryChange">
       <el-tab-pane label="全部" name="" />
@@ -63,8 +117,8 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { Picture } from '@element-plus/icons-vue'
-import { getProductList } from '@/api/product'
+import { Picture, Search } from '@element-plus/icons-vue'
+import { getProductList, searchProducts } from '@/api/product'
 import { CATEGORIES } from '@/constants/product'
 
 const router = useRouter()
@@ -76,6 +130,12 @@ const total = ref(0)
 const pageNum = ref(1)
 const pageSize = ref(10)
 const activeCategory = ref('')
+
+// 搜索筛选字段
+const keyword = ref('')
+const minPrice = ref(null)
+const maxPrice = ref(null)
+const sort = ref('')
 
 function formatPrice(price) {
   const n = Number(price)
@@ -93,8 +153,20 @@ async function fetchList() {
     if (activeCategory.value) {
       params.category = activeCategory.value
     }
-    const res = await getProductList(params)
-    // res.data = { total, pageNum, pageSize, list: [...] }
+    
+    // 如果存在搜索关键词、价格过滤或排序，走 ES 搜索；否则走标准 MySQL 分类列表
+    const isSearching = keyword.value || minPrice.value !== null || maxPrice.value !== null || sort.value
+    let res
+    if (isSearching) {
+      if (keyword.value) params.keyword = keyword.value
+      if (minPrice.value !== null) params.minPrice = minPrice.value
+      if (maxPrice.value !== null) params.maxPrice = maxPrice.value
+      if (sort.value) params.sort = sort.value
+      res = await searchProducts(params)
+    } else {
+      res = await getProductList(params)
+    }
+    
     list.value = res.data.list || []
     total.value = res.data.total || 0
   } catch (e) {
@@ -103,6 +175,17 @@ async function fetchList() {
   } finally {
     loading.value = false
   }
+}
+
+function handleSearch() {
+  pageNum.value = 1
+  fetchList()
+}
+
+function clearPriceFilter() {
+  minPrice.value = null
+  maxPrice.value = null
+  handleSearch()
 }
 
 function onCategoryChange() {
@@ -124,6 +207,60 @@ onMounted(fetchList)
 </script>
 
 <style scoped>
+.search-panel {
+  background-color: #fff;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
+}
+
+.search-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.search-input {
+  flex: 1;
+}
+
+.search-btn {
+  width: 100px;
+}
+
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  align-items: center;
+}
+
+.filter-item {
+  display: flex;
+  align-items: center;
+}
+
+.filter-label {
+  font-size: 14px;
+  color: #606266;
+  margin-right: 8px;
+}
+
+.price-filter {
+  display: flex;
+  align-items: center;
+}
+
+.price-input {
+  width: 110px;
+}
+
+.price-split {
+  margin: 0 6px;
+  color: #dcdfe6;
+}
+
 .category-tabs {
   margin-bottom: 8px;
 }

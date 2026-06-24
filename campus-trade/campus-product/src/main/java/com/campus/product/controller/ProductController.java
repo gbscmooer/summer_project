@@ -10,6 +10,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.util.Map;
 
 @RestController
@@ -57,6 +58,24 @@ public class ProductController {
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "10") Integer pageSize) {
         return Result.success(productService.listProducts(category, pageNum, pageSize));
+    }
+
+    @GetMapping("/search")
+    public Result<PageResult<ProductListVO>> search(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) BigDecimal minPrice,
+            @RequestParam(required = false) BigDecimal maxPrice,
+            @RequestParam(required = false) String sort,
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(defaultValue = "10") Integer pageSize) {
+        return Result.success(productService.search(keyword, category, minPrice, maxPrice, sort, pageNum, pageSize));
+    }
+
+    @PostMapping("/reindex")
+    public Result<Integer> reindex() {
+        int count = productService.reindexAll();
+        return Result.success("全量同步完成，共刷入商品: " + count, count);
     }
 
     @GetMapping("/my")
