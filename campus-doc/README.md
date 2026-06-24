@@ -38,11 +38,11 @@
 
 点击下方链接可直达各层级子文档：
 
-1. **公共基石层**：[campus-common/DOC.md](file:///Users/katisarrow/summer/campus-common/DOC.md) — 统一接口规范及通用工具集。
-2. **流量网关层**：[campus-gateway/DOC.md](file:///Users/katisarrow/summer/campus-gateway/DOC.md) — 网关路由及统一 JWT 鉴权规则。
-3. **用户业务层**：[campus-user/DOC.md](file:///Users/katisarrow/summer/campus-user/DOC.md) — 注册登录及个人信息模块。
-4. **商品业务层**：[campus-product/DOC.md](file:///Users/katisarrow/summer/campus-product/DOC.md) — 商品管理、Redis 高可用缓存与 Elasticsearch 检索模块。
-5. **交易与通知层**：[campus-order/DOC.md](file:///Users/katisarrow/summer/campus-order/DOC.md) — 下单链路、RabbitMQ 异步通知、OpenFeign 调用与 Redis+MQ 高并发秒杀削峰模块。
+1. **公共基石层**：[campus-common/DOC.md](file:///Users/katisarrow/summer/campus-trade/campus-common/DOC.md) — 统一接口规范及通用工具集。
+2. **流量网关层**：[campus-gateway/DOC.md](file:///Users/katisarrow/summer/campus-trade/campus-gateway/DOC.md) — 网关路由及统一 JWT 鉴权规则。
+3. **用户业务层**：[campus-user/DOC.md](file:///Users/katisarrow/summer/campus-trade/campus-user/DOC.md) — 注册登录及个人信息模块。
+4. **商品业务层**：[campus-product/DOC.md](file:///Users/katisarrow/summer/campus-trade/campus-product/DOC.md) — 商品管理、Redis 高可用缓存与 Elasticsearch 检索模块。
+5. **交易与通知层**：[campus-order/DOC.md](file:///Users/katisarrow/summer/campus-trade/campus-order/DOC.md) — 下单链路、RabbitMQ 异步通知、OpenFeign 调用与 Redis+MQ 高并发秒杀削峰模块。
 6. **前端展示层**：[campus-trade-web/DOC.md](file:///Users/katisarrow/summer/campus-trade-web/DOC.md) — 前端 SPA 工程结构及 Nginx 托管方案。
 
 ---

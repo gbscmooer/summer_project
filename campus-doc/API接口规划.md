@@ -9,11 +9,11 @@
 ## 📂 接口文档目录索引
 
 1. **用户服务接口**：包含注册、登录、个人中心、服务间批量查询昵称。
-   * 👉 详见：[campus-user/DOC.md 章节二、三](file:///Users/katisarrow/summer/campus-user/DOC.md)
+   * 👉 详见：[campus-user/DOC.md 章节二、三](file:///Users/katisarrow/summer/campus-trade/campus-user/DOC.md)
 2. **商品服务接口**：包含发布/修改/下架商品、详情、分类列表、ES全文搜索、Feign库存扣减。
-   * 👉 详见：[campus-product/DOC.md 章节三、四](file:///Users/katisarrow/summer/campus-product/DOC.md)
+   * 👉 详见：[campus-product/DOC.md 章节三、四](file:///Users/katisarrow/summer/campus-trade/campus-product/DOC.md)
 3. **订单与通知服务接口**：包含常规下单、订单状态机流转、高并发秒杀抢购削峰、订单轮询以及通知管理。
-   * 👉 详见：[campus-order/DOC.md 章节四](file:///Users/katisarrow/summer/campus-order/DOC.md)
+   * 👉 详见：[campus-order/DOC.md 章节四](file:///Users/katisarrow/summer/campus-trade/campus-order/DOC.md)
 
 ---
 
@@ -32,7 +32,7 @@
   "data": { }
 }
 ```
-* **非成功业务状态码**：使用统一的 `code` 区分。详细的状态码值和代表的业务异常，请阅读：[campus-common/DOC.md 章节一](file:///Users/katisarrow/summer/campus-common/DOC.md)。
+* **非成功业务状态码**：使用统一的 `code` 区分。详细的状态码值和代表的业务异常，请阅读：[campus-common/DOC.md 章节一](file:///Users/katisarrow/summer/campus-trade/campus-common/DOC.md)。
 
 ### 1.3 统一鉴权与身份透传
 - **JWT token**：登录成功会向前端返回 Bearer token。
