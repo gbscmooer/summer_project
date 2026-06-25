@@ -63,10 +63,18 @@
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="160" fixed="right">
+          <el-table-column label="操作" width="220" fixed="right">
             <template #default="{ row }">
               <el-button size="small" @click="$router.push(`/product/${row.productId}`)">
                 查看
+              </el-button>
+              <el-button
+                size="small"
+                type="primary"
+                :disabled="row.status === 0"
+                @click="openEditProduct(row)"
+              >
+                编辑
               </el-button>
               <el-button
                 size="small"
@@ -113,6 +121,56 @@
         <el-button type="primary" :loading="saving" @click="onSaveEdit">保存</el-button>
       </template>
     </el-dialog>
+
+    <!-- 编辑商品弹窗 -->
+    <el-dialog v-model="productEditVisible" title="编辑商品" width="640px">
+      <el-form
+        ref="productEditFormRef"
+        :model="productEditForm"
+        :rules="productEditRules"
+        label-width="90px"
+        v-loading="productEditLoading"
+      >
+        <el-form-item label="标题" prop="title">
+          <el-input v-model="productEditForm.title" maxlength="50" show-word-limit />
+        </el-form-item>
+        <el-form-item label="分类" prop="category">
+          <el-select v-model="productEditForm.category" placeholder="请选择分类" style="width: 220px">
+            <el-option v-for="cat in categories" :key="cat" :label="cat" :value="cat" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="价格" prop="price">
+          <el-input-number
+            v-model="productEditForm.price"
+            :min="0"
+            :precision="2"
+            :step="1"
+            controls-position="right"
+            style="width: 220px"
+          />
+        </el-form-item>
+        <el-form-item label="库存" prop="stock">
+          <el-input-number
+            v-model="productEditForm.stock"
+            :min="1"
+            :precision="0"
+            :step="1"
+            controls-position="right"
+            style="width: 220px"
+          />
+        </el-form-item>
+        <el-form-item label="图片URL" prop="images">
+          <el-input v-model="productEditForm.images" type="textarea" :rows="3" />
+        </el-form-item>
+        <el-form-item label="描述" prop="description">
+          <el-input v-model="productEditForm.description" type="textarea" :rows="4" maxlength="500" show-word-limit />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="productEditVisible = false">取消</el-button>
+        <el-button type="primary" :loading="productSaving" @click="onSaveProductEdit">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -121,11 +179,12 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Picture } from '@element-plus/icons-vue'
 import { getUserInfo, updateUserInfo } from '@/api/user'
-import { getMyProducts, deleteProduct } from '@/api/product'
-import { getStatusText, getStatusType } from '@/constants/product'
+import { getMyProducts, getProductDetail, updateProduct, deleteProduct } from '@/api/product'
+import { getStatusText, getStatusType, CATEGORIES } from '@/constants/product'
 import { useUserStore } from '@/store/user'
 
 const userStore = useUserStore()
+const categories = CATEGORIES
 
 // ---- 个人信息 ----
 const info = ref(null)
@@ -200,6 +259,81 @@ async function onSaveEdit() {
     // 错误提示已由拦截器处理
   } finally {
     saving.value = false
+  }
+}
+
+// ---- 编辑商品 ----
+const productEditVisible = ref(false)
+const productEditLoading = ref(false)
+const productSaving = ref(false)
+const productEditFormRef = ref(null)
+const editingProductId = ref(null)
+const productEditForm = reactive({
+  title: '',
+  category: '',
+  price: 0,
+  stock: 1,
+  images: '',
+  description: ''
+})
+
+const productEditRules = {
+  title: [{ required: true, message: '请输入标题', trigger: 'blur' }],
+  category: [{ required: true, message: '请选择分类', trigger: 'change' }],
+  price: [{ required: true, message: '请输入价格', trigger: 'blur' }],
+  stock: [{ required: true, message: '请输入库存', trigger: 'blur' }],
+  images: [{ required: true, message: '请至少填写一张图片URL', trigger: 'blur' }]
+}
+
+async function openEditProduct(row) {
+  editingProductId.value = row.productId
+  productEditVisible.value = true
+  productEditLoading.value = true
+  try {
+    const res = await getProductDetail(row.productId)
+    const data = res.data || {}
+    productEditForm.title = data.title || ''
+    productEditForm.category = data.category || ''
+    productEditForm.price = data.price || 0
+    productEditForm.stock = data.stock || 1
+    productEditForm.description = data.description || ''
+    productEditForm.images = Array.isArray(data.images) ? data.images.join(',') : ''
+  } catch (e) {
+    productEditVisible.value = false
+  } finally {
+    productEditLoading.value = false
+  }
+}
+
+async function onSaveProductEdit() {
+  if (!productEditFormRef.value || !editingProductId.value) return
+  try {
+    await productEditFormRef.value.validate()
+  } catch (e) {
+    return
+  }
+  productSaving.value = true
+  try {
+    const cleanImages = productEditForm.images
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => !!s)
+      .join(',')
+    await updateProduct(editingProductId.value, {
+      title: productEditForm.title,
+      description: productEditForm.description,
+      price: productEditForm.price,
+      images: cleanImages,
+      category: productEditForm.category,
+      stock: productEditForm.stock
+    })
+    ElMessage.success('商品已更新')
+    productEditVisible.value = false
+    fetchMyProducts()
+  } catch (e) {
+    // 错误提示已由拦截器处理
+  } finally {
+    productSaving.value = false
   }
 }
 

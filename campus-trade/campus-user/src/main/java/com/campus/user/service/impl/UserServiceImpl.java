@@ -9,6 +9,7 @@ import com.campus.user.entity.User;
 import com.campus.user.mapper.UserMapper;
 import com.campus.user.service.UserService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -37,7 +38,11 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         user.setNickname(request.getNickname() != null ? request.getNickname() : request.getUsername());
         user.setPhone(request.getPhone());
 
-        save(user);
+        try {
+            save(user);
+        } catch (DataIntegrityViolationException e) {
+            throw new BizException(ResultCode.USERNAME_EXISTS);
+        }
         return user.getId();
     }
 
@@ -48,6 +53,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                 .one();
         if (user == null || !passwordEncoder.matches(request.getPassword(), user.getPassword())) {
             throw new BizException(ResultCode.USERNAME_OR_PASSWORD_ERROR);
+        }
+        if (user.getId() == null) {
+            throw new BizException(ResultCode.INTERNAL_ERROR);
         }
         String token = JwtUtil.generateToken(user.getId());
         return new LoginResponse(token, user.getId(), user.getNickname(), user.getAvatar());
@@ -64,12 +72,27 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
     @Override
     public void updateUserInfo(Long userId, UpdateUserRequest request) {
+        if (request == null) {
+            throw new BizException(ResultCode.BAD_REQUEST);
+        }
+        boolean hasUpdates = false;
         User user = new User();
         user.setId(userId);
-        if (StringUtils.hasText(request.getNickname())) user.setNickname(request.getNickname());
-        if (StringUtils.hasText(request.getAvatar())) user.setAvatar(request.getAvatar());
-        if (StringUtils.hasText(request.getPhone())) user.setPhone(request.getPhone());
-        updateById(user);
+        if (StringUtils.hasText(request.getNickname())) {
+            user.setNickname(request.getNickname());
+            hasUpdates = true;
+        }
+        if (StringUtils.hasText(request.getAvatar())) {
+            user.setAvatar(request.getAvatar());
+            hasUpdates = true;
+        }
+        if (StringUtils.hasText(request.getPhone())) {
+            user.setPhone(request.getPhone());
+            hasUpdates = true;
+        }
+        if (hasUpdates) {
+            updateById(user);
+        }
     }
 
     @Override

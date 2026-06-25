@@ -4,6 +4,16 @@
       <el-tabs v-model="activeTab" @tab-change="onTabChange">
         <!-- 我买到的 -->
         <el-tab-pane label="我买到的" name="buyer">
+          <div class="status-filter">
+            <span class="filter-label">状态筛选：</span>
+            <el-radio-group v-model="statusFilter" size="small" @change="onStatusChange">
+              <el-radio-button value="all">全部</el-radio-button>
+              <el-radio-button :value="0">待付款</el-radio-button>
+              <el-radio-button :value="1">已付款</el-radio-button>
+              <el-radio-button :value="2">已完成</el-radio-button>
+              <el-radio-button :value="3">已取消</el-radio-button>
+            </el-radio-group>
+          </div>
           <div v-loading="loading">
             <el-empty v-if="!loading && list.length === 0" description="还没有买到的订单">
               <el-button type="primary" @click="$router.push('/')">去逛逛</el-button>
@@ -33,6 +43,7 @@
                   </div>
                   <!-- 买家操作：按状态显示 -->
                   <div class="order-actions">
+                    <el-button size="small" @click="openDetail(order.orderId)">详情</el-button>
                     <template v-if="order.status === 0">
                       <el-button
                         size="small"
@@ -60,7 +71,6 @@
                         确认收货
                       </el-button>
                     </template>
-                    <span v-else class="no-action">—</span>
                   </div>
                 </div>
               </el-card>
@@ -70,6 +80,16 @@
 
         <!-- 我卖出的（只读） -->
         <el-tab-pane label="我卖出的" name="seller">
+          <div class="status-filter">
+            <span class="filter-label">状态筛选：</span>
+            <el-radio-group v-model="statusFilter" size="small" @change="onStatusChange">
+              <el-radio-button value="all">全部</el-radio-button>
+              <el-radio-button :value="0">待付款</el-radio-button>
+              <el-radio-button :value="1">已付款</el-radio-button>
+              <el-radio-button :value="2">已完成</el-radio-button>
+              <el-radio-button :value="3">已取消</el-radio-button>
+            </el-radio-group>
+          </div>
           <div v-loading="loading">
             <el-empty v-if="!loading && list.length === 0" description="还没有卖出的订单" />
 
@@ -95,6 +115,9 @@
                       <span class="meta-item">{{ formatTime(order.createTime) }}</span>
                     </div>
                   </div>
+                  <div class="order-actions">
+                    <el-button size="small" @click="openDetail(order.orderId)">详情</el-button>
+                  </div>
                 </div>
               </el-card>
             </div>
@@ -116,6 +139,21 @@
         />
       </div>
     </el-card>
+
+    <el-dialog v-model="detailVisible" title="订单详情" width="520px">
+      <div v-loading="detailLoading">
+        <el-empty v-if="!detailLoading && !orderDetail" description="无法加载订单详情" />
+        <el-descriptions v-else-if="orderDetail" :column="1" border>
+          <el-descriptions-item label="订单号">{{ orderDetail.orderNo }}</el-descriptions-item>
+          <el-descriptions-item label="商品">{{ orderDetail.productTitle }}</el-descriptions-item>
+          <el-descriptions-item label="价格">¥{{ formatPrice(orderDetail.price) }}</el-descriptions-item>
+          <el-descriptions-item label="状态">{{ orderDetail.statusText }}</el-descriptions-item>
+          <el-descriptions-item label="买家">{{ orderDetail.buyerNickname || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="卖家">{{ orderDetail.sellerNickname || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="下单时间">{{ formatTime(orderDetail.createTime) }}</el-descriptions-item>
+        </el-descriptions>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -125,6 +163,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   getBuyerOrders,
   getSellerOrders,
+  getOrderDetail,
   payOrder,
   confirmOrder,
   cancelOrder
@@ -139,11 +178,15 @@ const ORDER_STATUS_TYPE = {
 }
 
 const activeTab = ref('buyer')
+const statusFilter = ref('all')
 const list = ref([])
 const total = ref(0)
 const pageNum = ref(1)
 const pageSize = ref(10)
 const loading = ref(false)
+const detailVisible = ref(false)
+const detailLoading = ref(false)
+const orderDetail = ref(null)
 // 正在操作的订单 id（用于按钮 loading，避免整列表禁用）
 const actingId = ref(null)
 
@@ -168,6 +211,9 @@ function formatTime(t) {
 async function fetchOrders() {
   loading.value = true
   const params = { pageNum: pageNum.value, pageSize: pageSize.value }
+  if (statusFilter.value !== 'all') {
+    params.status = statusFilter.value
+  }
   try {
     const res =
       activeTab.value === 'buyer'
@@ -188,7 +234,27 @@ function onTabChange() {
   pageNum.value = 1
   total.value = 0
   list.value = []
+  statusFilter.value = 'all'
   fetchOrders()
+}
+
+function onStatusChange() {
+  pageNum.value = 1
+  fetchOrders()
+}
+
+async function openDetail(orderId) {
+  detailVisible.value = true
+  detailLoading.value = true
+  orderDetail.value = null
+  try {
+    const res = await getOrderDetail(orderId)
+    orderDetail.value = res.data
+  } catch (e) {
+    orderDetail.value = null
+  } finally {
+    detailLoading.value = false
+  }
 }
 
 function onSizeChange() {
@@ -265,6 +331,19 @@ onMounted(fetchOrders)
 <style scoped>
 .orders-card {
   min-height: 400px;
+}
+
+.status-filter {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.filter-label {
+  color: #606266;
+  font-size: 13px;
 }
 
 .order-list {

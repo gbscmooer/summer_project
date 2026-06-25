@@ -99,8 +99,8 @@ public class ProductController {
     }
 
     @PostMapping("/inner/{id}/restore")
-    public Result<Void> restoreStock(@PathVariable Long id) {
-        productService.restoreStock(id);
+    public Result<Void> restoreStock(@PathVariable Long id, @RequestParam(value = "orderNo", required = false) String orderNo) {
+        productService.restoreStock(id, orderNo);
         return Result.success();
     }
 }

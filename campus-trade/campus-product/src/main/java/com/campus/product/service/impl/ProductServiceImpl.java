@@ -26,6 +26,7 @@ import org.springframework.data.elasticsearch.core.query.Criteria;
 import org.springframework.data.elasticsearch.core.query.CriteriaQuery;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
@@ -34,6 +35,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -48,6 +50,27 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
     private final ElasticsearchTemplate elasticsearchTemplate;
 
     private static final ZoneId ZONE = ZoneId.systemDefault();
+
+    private final ConcurrentHashMap<Long, Object> localLocks = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<Long, LocalCacheEntry> localCache = new ConcurrentHashMap<>();
+    private volatile long lastRedisErrorTime = 0L;
+    private static final long REDIS_COOLDOWN_MS = 5000L;
+
+    private static class LocalCacheEntry {
+        final ProductDetailVO data;
+        final boolean notFound;
+        final long expireTime;
+
+        LocalCacheEntry(ProductDetailVO data, boolean notFound, long ttlMs) {
+            this.data = data;
+            this.notFound = notFound;
+            this.expireTime = System.currentTimeMillis() + ttlMs;
+        }
+
+        boolean isExpired() {
+            return System.currentTimeMillis() > expireTime;
+        }
+    }
 
     // ==================== 商品写操作（含 ES 双写） ====================
 
@@ -110,16 +133,33 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
                 throw new BizException(ResultCode.PRODUCT_NOT_FOUND);
             }
             if (cached instanceof ProductDetailVO vo) {
-                // 命中也继续累加浏览量。
-                // 注意：viewCount 字段是缓存写入时的快照，在缓存有效期（最长约 35 分钟）内
-                // 返回值可能比真实库值轻微滞后，这是为降低 DB 压力而接受的已知取舍。
                 baseMapper.incrementViewCount(productId);
                 return vo;
             }
         }
 
-        // 2. 未命中：用互斥锁重建，防止缓存击穿（热点 key 失效瞬间大量请求压垮 DB）
-        return loadWithMutex(productId, cacheKey);
+        // 2. 本地锁防击穿 (无论是 Redis 正常还是异常，本地锁都能起到单机排队防击穿作用)
+        Object localLock = localLocks.computeIfAbsent(productId, k -> new Object());
+        synchronized (localLock) {
+            try {
+                // 本地双重检查
+                cached = safeGetCache(cacheKey);
+                if (cached != null) {
+                    if (cached instanceof NullValueMarker) {
+                        throw new BizException(ResultCode.PRODUCT_NOT_FOUND);
+                    }
+                    if (cached instanceof ProductDetailVO vo) {
+                        baseMapper.incrementViewCount(productId);
+                        return vo;
+                    }
+                }
+
+                // 3. 未命中：去分布式锁重建，防止缓存击穿
+                return loadWithMutex(productId, cacheKey);
+            } finally {
+                localLocks.remove(productId, localLock);
+            }
+        }
     }
 
     /**
@@ -128,6 +168,11 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
      * 仍读不到则兜底直接查库（避免长时间阻塞）。
      */
     private ProductDetailVO loadWithMutex(Long productId, String cacheKey) {
+        if (!isRedisHealthy()) {
+            log.warn("Redis 已判定为不可用，本地锁保护下直接查库兜底，productId={}", productId);
+            return loadFromDbAndCache(productId, cacheKey);
+        }
+
         String lockKey = ProductCacheConstants.lockKey(productId);
         for (int attempt = 0; attempt <= ProductCacheConstants.LOCK_MAX_RETRY; attempt++) {
             boolean locked = tryLock(lockKey);
@@ -173,6 +218,9 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
         if (product == null) {
             // 缓存穿透防护：缓存空值，短 TTL
             safeSetCache(cacheKey, new NullValueMarker(), ProductCacheConstants.NULL_TTL.toMillis());
+            if (!isRedisHealthy()) {
+                localCache.put(productId, new LocalCacheEntry(null, true, 5000L));
+            }
             throw new BizException(ResultCode.PRODUCT_NOT_FOUND);
         }
         baseMapper.incrementViewCount(productId);
@@ -180,6 +228,9 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
         ProductDetailVO vo = ProductDetailVO.from(product);
         // 缓存雪崩防护：基础 30 分钟 + 随机 0~5 分钟，错峰过期
         safeSetCache(cacheKey, vo, randomDetailTtlMillis());
+        if (!isRedisHealthy()) {
+            localCache.put(productId, new LocalCacheEntry(vo, false, 5000L));
+        }
         return vo;
     }
 
@@ -215,12 +266,41 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
         query.setPageable(PageRequest.of(page - 1, size));
         query.addSort(resolveSort(sort));
 
-        SearchHits<ProductDocument> hits = elasticsearchTemplate.search(query, ProductDocument.class);
-        List<ProductListVO> list = hits.getSearchHits().stream()
-                .map(SearchHit::getContent)
-                .map(this::toListVO)
-                .collect(Collectors.toList());
-        return PageResult.of(hits.getTotalHits(), page, size, list);
+        SearchHits<ProductDocument> hits;
+        try {
+            hits = elasticsearchTemplate.search(query, ProductDocument.class);
+            List<ProductListVO> list = hits.getSearchHits().stream()
+                    .map(SearchHit::getContent)
+                    .map(this::toListVO)
+                    .collect(Collectors.toList());
+            return PageResult.of(hits.getTotalHits(), page, size, list);
+        } catch (Exception e) {
+            log.warn("ES 搜索不可用，降级为 DB 模糊查询. keyword={}, category={}", keyword, category, e);
+            Page<Product> dbPage = new Page<>(page, size);
+            var queryChain = lambdaQuery()
+                    .eq(Product::getStatus, 1)
+                    .eq(StringUtils.hasText(category), Product::getCategory, category)
+                    .ge(minPrice != null, Product::getPrice, minPrice)
+                    .le(maxPrice != null, Product::getPrice, maxPrice);
+
+            if (StringUtils.hasText(keyword)) {
+                queryChain.and(q -> q.like(Product::getTitle, keyword).or().like(Product::getDescription, keyword));
+            }
+
+            if ("price_asc".equals(sort)) {
+                queryChain.orderByAsc(Product::getPrice);
+            } else if ("price_desc".equals(sort)) {
+                queryChain.orderByDesc(Product::getPrice);
+            } else {
+                queryChain.orderByDesc(Product::getCreateTime);
+            }
+
+            queryChain.page(dbPage);
+            List<ProductListVO> list = dbPage.getRecords().stream()
+                    .map(ProductListVO::from)
+                    .collect(Collectors.toList());
+            return PageResult.of(dbPage.getTotal(), page, size, list);
+        }
     }
 
     /** sort 解析：price_asc/price_desc 按 price，time_desc（默认）按 createTime desc */
@@ -327,24 +407,75 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public boolean deductStock(Long productId) {
-        Product product = getById(productId);
-        if (product == null) throw new BizException(ResultCode.PRODUCT_NOT_FOUND);
-        if (product.getStatus() != 1) throw new BizException(ResultCode.PRODUCT_OFF_SHELF);
-        if (product.getStock() <= 0) throw new BizException(ResultCode.PRODUCT_STOCK_INSUFFICIENT);
         int updated = baseMapper.deductStock(productId);
-        if (updated == 0) throw new BizException(ResultCode.PRODUCT_STOCK_INSUFFICIENT);
-        // 库存归零时自动标记已售
-        if (product.getStock() - 1 == 0) {
-            lambdaUpdate().eq(Product::getId, productId).set(Product::getStatus, 2).update();
+        if (updated == 0) {
+            Product product = getById(productId);
+            if (product == null) throw new BizException(ResultCode.PRODUCT_NOT_FOUND);
+            if (product.getStatus() != 1) throw new BizException(ResultCode.PRODUCT_OFF_SHELF);
+            if (product.getStock() <= 0) throw new BizException(ResultCode.PRODUCT_STOCK_INSUFFICIENT);
+            throw new BizException(ResultCode.PRODUCT_STOCK_INSUFFICIENT);
+        }
+
+        // 扣减库存成功，清除缓存并双写 ES
+        evictDetailCache(productId);
+        Product updatedProduct = getById(productId);
+        if (updatedProduct != null) {
+            saveToEs(updatedProduct);
         }
         return true;
     }
 
     @Override
-    public void restoreStock(Long productId) {
+    @Transactional(rollbackFor = Exception.class)
+    public void restoreStock(Long productId, String orderNo) {
+        // 幂等性校验
+        if (StringUtils.hasText(orderNo)) {
+            String dupKey = "product:restore:dup:" + orderNo;
+            Boolean isFirst = false;
+            if (isRedisHealthy()) {
+                try {
+                    isFirst = redisTemplate.opsForValue().setIfAbsent(dupKey, "1", java.time.Duration.ofDays(7));
+                } catch (Exception e) {
+                    lastRedisErrorTime = System.currentTimeMillis();
+                    log.warn("写入 Redis 幂等键失败，降级允许重试以保证最终一致性", e);
+                    isFirst = true; // Redis 挂了时降级放行，保证最少一次回滚
+                }
+            } else {
+                isFirst = true; // Redis 挂了时放行
+            }
+            if (Boolean.FALSE.equals(isFirst)) {
+                log.info("检测到重复的库存回滚请求，productId={}, orderNo={}, 直接返回", productId, orderNo);
+                return;
+            }
+        }
+
+        Product product = getById(productId);
+        if (product == null) {
+            throw new BizException(ResultCode.PRODUCT_NOT_FOUND);
+        }
+
+        // 已下架商品 (status == 0) 只加库存，不重新上架 (不设 status=1)
+        if (product.getStatus() == 0) {
+            baseMapper.restoreStock(productId);
+            evictDetailCache(productId);
+            Product updatedProduct = getById(productId);
+            if (updatedProduct != null) {
+                saveToEs(updatedProduct);
+            }
+            return;
+        }
+
+        // 正常商品，恢复库存并恢复为在售状态 (status = 1)
         baseMapper.restoreStock(productId);
         lambdaUpdate().eq(Product::getId, productId).set(Product::getStatus, 1).update();
+
+        evictDetailCache(productId);
+        Product updatedProduct = getById(productId);
+        if (updatedProduct != null) {
+            saveToEs(updatedProduct);
+        }
     }
 
     private Product getAndCheckOwner(Long sellerId, Long productId) {
@@ -358,19 +489,52 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
 
     // ==================== Redis 辅助（统一降级：Redis 不可用打 warn 不阻断主流程） ====================
 
+    private boolean isRedisHealthy() {
+        return System.currentTimeMillis() - lastRedisErrorTime > REDIS_COOLDOWN_MS;
+    }
+
+    private Long parseProductIdFromKey(String key) {
+        try {
+            if (key != null && key.startsWith("product:detail:")) {
+                return Long.parseLong(key.substring("product:detail:".length()));
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
+
     private Object safeGetCache(String key) {
+        Long productId = parseProductIdFromKey(key);
+        if (!isRedisHealthy() && productId != null) {
+            LocalCacheEntry entry = localCache.get(productId);
+            if (entry != null && !entry.isExpired()) {
+                return entry.notFound ? new NullValueMarker() : entry.data;
+            }
+            return null;
+        }
+
         try {
             return redisTemplate.opsForValue().get(key);
         } catch (Exception e) {
+            lastRedisErrorTime = System.currentTimeMillis();
             log.warn("读取 Redis 缓存失败，降级直查 DB，key={}", key, e);
+            if (productId != null) {
+                LocalCacheEntry entry = localCache.get(productId);
+                if (entry != null && !entry.isExpired()) {
+                    return entry.notFound ? new NullValueMarker() : entry.data;
+                }
+            }
             return null;
         }
     }
 
     private void safeSetCache(String key, Object value, long ttlMillis) {
+        if (!isRedisHealthy()) {
+            return;
+        }
         try {
             redisTemplate.opsForValue().set(key, value, ttlMillis, TimeUnit.MILLISECONDS);
         } catch (Exception e) {
+            lastRedisErrorTime = System.currentTimeMillis();
             log.warn("写入 Redis 缓存失败，已忽略，key={}", key, e);
         }
     }
@@ -378,6 +542,9 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
     private void evictDetailCache(Long productId) {
         try {
             redisTemplate.delete(ProductCacheConstants.detailKey(productId));
+            // 同时清理秒杀预热缓存，防止双轨不同步
+            redisTemplate.delete("seckill:stock:" + productId);
+            redisTemplate.delete("seckill:product:" + productId);
         } catch (Exception e) {
             log.warn("删除 Redis 缓存失败，已忽略，productId={}", productId, e);
         }
@@ -385,21 +552,28 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
 
     /** SETNX 抢锁：仅当 key 不存在时设置成功并返回 true */
     private boolean tryLock(String lockKey) {
+        if (!isRedisHealthy()) {
+            return false;
+        }
         try {
             Boolean ok = redisTemplate.opsForValue()
                     .setIfAbsent(lockKey, "1", ProductCacheConstants.LOCK_TTL.toMillis(), TimeUnit.MILLISECONDS);
             return Boolean.TRUE.equals(ok);
         } catch (Exception e) {
-            // Redis 异常时视作未抢到锁，由调用方走 DB 兜底
+            lastRedisErrorTime = System.currentTimeMillis();
             log.warn("获取重建锁失败，key={}", lockKey, e);
             return false;
         }
     }
 
     private void unlock(String lockKey) {
+        if (!isRedisHealthy()) {
+            return;
+        }
         try {
             redisTemplate.delete(lockKey);
         } catch (Exception e) {
+            lastRedisErrorTime = System.currentTimeMillis();
             log.warn("释放重建锁失败，key={}", lockKey, e);
         }
     }

@@ -66,3 +66,20 @@ export function cancelOrder(id) {
     method: 'put'
   })
 }
+
+// 秒杀下单：body { productId } -> data { queueId }
+export function seckillOrder(data) {
+  return request({
+    url: '/order/seckill',
+    method: 'post',
+    data
+  })
+}
+
+// 查询秒杀结果 -> data { status, orderNo }；status: 0 排队中 / 1 成功 / -1 失败
+export function getSeckillResult(productId) {
+  return request({
+    url: `/order/seckill/result/${productId}`,
+    method: 'get'
+  })
+}

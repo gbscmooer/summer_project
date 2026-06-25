@@ -7,8 +7,11 @@ import com.campus.order.mapper.NotificationMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 
 /**
@@ -25,17 +28,41 @@ import java.time.LocalDateTime;
 @RequiredArgsConstructor
 public class OrderNotificationConsumer {
 
+    private static final String DUP_KEY_PREFIX = "notification:dup:";
+    private static final Duration DUP_TTL = Duration.ofDays(7);
+
     private final NotificationMapper notificationMapper;
+    private final StringRedisTemplate stringRedisTemplate;
 
     @RabbitListener(queues = RabbitMQConfig.ORDER_NOTIFY_QUEUE)
     public void processOrderNotification(OrderNotifyMessage message) {
+        if (message == null) {
+            log.warn("收到空下单通知消息，跳过处理");
+            return;
+        }
+        if (!StringUtils.hasText(message.getOrderNo())
+                || message.getSellerId() == null
+                || !StringUtils.hasText(message.getProductTitle())) {
+            log.warn("下单通知消息字段不完整，跳过处理: orderNo={}, sellerId={}, productTitle={}",
+                    message.getOrderNo(), message.getSellerId(), message.getProductTitle());
+            return;
+        }
+
+        String dupKey = DUP_KEY_PREFIX + message.getOrderNo();
+        Boolean acquired = stringRedisTemplate.opsForValue().setIfAbsent(dupKey, "1", DUP_TTL);
+        if (Boolean.FALSE.equals(acquired)) {
+            log.info("订单 {} 通知已处理，跳过重复消费", message.getOrderNo());
+            return;
+        }
+
         log.info("====== [RabbitMQ 消费者] 收到下单通知 ======");
         log.info("订单号: {}", message.getOrderNo());
         log.info("商品标题: {}", message.getProductTitle());
         log.info("卖家 ID: {}", message.getSellerId());
         log.info("买家 ID: {}", message.getBuyerId());
 
-        // 写入通知表，发给卖家
+        String priceText = message.getPrice() != null ? message.getPrice().toPlainString() : "-";
+
         Notification notification = new Notification();
         notification.setUserId(message.getSellerId());
         notification.setType("ORDER_CREATED");
@@ -44,7 +71,7 @@ public class OrderNotificationConsumer {
                 String.format("买家已下单「%s」，订单号 %s，成交价 ¥%s",
                         message.getProductTitle(),
                         message.getOrderNo(),
-                        message.getPrice()));
+                        priceText));
         notification.setOrderNo(message.getOrderNo());
         notification.setIsRead(0);
         notification.setCreateTime(LocalDateTime.now());

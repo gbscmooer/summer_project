@@ -29,5 +29,5 @@ public interface ProductService {
     // 内部接口（供 OpenFeign）
     Product innerGetProduct(Long productId);
     boolean deductStock(Long productId);
-    void restoreStock(Long productId);
+    void restoreStock(Long productId, String orderNo);
 }

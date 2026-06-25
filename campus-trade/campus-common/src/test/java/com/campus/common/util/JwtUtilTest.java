@@ -18,6 +18,11 @@ class JwtUtilTest {
     }
 
     @Test
+    void generateTokenWithNullUserId() {
+        assertThrows(IllegalArgumentException.class, () -> JwtUtil.generateToken(null));
+    }
+
+    @Test
     void invalidToken() {
         assertFalse(JwtUtil.isValid("invalid.token.here"));
         assertFalse(JwtUtil.isValid(""));

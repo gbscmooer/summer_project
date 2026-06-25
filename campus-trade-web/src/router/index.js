@@ -47,6 +47,12 @@ const routes = [
     // 需要登录
     meta: { title: '我的订单', requiresAuth: true }
   },
+  {
+    path: '/notifications',
+    name: 'Notifications',
+    component: () => import('@/views/Notifications.vue'),
+    meta: { title: '消息通知', requiresAuth: true }
+  },
   // 兜底：未匹配路由回首页
   {
     path: '/:pathMatch(.*)*',

@@ -63,10 +63,19 @@
               size="large"
               :icon="ShoppingCart"
               :loading="buying"
-              :disabled="detail.status !== 1"
+              :disabled="detail.status !== 1 || seckilling"
               @click="onBuy"
             >
               {{ detail.status === 1 ? '立即购买' : '已售/已下架' }}
+            </el-button>
+            <el-button
+              type="warning"
+              size="large"
+              :loading="seckilling"
+              :disabled="detail.status !== 1 || buying"
+              @click="onSeckill"
+            >
+              {{ seckilling ? '秒杀排队中...' : '限时秒杀' }}
             </el-button>
           </div>
         </div>
@@ -85,7 +94,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Picture, ShoppingCart } from '@element-plus/icons-vue'
 import { getProductDetail } from '@/api/product'
-import { createOrder } from '@/api/order'
+import { createOrder, seckillOrder, getSeckillResult } from '@/api/order'
 import { useUserStore } from '@/store/user'
 import { getStatusText, getStatusType } from '@/constants/product'
 
@@ -95,6 +104,7 @@ const userStore = useUserStore()
 const loading = ref(false)
 const detail = ref(null)
 const buying = ref(false)
+const seckilling = ref(false)
 
 const images = computed(() => {
   if (!detail.value || !Array.isArray(detail.value.images)) return []
@@ -138,6 +148,53 @@ async function onBuy() {
     // 失败的具体业务提示（库存不足/已售/不能买自己的等）已由响应拦截器 ElMessage 弹出
   } finally {
     buying.value = false
+  }
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function pollSeckillResult(productId, maxAttempts = 30) {
+  for (let i = 0; i < maxAttempts; i++) {
+    await sleep(1000)
+    const res = await getSeckillResult(productId)
+    const status = res.data && res.data.status
+    const orderNo = res.data && res.data.orderNo
+    if (status === 0) continue
+    if (status === 1) return { success: true, orderNo }
+    return { success: false }
+  }
+  return { success: false, timeout: true }
+}
+
+async function onSeckill() {
+  if (!userStore.isLogin) {
+    router.push({ path: '/login', query: { redirect: route.fullPath } })
+    return
+  }
+  if (seckilling.value) return
+  const productId = detail.value && detail.value.productId
+  if (!productId) return
+  seckilling.value = true
+  try {
+    const res = await seckillOrder({ productId })
+    ElMessage.info(res.message || '排队中，请稍候')
+    const result = await pollSeckillResult(productId)
+    if (result.success) {
+      ElMessage.success(`秒杀成功，订单号 ${result.orderNo}`)
+      router.push('/orders')
+      return
+    }
+    if (result.timeout) {
+      ElMessage.warning('仍在排队中，请稍后在「我的订单」查看结果')
+    } else {
+      ElMessage.error('秒杀失败，请稍后重试')
+    }
+  } catch (e) {
+    // 错误提示已由拦截器处理
+  } finally {
+    seckilling.value = false
   }
 }
 
@@ -233,6 +290,9 @@ onMounted(fetchDetail)
 
 .buy-box {
   margin-top: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
 .description {

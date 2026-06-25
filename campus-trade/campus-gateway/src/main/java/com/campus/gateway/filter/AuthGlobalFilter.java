@@ -18,6 +18,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.nio.charset.StandardCharsets;
 import java.util.regex.Pattern;
@@ -59,24 +60,32 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
                 .build();
         ServerWebExchange sanitizedExchange = exchange.mutate().request(sanitizedRequest).build();
 
-        // 2. 白名单放行（已剥离 X-User-Id，即便携带 token 也无需注入下游）。
+        // 2. CORS 预检请求直接放行。
+        if (HttpMethod.OPTIONS.equals(method)) {
+            return chain.filter(sanitizedExchange);
+        }
+
+        // 3. 白名单放行（已剥离 X-User-Id，即便携带 token 也无需注入下游）。
         if (isWhiteList(path, method)) {
             return chain.filter(sanitizedExchange);
         }
 
-        // 3. 非白名单：校验 Authorization 头中的 Bearer token。
+        // 4. 非白名单：校验 Authorization 头中的 Bearer token（JWT 解析放到 boundedElastic，避免阻塞 Netty event loop）。
         String authorization = sanitizedRequest.getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
         String token = extractToken(authorization);
-        if (token == null || !JwtUtil.isValid(token)) {
+        if (token == null) {
             return unauthorized(sanitizedExchange);
         }
 
-        // 4. token 有效：解析 userId 并通过 X-User-Id 透传给下游。
-        Long userId = JwtUtil.parseUserId(token);
-        ServerHttpRequest authedRequest = sanitizedRequest.mutate()
-                .header(HEADER_USER_ID, String.valueOf(userId))
-                .build();
-        return chain.filter(sanitizedExchange.mutate().request(authedRequest).build());
+        return Mono.fromCallable(() -> JwtUtil.parseUserId(token))
+                .subscribeOn(Schedulers.boundedElastic())
+                .flatMap(userId -> {
+                    ServerHttpRequest authedRequest = sanitizedRequest.mutate()
+                            .header(HEADER_USER_ID, String.valueOf(userId))
+                            .build();
+                    return chain.filter(sanitizedExchange.mutate().request(authedRequest).build());
+                })
+                .onErrorResume(e -> unauthorized(sanitizedExchange));
     }
 
     /**

@@ -21,6 +21,12 @@
           <el-menu-item index="/">首页</el-menu-item>
           <el-menu-item index="/publish">发布</el-menu-item>
           <el-menu-item v-if="userStore.isLogin" index="/orders">我的订单</el-menu-item>
+          <el-menu-item v-if="userStore.isLogin" index="/notifications" class="notify-menu-item">
+            <span class="notify-label">
+              消息
+              <el-badge v-if="unreadCount > 0" :value="unreadCount" :max="99" class="notify-badge" />
+            </span>
+          </el-menu-item>
           <el-menu-item index="/my">我的</el-menu-item>
         </el-menu>
 
@@ -57,24 +63,89 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import { User, ArrowDown } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/user'
+import { getUnreadCount } from '@/api/notification'
 
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
+const unreadCount = ref(0)
+let unreadTimer = null
 
-// 当前激活菜单项：仅在这三个主菜单路径下高亮
+// 当前激活菜单项：仅在这几个主菜单路径下高亮
 const activeMenu = computed(() => {
   const path = route.path
-  if (path === '/' || path === '/publish' || path === '/my' || path === '/orders') {
+  if (
+    path === '/' ||
+    path === '/publish' ||
+    path === '/my' ||
+    path === '/orders' ||
+    path === '/notifications'
+  ) {
     return path
   }
   return ''
 })
+
+async function refreshUnreadCount() {
+  if (!userStore.isLogin) {
+    unreadCount.value = 0
+    return
+  }
+  try {
+    const res = await getUnreadCount()
+    unreadCount.value = Number(res.data) || 0
+  } catch (e) {
+    unreadCount.value = 0
+  }
+}
+
+function startUnreadPolling() {
+  stopUnreadPolling()
+  refreshUnreadCount()
+  unreadTimer = setInterval(refreshUnreadCount, 30000)
+}
+
+function stopUnreadPolling() {
+  if (unreadTimer) {
+    clearInterval(unreadTimer)
+    unreadTimer = null
+  }
+}
+
+watch(
+  () => userStore.isLogin,
+  (loggedIn) => {
+    if (loggedIn) {
+      startUnreadPolling()
+    } else {
+      stopUnreadPolling()
+      unreadCount.value = 0
+    }
+  },
+  { immediate: true }
+)
+
+watch(
+  () => route.path,
+  (path) => {
+    if (path === '/notifications' || path === '/orders') {
+      refreshUnreadCount()
+    }
+  }
+)
+
+onMounted(() => {
+  if (userStore.isLogin) {
+    startUnreadPolling()
+  }
+})
+
+onUnmounted(stopUnreadPolling)
 
 function handleCommand(command) {
   if (command === 'my') {
@@ -165,6 +236,16 @@ function handleCommand(command) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.notify-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.notify-badge :deep(.el-badge__content) {
+  transform: translateY(-2px);
 }
 
 .app-main {

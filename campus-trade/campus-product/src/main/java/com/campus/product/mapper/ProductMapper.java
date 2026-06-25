@@ -11,7 +11,7 @@ public interface ProductMapper extends BaseMapper<Product> {
     @Update("UPDATE t_product SET view_count = view_count + 1 WHERE id = #{id}")
     void incrementViewCount(Long id);
 
-    @Update("UPDATE t_product SET stock = stock - 1 WHERE id = #{id} AND stock > 0")
+    @Update("UPDATE t_product SET stock = stock - 1, status = CASE WHEN stock = 1 THEN 2 ELSE status END WHERE id = #{id} AND status = 1 AND stock > 0")
     int deductStock(Long id);
 
     @Update("UPDATE t_product SET stock = stock + 1 WHERE id = #{id}")
