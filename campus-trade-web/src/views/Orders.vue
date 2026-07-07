@@ -1,156 +1,130 @@
 <template>
   <div class="page-container">
-    <el-card class="orders-card">
-      <el-tabs v-model="activeTab" @tab-change="onTabChange">
-        <!-- 我买到的 -->
-        <el-tab-pane label="我买到的" name="buyer">
-          <div class="status-filter">
-            <span class="filter-label">状态筛选：</span>
-            <el-radio-group v-model="statusFilter" size="small" @change="onStatusChange">
-              <el-radio-button value="all">全部</el-radio-button>
-              <el-radio-button :value="0">待付款</el-radio-button>
-              <el-radio-button :value="1">已付款</el-radio-button>
-              <el-radio-button :value="2">已完成</el-radio-button>
-              <el-radio-button :value="3">已取消</el-radio-button>
-            </el-radio-group>
-          </div>
-          <div v-loading="loading">
-            <el-empty v-if="!loading && list.length === 0" description="还没有买到的订单">
-              <el-button type="primary" @click="$router.push('/')">去逛逛</el-button>
-            </el-empty>
+    <div class="page-header">
+      <h1 class="page-title">Orders</h1>
+    </div>
 
-            <div v-else class="order-list">
-              <el-card
-                v-for="order in list"
-                :key="order.orderId"
-                class="order-item"
-                shadow="hover"
-              >
-                <div class="order-row">
-                  <div class="order-main">
-                    <div class="order-title-line">
-                      <span class="order-title">{{ order.productTitle }}</span>
-                      <el-tag size="small" :type="statusType(order.status)">
-                        {{ order.statusText }}
-                      </el-tag>
-                    </div>
-                    <div class="order-meta">
-                      <span class="price">¥{{ formatPrice(order.price) }}</span>
-                      <span class="meta-item">卖家：{{ order.counterpartNickname || '—' }}</span>
-                      <span class="meta-item">订单号：{{ order.orderNo }}</span>
-                      <span class="meta-item">{{ formatTime(order.createTime) }}</span>
-                    </div>
-                  </div>
-                  <!-- 买家操作：按状态显示 -->
-                  <div class="order-actions">
-                    <el-button size="small" @click="openDetail(order.orderId)">详情</el-button>
-                    <template v-if="order.status === 0">
-                      <el-button
-                        size="small"
-                        type="danger"
-                        :loading="actingId === order.orderId"
-                        @click="onPay(order)"
-                      >
-                        支付
-                      </el-button>
-                      <el-button
-                        size="small"
-                        :loading="actingId === order.orderId"
-                        @click="onCancel(order)"
-                      >
-                        取消
-                      </el-button>
-                    </template>
-                    <template v-else-if="order.status === 1">
-                      <el-button
-                        size="small"
-                        type="primary"
-                        :loading="actingId === order.orderId"
-                        @click="onConfirm(order)"
-                      >
-                        确认收货
-                      </el-button>
-                    </template>
-                  </div>
-                </div>
-              </el-card>
-            </div>
-          </div>
-        </el-tab-pane>
-
-        <!-- 我卖出的（只读） -->
-        <el-tab-pane label="我卖出的" name="seller">
-          <div class="status-filter">
-            <span class="filter-label">状态筛选：</span>
-            <el-radio-group v-model="statusFilter" size="small" @change="onStatusChange">
-              <el-radio-button value="all">全部</el-radio-button>
-              <el-radio-button :value="0">待付款</el-radio-button>
-              <el-radio-button :value="1">已付款</el-radio-button>
-              <el-radio-button :value="2">已完成</el-radio-button>
-              <el-radio-button :value="3">已取消</el-radio-button>
-            </el-radio-group>
-          </div>
-          <div v-loading="loading">
-            <el-empty v-if="!loading && list.length === 0" description="还没有卖出的订单" />
-
-            <div v-else class="order-list">
-              <el-card
-                v-for="order in list"
-                :key="order.orderId"
-                class="order-item"
-                shadow="hover"
-              >
-                <div class="order-row">
-                  <div class="order-main">
-                    <div class="order-title-line">
-                      <span class="order-title">{{ order.productTitle }}</span>
-                      <el-tag size="small" :type="statusType(order.status)">
-                        {{ order.statusText }}
-                      </el-tag>
-                    </div>
-                    <div class="order-meta">
-                      <span class="price">¥{{ formatPrice(order.price) }}</span>
-                      <span class="meta-item">买家：{{ order.counterpartNickname || '—' }}</span>
-                      <span class="meta-item">订单号：{{ order.orderNo }}</span>
-                      <span class="meta-item">{{ formatTime(order.createTime) }}</span>
-                    </div>
-                  </div>
-                  <div class="order-actions">
-                    <el-button size="small" @click="openDetail(order.orderId)">详情</el-button>
-                  </div>
-                </div>
-              </el-card>
-            </div>
-          </div>
-        </el-tab-pane>
-      </el-tabs>
-
-      <!-- 分页 -->
-      <div v-if="total > 0" class="pagination-wrapper">
-        <el-pagination
-          v-model:current-page="pageNum"
-          v-model:page-size="pageSize"
-          :total="total"
-          :page-sizes="[10, 20, 30]"
-          layout="total, sizes, prev, pager, next"
-          background
-          @current-change="fetchOrders"
-          @size-change="onSizeChange"
-        />
+    <div class="oa-panel">
+      <!-- Tab pills -->
+      <div class="oa-filter-pills tab-pills">
+        <button
+          class="oa-filter-pill"
+          :class="{ active: activeTab === 'buyer' }"
+          @click="switchTab('buyer')"
+        >
+          Purchases
+        </button>
+        <button
+          class="oa-filter-pill"
+          :class="{ active: activeTab === 'seller' }"
+          @click="switchTab('seller')"
+        >
+          Sales
+        </button>
       </div>
-    </el-card>
 
-    <el-dialog v-model="detailVisible" title="订单详情" width="520px">
+      <!-- 状态筛选 -->
+      <div class="oa-filter-pills">
+        <button
+          v-for="s in statusOptions"
+          :key="s.value"
+          class="oa-filter-pill"
+          :class="{ active: statusFilter === s.value }"
+          @click="setStatus(s.value)"
+        >
+          {{ s.label }}
+        </button>
+      </div>
+
+      <div v-loading="loading">
+        <div v-if="!loading && list.length === 0" class="oa-empty-state">
+          <p>{{ activeTab === 'buyer' ? 'No purchases yet' : 'No sales yet' }}</p>
+          <el-button v-if="activeTab === 'buyer'" type="primary" @click="$router.push('/')">
+            Browse marketplace
+          </el-button>
+        </div>
+
+        <div v-else class="order-list">
+          <div v-for="order in list" :key="order.orderId" class="oa-list-item order-item">
+            <div class="order-row">
+              <div class="order-main">
+                <div class="order-title-line">
+                  <span class="order-title">{{ order.productTitle }}</span>
+                  <span class="oa-status" :class="statusClass(order.status)">
+                    {{ order.statusText }}
+                  </span>
+                </div>
+                <div class="order-meta">
+                  <span class="oa-price">¥{{ formatPrice(order.price) }}</span>
+                  <span class="oa-meta">
+                    {{ activeTab === 'buyer' ? 'Seller' : 'Buyer' }}:
+                    {{ order.counterpartNickname || '—' }}
+                  </span>
+                  <span class="oa-meta">#{{ order.orderNo }}</span>
+                  <span class="oa-meta">{{ formatTime(order.createTime) }}</span>
+                </div>
+              </div>
+              <div class="order-actions">
+                <el-button size="small" @click="openDetail(order.orderId)">Details</el-button>
+                <template v-if="activeTab === 'buyer'">
+                  <template v-if="order.status === 0">
+                    <el-button
+                      size="small"
+                      type="primary"
+                      :loading="actingId === order.orderId"
+                      @click="onPay(order)"
+                    >
+                      Pay
+                    </el-button>
+                    <el-button
+                      size="small"
+                      :loading="actingId === order.orderId"
+                      @click="onCancel(order)"
+                    >
+                      Cancel
+                    </el-button>
+                  </template>
+                  <el-button
+                    v-else-if="order.status === 1"
+                    size="small"
+                    type="primary"
+                    :loading="actingId === order.orderId"
+                    @click="onConfirm(order)"
+                  >
+                    Confirm
+                  </el-button>
+                </template>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="total > 0" class="oa-pagination">
+          <el-pagination
+            v-model:current-page="pageNum"
+            v-model:page-size="pageSize"
+            :total="total"
+            :page-sizes="[10, 20, 30]"
+            layout="total, sizes, prev, pager, next"
+            background
+            @current-change="fetchOrders"
+            @size-change="onSizeChange"
+          />
+        </div>
+      </div>
+    </div>
+
+    <el-dialog v-model="detailVisible" title="Order details" width="520px">
       <div v-loading="detailLoading">
-        <el-empty v-if="!detailLoading && !orderDetail" description="无法加载订单详情" />
+        <el-empty v-if="!detailLoading && !orderDetail" description="Unable to load order" />
         <el-descriptions v-else-if="orderDetail" :column="1" border>
-          <el-descriptions-item label="订单号">{{ orderDetail.orderNo }}</el-descriptions-item>
-          <el-descriptions-item label="商品">{{ orderDetail.productTitle }}</el-descriptions-item>
-          <el-descriptions-item label="价格">¥{{ formatPrice(orderDetail.price) }}</el-descriptions-item>
-          <el-descriptions-item label="状态">{{ orderDetail.statusText }}</el-descriptions-item>
-          <el-descriptions-item label="买家">{{ orderDetail.buyerNickname || '—' }}</el-descriptions-item>
-          <el-descriptions-item label="卖家">{{ orderDetail.sellerNickname || '—' }}</el-descriptions-item>
-          <el-descriptions-item label="下单时间">{{ formatTime(orderDetail.createTime) }}</el-descriptions-item>
+          <el-descriptions-item label="Order No">{{ orderDetail.orderNo }}</el-descriptions-item>
+          <el-descriptions-item label="Product">{{ orderDetail.productTitle }}</el-descriptions-item>
+          <el-descriptions-item label="Price">¥{{ formatPrice(orderDetail.price) }}</el-descriptions-item>
+          <el-descriptions-item label="Status">{{ orderDetail.statusText }}</el-descriptions-item>
+          <el-descriptions-item label="Buyer">{{ orderDetail.buyerNickname || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="Seller">{{ orderDetail.sellerNickname || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="Created">{{ formatTime(orderDetail.createTime) }}</el-descriptions-item>
         </el-descriptions>
       </div>
     </el-dialog>
@@ -169,13 +143,13 @@ import {
   cancelOrder
 } from '@/api/order'
 
-// 订单状态映射：0 待付款 / 1 已付款 / 2 已完成 / 3 已取消
-const ORDER_STATUS_TYPE = {
-  0: 'warning',
-  1: 'primary',
-  2: 'success',
-  3: 'info'
-}
+const statusOptions = [
+  { label: 'All', value: 'all' },
+  { label: 'Pending', value: 0 },
+  { label: 'Paid', value: 1 },
+  { label: 'Completed', value: 2 },
+  { label: 'Cancelled', value: 3 }
+]
 
 const activeTab = ref('buyer')
 const statusFilter = ref('all')
@@ -187,11 +161,11 @@ const loading = ref(false)
 const detailVisible = ref(false)
 const detailLoading = ref(false)
 const orderDetail = ref(null)
-// 正在操作的订单 id（用于按钮 loading，避免整列表禁用）
 const actingId = ref(null)
 
-function statusType(status) {
-  return ORDER_STATUS_TYPE[status] || 'info'
+function statusClass(status) {
+  const map = { 0: 'oa-status-warning', 1: 'oa-status-primary', 2: 'oa-status-success', 3: 'oa-status-info' }
+  return map[status] || 'oa-status-info'
 }
 
 function formatPrice(price) {
@@ -199,7 +173,6 @@ function formatPrice(price) {
   return Number.isFinite(n) ? n.toFixed(2) : price
 }
 
-// 后端 LocalDateTime 序列化为 ISO 字符串，这里转为本地可读格式
 function formatTime(t) {
   if (!t) return ''
   const d = new Date(t)
@@ -211,9 +184,7 @@ function formatTime(t) {
 async function fetchOrders() {
   loading.value = true
   const params = { pageNum: pageNum.value, pageSize: pageSize.value }
-  if (statusFilter.value !== 'all') {
-    params.status = statusFilter.value
-  }
+  if (statusFilter.value !== 'all') params.status = statusFilter.value
   try {
     const res =
       activeTab.value === 'buyer'
@@ -221,7 +192,7 @@ async function fetchOrders() {
         : await getSellerOrders(params)
     list.value = (res.data && res.data.list) || []
     total.value = (res.data && res.data.total) || 0
-  } catch (e) {
+  } catch {
     list.value = []
     total.value = 0
   } finally {
@@ -229,8 +200,8 @@ async function fetchOrders() {
   }
 }
 
-function onTabChange() {
-  // 切 Tab 重置分页并重新拉取
+function switchTab(tab) {
+  activeTab.value = tab
   pageNum.value = 1
   total.value = 0
   list.value = []
@@ -238,7 +209,8 @@ function onTabChange() {
   fetchOrders()
 }
 
-function onStatusChange() {
+function setStatus(val) {
+  statusFilter.value = val
   pageNum.value = 1
   fetchOrders()
 }
@@ -250,7 +222,7 @@ async function openDetail(orderId) {
   try {
     const res = await getOrderDetail(orderId)
     orderDetail.value = res.data
-  } catch (e) {
+  } catch {
     orderDetail.value = null
   } finally {
     detailLoading.value = false
@@ -263,19 +235,17 @@ function onSizeChange() {
 }
 
 function onPay(order) {
-  ElMessageBox.confirm(`确认支付订单「${order.productTitle}」？`, '支付确认', {
-    confirmButtonText: '支付',
-    cancelButtonText: '取消',
+  ElMessageBox.confirm(`Confirm payment for "${order.productTitle}"?`, 'Payment', {
+    confirmButtonText: 'Pay',
+    cancelButtonText: 'Cancel',
     type: 'warning'
   })
     .then(async () => {
       actingId.value = order.orderId
       try {
         await payOrder(order.orderId)
-        ElMessage.success('支付成功')
+        ElMessage.success('Payment successful')
         await fetchOrders()
-      } catch (e) {
-        // 错误提示已由拦截器处理
       } finally {
         actingId.value = null
       }
@@ -284,19 +254,17 @@ function onPay(order) {
 }
 
 function onConfirm(order) {
-  ElMessageBox.confirm(`确认已收到「${order.productTitle}」？`, '确认收货', {
-    confirmButtonText: '确认收货',
-    cancelButtonText: '取消',
+  ElMessageBox.confirm(`Confirm receipt of "${order.productTitle}"?`, 'Confirm receipt', {
+    confirmButtonText: 'Confirm',
+    cancelButtonText: 'Cancel',
     type: 'warning'
   })
     .then(async () => {
       actingId.value = order.orderId
       try {
         await confirmOrder(order.orderId)
-        ElMessage.success('确认收货成功')
+        ElMessage.success('Receipt confirmed')
         await fetchOrders()
-      } catch (e) {
-        // 错误提示已由拦截器处理
       } finally {
         actingId.value = null
       }
@@ -305,19 +273,17 @@ function onConfirm(order) {
 }
 
 function onCancel(order) {
-  ElMessageBox.confirm(`确定取消订单「${order.productTitle}」？`, '取消订单', {
-    confirmButtonText: '取消订单',
-    cancelButtonText: '再想想',
+  ElMessageBox.confirm(`Cancel order "${order.productTitle}"?`, 'Cancel order', {
+    confirmButtonText: 'Cancel order',
+    cancelButtonText: 'Keep',
     type: 'warning'
   })
     .then(async () => {
       actingId.value = order.orderId
       try {
         await cancelOrder(order.orderId)
-        ElMessage.success('已取消')
+        ElMessage.success('Order cancelled')
         await fetchOrders()
-      } catch (e) {
-        // 错误提示已由拦截器处理
       } finally {
         actingId.value = null
       }
@@ -329,31 +295,17 @@ onMounted(fetchOrders)
 </script>
 
 <style scoped>
-.orders-card {
-  min-height: 400px;
-}
-
-.status-filter {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 16px;
-}
-
-.filter-label {
-  color: #606266;
-  font-size: 13px;
+.tab-pills {
+  margin-bottom: 12px;
 }
 
 .order-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
 }
 
 .order-item {
-  border-radius: 8px;
+  cursor: default;
 }
 
 .order-row {
@@ -377,9 +329,9 @@ onMounted(fetchOrders)
 }
 
 .order-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: #303133;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--oa-text);
 }
 
 .order-meta {
@@ -387,33 +339,12 @@ onMounted(fetchOrders)
   flex-wrap: wrap;
   align-items: center;
   gap: 16px;
-  color: #909399;
-  font-size: 13px;
-}
-
-.price {
-  color: #f56c6c;
-  font-size: 16px;
-  font-weight: 700;
-}
-
-.meta-item {
-  white-space: nowrap;
 }
 
 .order-actions {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.no-action {
-  color: #c0c4cc;
-}
-
-.pagination-wrapper {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 20px;
+  flex-shrink: 0;
 }
 </style>

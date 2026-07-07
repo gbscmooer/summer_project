@@ -1,45 +1,63 @@
 <template>
   <div class="page-container">
-    <!-- 个人信息 -->
-    <el-card class="info-card" v-loading="infoLoading">
-      <template #header>
-        <div class="card-header">
-          <span class="card-title">个人信息</span>
-          <el-button text type="primary" @click="openEdit">编辑资料</el-button>
-        </div>
-      </template>
+    <div class="page-header">
+      <h1 class="page-title">Profile</h1>
+      <el-button type="primary" size="small" @click="openEdit">Edit profile</el-button>
+    </div>
 
-      <div v-if="info" class="user-info">
-        <el-avatar :size="64" :src="info.avatar">
+    <!-- 个人信息 -->
+    <div class="oa-panel profile-panel" v-loading="infoLoading">
+      <div v-if="info" class="profile-row">
+        <el-avatar :size="56" :src="info.avatar" class="profile-avatar">
           {{ (info.nickname || info.username || 'U').charAt(0) }}
         </el-avatar>
-        <el-descriptions :column="2" class="info-desc">
-          <el-descriptions-item label="用户名">{{ info.username }}</el-descriptions-item>
-          <el-descriptions-item label="昵称">{{ info.nickname }}</el-descriptions-item>
-          <el-descriptions-item label="手机号">{{ info.phone || '未填写' }}</el-descriptions-item>
-          <el-descriptions-item label="注册时间">{{ info.createTime }}</el-descriptions-item>
-        </el-descriptions>
+        <div class="profile-fields">
+          <div class="field-row">
+            <div class="field">
+              <span class="field-label">Username</span>
+              <span class="field-value">{{ info.username }}</span>
+            </div>
+            <div class="field">
+              <span class="field-label">Nickname</span>
+              <span class="field-value">{{ info.nickname }}</span>
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <span class="field-label">Phone</span>
+              <span class="field-value">{{ info.phone || 'Not set' }}</span>
+            </div>
+            <div class="field">
+              <span class="field-label">Joined</span>
+              <span class="field-value">{{ info.createTime }}</span>
+            </div>
+          </div>
+        </div>
       </div>
-    </el-card>
+    </div>
 
     <!-- 我发布的 -->
-    <el-card class="list-card">
-      <template #header>
-        <span class="card-title">我发布的商品</span>
-      </template>
+    <div class="oa-panel listings-panel">
+      <div class="oa-panel-header">
+        <span class="oa-panel-title">My listings</span>
+        <el-button type="primary" size="small" @click="$router.push('/publish')">
+          New listing
+        </el-button>
+      </div>
 
       <div v-loading="listLoading">
-        <el-empty v-if="!listLoading && list.length === 0" description="你还没有发布过商品">
-          <el-button type="primary" @click="$router.push('/publish')">去发布</el-button>
-        </el-empty>
+        <div v-if="!listLoading && list.length === 0" class="oa-empty-state">
+          <p>You haven't published any listings yet</p>
+          <el-button type="primary" @click="$router.push('/publish')">Create listing</el-button>
+        </div>
 
         <el-table v-else :data="list" style="width: 100%">
-          <el-table-column label="封面" width="90">
+          <el-table-column label="Cover" width="80">
             <template #default="{ row }">
               <el-image
                 :src="row.cover"
                 fit="cover"
-                style="width: 60px; height: 60px; border-radius: 4px"
+                class="thumb-img"
               >
                 <template #error>
                   <div class="thumb-placeholder">
@@ -49,24 +67,24 @@
               </el-image>
             </template>
           </el-table-column>
-          <el-table-column prop="title" label="标题" min-width="180" show-overflow-tooltip />
-          <el-table-column label="价格" width="120">
+          <el-table-column prop="title" label="Title" min-width="180" show-overflow-tooltip />
+          <el-table-column label="Price" width="110">
             <template #default="{ row }">
-              <span class="price">¥{{ formatPrice(row.price) }}</span>
+              <span class="oa-price">¥{{ formatPrice(row.price) }}</span>
             </template>
           </el-table-column>
-          <el-table-column prop="category" label="分类" width="90" />
-          <el-table-column label="状态" width="90">
+          <el-table-column prop="category" label="Category" width="100" />
+          <el-table-column label="Status" width="100">
             <template #default="{ row }">
-              <el-tag size="small" :type="getStatusType(row.status)">
+              <span class="oa-status" :class="listingStatusClass(row.status)">
                 {{ getStatusText(row.status) }}
-              </el-tag>
+              </span>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="220" fixed="right">
+          <el-table-column label="Actions" width="220" fixed="right">
             <template #default="{ row }">
               <el-button size="small" @click="$router.push(`/product/${row.productId}`)">
-                查看
+                View
               </el-button>
               <el-button
                 size="small"
@@ -74,7 +92,7 @@
                 :disabled="row.status === 0"
                 @click="openEditProduct(row)"
               >
-                编辑
+                Edit
               </el-button>
               <el-button
                 size="small"
@@ -82,13 +100,13 @@
                 :disabled="row.status === 0"
                 @click="onDelist(row)"
               >
-                下架
+                Delist
               </el-button>
             </template>
           </el-table-column>
         </el-table>
 
-        <div v-if="total > 0" class="pagination-wrapper">
+        <div v-if="total > 0" class="oa-pagination">
           <el-pagination
             v-model:current-page="pageNum"
             v-model:page-size="pageSize"
@@ -101,74 +119,74 @@
           />
         </div>
       </div>
-    </el-card>
+    </div>
 
     <!-- 编辑资料弹窗 -->
-    <el-dialog v-model="editVisible" title="编辑资料" width="420px">
-      <el-form ref="editFormRef" :model="editForm" :rules="editRules" label-width="70px">
-        <el-form-item label="昵称" prop="nickname">
-          <el-input v-model="editForm.nickname" placeholder="请输入昵称" />
+    <el-dialog v-model="editVisible" title="Edit profile" width="420px">
+      <el-form ref="editFormRef" :model="editForm" :rules="editRules" label-position="top">
+        <el-form-item label="Nickname" prop="nickname">
+          <el-input v-model="editForm.nickname" placeholder="Display name" />
         </el-form-item>
-        <el-form-item label="手机号" prop="phone">
-          <el-input v-model="editForm.phone" placeholder="请输入手机号" />
+        <el-form-item label="Phone" prop="phone">
+          <el-input v-model="editForm.phone" placeholder="Phone number" />
         </el-form-item>
-        <el-form-item label="头像URL" prop="avatar">
-          <el-input v-model="editForm.avatar" placeholder="头像图片链接（可选）" />
+        <el-form-item label="Avatar URL" prop="avatar">
+          <el-input v-model="editForm.avatar" placeholder="Optional avatar image URL" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="editVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="onSaveEdit">保存</el-button>
+        <el-button @click="editVisible = false">Cancel</el-button>
+        <el-button type="primary" :loading="saving" @click="onSaveEdit">Save</el-button>
       </template>
     </el-dialog>
 
     <!-- 编辑商品弹窗 -->
-    <el-dialog v-model="productEditVisible" title="编辑商品" width="640px">
+    <el-dialog v-model="productEditVisible" title="Edit listing" width="640px">
       <el-form
         ref="productEditFormRef"
         :model="productEditForm"
         :rules="productEditRules"
-        label-width="90px"
+        label-position="top"
         v-loading="productEditLoading"
       >
-        <el-form-item label="标题" prop="title">
+        <el-form-item label="Title" prop="title">
           <el-input v-model="productEditForm.title" maxlength="50" show-word-limit />
         </el-form-item>
-        <el-form-item label="分类" prop="category">
-          <el-select v-model="productEditForm.category" placeholder="请选择分类" style="width: 220px">
+        <el-form-item label="Category" prop="category">
+          <el-select v-model="productEditForm.category" placeholder="Select category" style="width: 100%">
             <el-option v-for="cat in categories" :key="cat" :label="cat" :value="cat" />
           </el-select>
         </el-form-item>
-        <el-form-item label="价格" prop="price">
+        <el-form-item label="Price" prop="price">
           <el-input-number
             v-model="productEditForm.price"
             :min="0"
             :precision="2"
             :step="1"
             controls-position="right"
-            style="width: 220px"
+            style="width: 200px"
           />
         </el-form-item>
-        <el-form-item label="库存" prop="stock">
+        <el-form-item label="Stock" prop="stock">
           <el-input-number
             v-model="productEditForm.stock"
             :min="1"
             :precision="0"
             :step="1"
             controls-position="right"
-            style="width: 220px"
+            style="width: 200px"
           />
         </el-form-item>
-        <el-form-item label="图片URL" prop="images">
+        <el-form-item label="Image URLs" prop="images">
           <el-input v-model="productEditForm.images" type="textarea" :rows="3" />
         </el-form-item>
-        <el-form-item label="描述" prop="description">
+        <el-form-item label="Description" prop="description">
           <el-input v-model="productEditForm.description" type="textarea" :rows="4" maxlength="500" show-word-limit />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="productEditVisible = false">取消</el-button>
-        <el-button type="primary" :loading="productSaving" @click="onSaveProductEdit">保存</el-button>
+        <el-button @click="productEditVisible = false">Cancel</el-button>
+        <el-button type="primary" :loading="productSaving" @click="onSaveProductEdit">Save</el-button>
       </template>
     </el-dialog>
   </div>
@@ -180,13 +198,12 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Picture } from '@element-plus/icons-vue'
 import { getUserInfo, updateUserInfo } from '@/api/user'
 import { getMyProducts, getProductDetail, updateProduct, deleteProduct } from '@/api/product'
-import { getStatusText, getStatusType, CATEGORIES } from '@/constants/product'
+import { getStatusText, CATEGORIES } from '@/constants/product'
 import { useUserStore } from '@/store/user'
 
 const userStore = useUserStore()
 const categories = CATEGORIES
 
-// ---- 个人信息 ----
 const info = ref(null)
 const infoLoading = ref(false)
 
@@ -195,32 +212,31 @@ function formatPrice(price) {
   return Number.isFinite(n) ? n.toFixed(2) : price
 }
 
+function listingStatusClass(status) {
+  const map = { 0: 'oa-status-info', 1: 'oa-status-success', 2: 'oa-status-danger' }
+  return map[status] || 'oa-status-info'
+}
+
 async function fetchInfo() {
   infoLoading.value = true
   try {
     const res = await getUserInfo()
     info.value = res.data
-    // 同步最新昵称/头像到 store，保持导航栏一致
     userStore.setUserInfo({
       nickname: res.data.nickname,
       avatar: res.data.avatar
     })
-  } catch (e) {
+  } catch {
     info.value = null
   } finally {
     infoLoading.value = false
   }
 }
 
-// ---- 编辑资料 ----
 const editVisible = ref(false)
 const saving = ref(false)
 const editFormRef = ref(null)
-const editForm = reactive({
-  nickname: '',
-  phone: '',
-  avatar: ''
-})
+const editForm = reactive({ nickname: '', phone: '', avatar: '' })
 
 const editRules = {
   nickname: [{ required: true, message: '请输入昵称', trigger: 'blur' }],
@@ -242,7 +258,7 @@ async function onSaveEdit() {
   if (!editFormRef.value) return
   try {
     await editFormRef.value.validate()
-  } catch (e) {
+  } catch {
     return
   }
   saving.value = true
@@ -252,17 +268,14 @@ async function onSaveEdit() {
       avatar: editForm.avatar,
       phone: editForm.phone
     })
-    ElMessage.success('资料已更新')
+    ElMessage.success('Profile updated')
     editVisible.value = false
     await fetchInfo()
-  } catch (e) {
-    // 错误提示已由拦截器处理
   } finally {
     saving.value = false
   }
 }
 
-// ---- 编辑商品 ----
 const productEditVisible = ref(false)
 const productEditLoading = ref(false)
 const productSaving = ref(false)
@@ -298,7 +311,7 @@ async function openEditProduct(row) {
     productEditForm.stock = data.stock || 1
     productEditForm.description = data.description || ''
     productEditForm.images = Array.isArray(data.images) ? data.images.join(',') : ''
-  } catch (e) {
+  } catch {
     productEditVisible.value = false
   } finally {
     productEditLoading.value = false
@@ -309,7 +322,7 @@ async function onSaveProductEdit() {
   if (!productEditFormRef.value || !editingProductId.value) return
   try {
     await productEditFormRef.value.validate()
-  } catch (e) {
+  } catch {
     return
   }
   productSaving.value = true
@@ -317,7 +330,7 @@ async function onSaveProductEdit() {
     const cleanImages = productEditForm.images
       .split(',')
       .map((s) => s.trim())
-      .filter((s) => !!s)
+      .filter(Boolean)
       .join(',')
     await updateProduct(editingProductId.value, {
       title: productEditForm.title,
@@ -327,17 +340,14 @@ async function onSaveProductEdit() {
       category: productEditForm.category,
       stock: productEditForm.stock
     })
-    ElMessage.success('商品已更新')
+    ElMessage.success('Listing updated')
     productEditVisible.value = false
     fetchMyProducts()
-  } catch (e) {
-    // 错误提示已由拦截器处理
   } finally {
     productSaving.value = false
   }
 }
 
-// ---- 我发布的 ----
 const list = ref([])
 const total = ref(0)
 const pageNum = ref(1)
@@ -347,13 +357,10 @@ const listLoading = ref(false)
 async function fetchMyProducts() {
   listLoading.value = true
   try {
-    const res = await getMyProducts({
-      pageNum: pageNum.value,
-      pageSize: pageSize.value
-    })
+    const res = await getMyProducts({ pageNum: pageNum.value, pageSize: pageSize.value })
     list.value = res.data.list || []
     total.value = res.data.total || 0
-  } catch (e) {
+  } catch {
     list.value = []
     total.value = 0
   } finally {
@@ -367,23 +374,16 @@ function onSizeChange() {
 }
 
 function onDelist(row) {
-  ElMessageBox.confirm(`确定要下架「${row.title}」吗？`, '下架确认', {
-    confirmButtonText: '下架',
-    cancelButtonText: '取消',
+  ElMessageBox.confirm(`Delist "${row.title}"?`, 'Confirm delist', {
+    confirmButtonText: 'Delist',
+    cancelButtonText: 'Cancel',
     type: 'warning'
   })
     .then(async () => {
-      try {
-        await deleteProduct(row.productId)
-        ElMessage.success('已下架')
-        // 若当前页删空且非首页，回退一页
-        if (list.value.length === 1 && pageNum.value > 1) {
-          pageNum.value -= 1
-        }
-        fetchMyProducts()
-      } catch (e) {
-        // 错误提示已由拦截器处理
-      }
+      await deleteProduct(row.productId)
+      ElMessage.success('Delisted')
+      if (list.value.length === 1 && pageNum.value > 1) pageNum.value -= 1
+      fetchMyProducts()
     })
     .catch(() => {})
 }
@@ -395,50 +395,77 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.card-title {
-  font-size: 16px;
-  font-weight: 600;
+.profile-panel {
+  margin-bottom: 16px;
 }
 
-.card-header {
+.profile-row {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.info-card {
-  margin-bottom: 20px;
-}
-
-.user-info {
-  display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 24px;
 }
 
-.info-desc {
-  flex: 1;
-}
-
-.price {
-  color: #f56c6c;
+.profile-avatar {
+  flex-shrink: 0;
+  font-size: 20px;
   font-weight: 600;
 }
 
+.profile-fields {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.field-label {
+  display: block;
+  font-size: 12px;
+  color: var(--oa-text-muted);
+  margin-bottom: 4px;
+}
+
+.field-value {
+  font-size: 14px;
+  color: var(--oa-text);
+}
+
+.listings-panel {
+  margin-top: 0;
+}
+
+.thumb-img {
+  width: 48px;
+  height: 48px;
+  border-radius: 6px;
+  display: block;
+}
+
 .thumb-placeholder {
-  width: 60px;
-  height: 60px;
+  width: 48px;
+  height: 48px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #f5f7fa;
-  color: #c0c4cc;
-  border-radius: 4px;
+  background: var(--oa-bg-elevated);
+  color: var(--oa-text-muted);
+  border-radius: 6px;
 }
 
-.pagination-wrapper {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 20px;
+@media (max-width: 640px) {
+  .field-row {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .profile-row {
+    flex-direction: column;
+  }
 }
 </style>

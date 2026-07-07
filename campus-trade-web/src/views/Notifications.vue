@@ -1,45 +1,45 @@
 <template>
   <div class="page-container">
-    <el-card class="notify-card">
-      <template #header>
-        <div class="card-header">
-          <span class="card-title">消息通知</span>
-          <el-button
-            v-if="list.some((n) => n.isRead === 0)"
-            text
-            type="primary"
-            :loading="markingAll"
-            @click="onMarkAllRead"
-          >
-            全部已读
-          </el-button>
-        </div>
-      </template>
+    <div class="page-header">
+      <h1 class="page-title">Notifications</h1>
+      <el-button
+        v-if="list.some((n) => n.isRead === 0)"
+        type="primary"
+        size="small"
+        :loading="markingAll"
+        @click="onMarkAllRead"
+      >
+        Mark all read
+      </el-button>
+    </div>
 
+    <div class="oa-panel">
       <div v-loading="loading">
-        <el-empty v-if="!loading && list.length === 0" description="暂无通知" />
+        <div v-if="!loading && list.length === 0" class="oa-empty-state">
+          <p>Your notifications will appear here</p>
+        </div>
 
         <div v-else class="notify-list">
           <div
             v-for="item in list"
             :key="item.id"
-            class="notify-item"
+            class="oa-list-item notify-item"
             :class="{ unread: item.isRead === 0 }"
             @click="onItemClick(item)"
           >
             <div class="notify-head">
               <span class="notify-title">{{ item.title }}</span>
-              <el-tag v-if="item.isRead === 0" size="small" type="danger" effect="plain">未读</el-tag>
+              <span v-if="item.isRead === 0" class="oa-status oa-status-danger">Unread</span>
             </div>
             <p class="notify-content">{{ item.content }}</p>
             <div class="notify-meta">
-              <span v-if="item.orderNo">订单号：{{ item.orderNo }}</span>
-              <span>{{ formatTime(item.createTime) }}</span>
+              <span v-if="item.orderNo" class="oa-meta">Order #{{ item.orderNo }}</span>
+              <span class="oa-meta">{{ formatTime(item.createTime) }}</span>
             </div>
           </div>
         </div>
 
-        <div v-if="total > 0" class="pagination-wrapper">
+        <div v-if="total > 0" class="oa-pagination">
           <el-pagination
             v-model:current-page="pageNum"
             v-model:page-size="pageSize"
@@ -52,7 +52,7 @@
           />
         </div>
       </div>
-    </el-card>
+    </div>
   </div>
 </template>
 
@@ -89,7 +89,7 @@ async function fetchList() {
     })
     list.value = (res.data && res.data.list) || []
     total.value = (res.data && res.data.total) || 0
-  } catch (e) {
+  } catch {
     list.value = []
     total.value = 0
   } finally {
@@ -107,9 +107,9 @@ async function onItemClick(item) {
   try {
     await markNotificationRead(item.id)
     item.isRead = 1
-    ElMessage.success('已标记已读')
-  } catch (e) {
-    // 错误提示已由拦截器处理
+    ElMessage.success('Marked as read')
+  } catch {
+    // handled by interceptor
   }
 }
 
@@ -117,10 +117,8 @@ async function onMarkAllRead() {
   markingAll.value = true
   try {
     await markAllNotificationsRead()
-    ElMessage.success('已全部标记已读')
+    ElMessage.success('All marked as read')
     await fetchList()
-  } catch (e) {
-    // 错误提示已由拦截器处理
   } finally {
     markingAll.value = false
   }
@@ -130,42 +128,18 @@ onMounted(fetchList)
 </script>
 
 <style scoped>
-.notify-card {
-  min-height: 400px;
-}
-
-.card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.card-title {
-  font-size: 16px;
-  font-weight: 600;
-}
-
 .notify-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
 }
 
 .notify-item {
-  padding: 14px 16px;
-  border: 1px solid #ebeef5;
-  border-radius: 8px;
   cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.notify-item:hover {
-  background-color: #f5f7fa;
 }
 
 .notify-item.unread {
-  background-color: #ecf5ff;
-  border-color: #d9ecff;
+  border-color: rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.05);
 }
 
 .notify-head {
@@ -177,15 +151,15 @@ onMounted(fetchList)
 }
 
 .notify-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: #303133;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--oa-text);
 }
 
 .notify-content {
   margin: 0 0 8px;
-  color: #606266;
-  font-size: 14px;
+  color: var(--oa-text-secondary);
+  font-size: 13px;
   line-height: 1.6;
 }
 
@@ -193,13 +167,5 @@ onMounted(fetchList)
   display: flex;
   flex-wrap: wrap;
   gap: 16px;
-  color: #909399;
-  font-size: 12px;
-}
-
-.pagination-wrapper {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 20px;
 }
 </style>

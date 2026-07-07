@@ -1,7 +1,7 @@
 <template>
-  <div class="auth-page">
-    <el-card class="auth-card">
-      <h2 class="auth-title">注册校园淘</h2>
+  <el-card class="auth-card">
+    <h2 class="auth-title">注册校园淘</h2>
+    <p class="auth-subtitle">Create your account</p>
       <el-form
         ref="formRef"
         :model="form"
@@ -67,8 +67,7 @@
         已有账号？
         <el-link type="primary" @click="$router.push('/login')">去登录</el-link>
       </div>
-    </el-card>
-  </div>
+  </el-card>
 </template>
 
 <script setup>
@@ -145,32 +144,38 @@ async function onSubmit() {
 </script>
 
 <style scoped>
-.auth-page {
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  padding: 40px 16px;
-}
-
 .auth-card {
   width: 100%;
   max-width: 400px;
+  padding: 8px;
+}
+
+.auth-card :deep(.el-card__body) {
+  padding: 32px 28px;
 }
 
 .auth-title {
-  text-align: center;
-  margin-bottom: 24px;
-  color: #303133;
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--oa-text);
+  margin-bottom: 4px;
+}
+
+.auth-subtitle {
+  font-size: 14px;
+  color: var(--oa-text-secondary);
+  margin-bottom: 28px;
 }
 
 .auth-submit {
   width: 100%;
+  height: 40px;
 }
 
 .auth-footer {
   text-align: center;
   font-size: 14px;
-  color: #909399;
-  margin-top: 8px;
+  color: var(--oa-text-secondary);
+  margin-top: 16px;
 }
 </style>

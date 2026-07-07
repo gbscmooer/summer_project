@@ -1,21 +1,22 @@
 <template>
   <div class="page-container" v-loading="loading">
-    <el-page-header v-if="detail" class="detail-header" @back="$router.back()">
-      <template #content>
-        <span class="header-title">商品详情</span>
-      </template>
-    </el-page-header>
+    <button class="oa-back-btn" @click="$router.back()">
+      <el-icon><ArrowLeft /></el-icon>
+      Back
+    </button>
 
-    <el-empty v-if="!loading && !detail" description="商品不存在或已下架" />
+    <el-empty v-if="!loading && !detail" description="Listing not found or delisted" />
 
-    <el-card v-if="detail" class="detail-card">
-      <div class="detail-body">
-        <!-- 左侧：图片轮播 -->
-        <div class="gallery">
+    <template v-if="detail">
+      <h1 class="page-title listing-title">{{ detail.title }}</h1>
+
+      <div class="detail-grid">
+        <!-- 左侧图片 -->
+        <div class="oa-panel gallery-panel">
           <el-carousel
             v-if="images.length > 0"
             :autoplay="false"
-            height="380px"
+            height="400px"
             indicator-position="outside"
             :arrow="images.length > 1 ? 'hover' : 'never'"
           >
@@ -34,57 +35,67 @@
           </div>
         </div>
 
-        <!-- 右侧：信息 -->
-        <div class="info">
-          <h1 class="title">{{ detail.title }}</h1>
-
-          <div class="price-box">
-            <span class="price-label">价格</span>
+        <!-- 右侧信息 -->
+        <div class="info-panel">
+          <div class="price-card">
+            <span class="price-label">Price</span>
             <span class="price">¥{{ formatPrice(detail.price) }}</span>
           </div>
 
-          <el-descriptions :column="1" border class="meta-desc">
-            <el-descriptions-item label="分类">
-              <el-tag size="small" type="info" effect="plain">{{ detail.category }}</el-tag>
-            </el-descriptions-item>
-            <el-descriptions-item label="状态">
-              <el-tag size="small" :type="getStatusType(detail.status)">
+          <div class="meta-grid">
+            <div class="meta-item">
+              <span class="meta-label">Category</span>
+              <span class="meta-value">{{ detail.category }}</span>
+            </div>
+            <div class="meta-item">
+              <span class="meta-label">Status</span>
+              <span class="oa-status" :class="statusClass(detail.status)">
                 {{ getStatusText(detail.status) }}
-              </el-tag>
-            </el-descriptions-item>
-            <el-descriptions-item label="库存">{{ detail.stock }}</el-descriptions-item>
-            <el-descriptions-item label="卖家">{{ detail.sellerNickname }}</el-descriptions-item>
-            <el-descriptions-item label="浏览量">{{ detail.viewCount }}</el-descriptions-item>
-          </el-descriptions>
+              </span>
+            </div>
+            <div class="meta-item">
+              <span class="meta-label">Stock</span>
+              <span class="meta-value">{{ detail.stock }}</span>
+            </div>
+            <div class="meta-item">
+              <span class="meta-label">Seller</span>
+              <span class="meta-value">{{ detail.sellerNickname }}</span>
+            </div>
+            <div class="meta-item">
+              <span class="meta-label">Views</span>
+              <span class="meta-value">{{ detail.viewCount }}</span>
+            </div>
+          </div>
 
           <div class="buy-box">
             <el-button
-              type="danger"
+              type="primary"
               size="large"
               :icon="ShoppingCart"
               :loading="buying"
               :disabled="detail.status !== 1 || seckilling"
               @click="onBuy"
             >
-              {{ detail.status === 1 ? '立即购买' : '已售/已下架' }}
+              {{ detail.status === 1 ? 'Buy now' : 'Unavailable' }}
             </el-button>
             <el-button
-              type="warning"
               size="large"
               :loading="seckilling"
               :disabled="detail.status !== 1 || buying"
               @click="onSeckill"
             >
-              {{ seckilling ? '秒杀排队中...' : '限时秒杀' }}
+              {{ seckilling ? 'Queuing...' : 'Flash sale' }}
             </el-button>
           </div>
         </div>
       </div>
 
-      <!-- 商品描述 -->
-      <el-divider content-position="left">商品描述</el-divider>
-      <div class="description">{{ detail.description || '卖家很懒，没有填写描述～' }}</div>
-    </el-card>
+      <!-- 描述 -->
+      <div class="oa-panel desc-panel">
+        <h3 class="oa-section-title">Description</h3>
+        <p class="description">{{ detail.description || 'No description provided.' }}</p>
+      </div>
+    </template>
   </div>
 </template>
 
@@ -92,11 +103,11 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Picture, ShoppingCart } from '@element-plus/icons-vue'
+import { Picture, ShoppingCart, ArrowLeft } from '@element-plus/icons-vue'
 import { getProductDetail } from '@/api/product'
 import { createOrder, seckillOrder, getSeckillResult } from '@/api/order'
 import { useUserStore } from '@/store/user'
-import { getStatusText, getStatusType } from '@/constants/product'
+import { getStatusText } from '@/constants/product'
 
 const route = useRoute()
 const router = useRouter()
@@ -108,8 +119,13 @@ const seckilling = ref(false)
 
 const images = computed(() => {
   if (!detail.value || !Array.isArray(detail.value.images)) return []
-  return detail.value.images.filter((u) => !!u)
+  return detail.value.images.filter(Boolean)
 })
+
+function statusClass(status) {
+  const map = { 0: 'oa-status-info', 1: 'oa-status-success', 2: 'oa-status-danger' }
+  return map[status] || 'oa-status-info'
+}
 
 function formatPrice(price) {
   const n = Number(price)
@@ -123,29 +139,26 @@ async function fetchDetail() {
   try {
     const res = await getProductDetail(id)
     detail.value = res.data
-  } catch (e) {
+  } catch {
     detail.value = null
   } finally {
     loading.value = false
   }
 }
 
-// 立即购买：未登录跳登录页（带 redirect 回跳）；已登录则真实下单，成功后进订单页
 async function onBuy() {
   if (!userStore.isLogin) {
     router.push({ path: '/login', query: { redirect: route.fullPath } })
     return
   }
   if (buying.value) return
-  const productId = detail.value && detail.value.productId
+  const productId = detail.value?.productId
   if (!productId) return
   buying.value = true
   try {
     const res = await createOrder({ productId })
-    ElMessage.success(res.message || '下单成功')
+    ElMessage.success(res.message || 'Order placed')
     router.push('/orders')
-  } catch (e) {
-    // 失败的具体业务提示（库存不足/已售/不能买自己的等）已由响应拦截器 ElMessage 弹出
   } finally {
     buying.value = false
   }
@@ -159,8 +172,8 @@ async function pollSeckillResult(productId, maxAttempts = 30) {
   for (let i = 0; i < maxAttempts; i++) {
     await sleep(1000)
     const res = await getSeckillResult(productId)
-    const status = res.data && res.data.status
-    const orderNo = res.data && res.data.orderNo
+    const status = res.data?.status
+    const orderNo = res.data?.orderNo
     if (status === 0) continue
     if (status === 1) return { success: true, orderNo }
     return { success: false }
@@ -174,64 +187,52 @@ async function onSeckill() {
     return
   }
   if (seckilling.value) return
-  const productId = detail.value && detail.value.productId
+  const productId = detail.value?.productId
   if (!productId) return
   seckilling.value = true
   try {
     const res = await seckillOrder({ productId })
-    ElMessage.info(res.message || '排队中，请稍候')
+    ElMessage.info(res.message || 'Queuing, please wait')
     const result = await pollSeckillResult(productId)
     if (result.success) {
-      ElMessage.success(`秒杀成功，订单号 ${result.orderNo}`)
+      ElMessage.success(`Flash sale success, order ${result.orderNo}`)
       router.push('/orders')
-      return
-    }
-    if (result.timeout) {
-      ElMessage.warning('仍在排队中，请稍后在「我的订单」查看结果')
+    } else if (result.timeout) {
+      ElMessage.warning('Still queuing, check Orders later')
     } else {
-      ElMessage.error('秒杀失败，请稍后重试')
+      ElMessage.error('Flash sale failed, try again')
     }
-  } catch (e) {
-    // 错误提示已由拦截器处理
   } finally {
     seckilling.value = false
   }
 }
 
-// 支持在详情页之间切换（路由参数变化时重新拉取）
-watch(
-  () => route.params.id,
-  () => fetchDetail()
-)
-
+watch(() => route.params.id, fetchDetail)
 onMounted(fetchDetail)
 </script>
 
 <style scoped>
-.detail-header {
-  margin-bottom: 16px;
+.listing-title {
+  margin-bottom: 24px;
+  font-size: 24px;
 }
 
-.header-title {
-  font-size: 16px;
-  font-weight: 600;
+.detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  gap: 20px;
+  margin-bottom: 20px;
 }
 
-.detail-body {
-  display: flex;
-  gap: 28px;
-  flex-wrap: wrap;
-}
-
-.gallery {
-  flex: 0 0 420px;
-  max-width: 100%;
+.gallery-panel {
+  padding: 0;
+  overflow: hidden;
 }
 
 .gallery-img {
   width: 100%;
   height: 100%;
-  background-color: #f5f7fa;
+  background: var(--oa-bg-elevated);
 }
 
 .gallery-placeholder {
@@ -240,65 +241,96 @@ onMounted(fetchDetail)
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #c0c4cc;
-  background-color: #f5f7fa;
+  color: var(--oa-text-muted);
+  background: var(--oa-bg-elevated);
 }
 
 .gallery-empty {
-  height: 380px;
-  border-radius: 4px;
+  height: 400px;
 }
 
-.info {
-  flex: 1;
-  min-width: 280px;
+.info-panel {
   display: flex;
   flex-direction: column;
+  gap: 16px;
 }
 
-.title {
-  font-size: 22px;
-  line-height: 1.4;
-  margin-bottom: 16px;
-  color: #303133;
-}
-
-.price-box {
-  background-color: #fef0f0;
-  border-radius: 6px;
-  padding: 14px 16px;
-  margin-bottom: 16px;
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
+.price-card {
+  background: var(--oa-bg-sidebar);
+  border: 1px solid var(--oa-border-subtle);
+  border-radius: var(--oa-radius);
+  padding: 20px 24px;
 }
 
 .price-label {
-  color: #909399;
-  font-size: 13px;
+  display: block;
+  font-size: 12px;
+  color: var(--oa-text-secondary);
+  margin-bottom: 4px;
 }
 
 .price {
-  color: #f56c6c;
-  font-size: 28px;
-  font-weight: 700;
+  font-size: 32px;
+  font-weight: 500;
+  color: var(--oa-text);
+  letter-spacing: -0.02em;
 }
 
-.meta-desc {
-  margin-bottom: 20px;
+.meta-grid {
+  background: var(--oa-bg-sidebar);
+  border: 1px solid var(--oa-border-subtle);
+  border-radius: var(--oa-radius);
+  padding: 4px 0;
+}
+
+.meta-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--oa-border-subtle);
+}
+
+.meta-item:last-child {
+  border-bottom: none;
+}
+
+.meta-label {
+  font-size: 13px;
+  color: var(--oa-text-secondary);
+}
+
+.meta-value {
+  font-size: 13px;
+  color: var(--oa-text);
 }
 
 .buy-box {
-  margin-top: auto;
   display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: auto;
+}
+
+.buy-box .el-button {
+  width: 100%;
+  height: 44px;
+}
+
+.desc-panel {
+  margin-top: 0;
 }
 
 .description {
   white-space: pre-wrap;
-  line-height: 1.8;
-  color: #606266;
+  line-height: 1.7;
+  color: var(--oa-text-secondary);
   font-size: 14px;
+}
+
+@media (max-width: 900px) {
+  .detail-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

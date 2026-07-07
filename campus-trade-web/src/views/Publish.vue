@@ -1,84 +1,105 @@
 <template>
   <div class="page-container">
-    <el-card class="publish-card">
-      <template #header>
-        <span class="card-title">发布闲置商品</span>
-      </template>
+    <div class="page-header">
+      <h1 class="page-title">Publish</h1>
+    </div>
 
+    <p class="oa-section-desc">Create a new listing for your campus marketplace.</p>
+
+    <div class="oa-panel publish-panel">
       <el-form
         ref="formRef"
         :model="form"
         :rules="rules"
-        label-width="90px"
+        label-position="top"
         @submit.prevent="onSubmit"
       >
-        <el-form-item label="标题" prop="title">
-          <el-input
-            v-model="form.title"
-            placeholder="一句话描述你的宝贝"
-            maxlength="50"
-            show-word-limit
-            clearable
-          />
-        </el-form-item>
+        <div class="form-section">
+          <label class="oa-form-label">Title</label>
+          <el-form-item prop="title">
+            <el-input
+              v-model="form.title"
+              placeholder="Describe your item in one line"
+              maxlength="50"
+              show-word-limit
+              clearable
+            />
+          </el-form-item>
+        </div>
 
-        <el-form-item label="分类" prop="category">
-          <el-select v-model="form.category" placeholder="请选择分类" style="width: 220px">
-            <el-option v-for="cat in categories" :key="cat" :label="cat" :value="cat" />
-          </el-select>
-        </el-form-item>
+        <div class="form-row">
+          <div class="form-section half">
+            <label class="oa-form-label">Category</label>
+            <el-form-item prop="category">
+              <el-select v-model="form.category" placeholder="Select category" style="width: 100%">
+                <el-option v-for="cat in categories" :key="cat" :label="cat" :value="cat" />
+              </el-select>
+            </el-form-item>
+          </div>
+          <div class="form-section half">
+            <label class="oa-form-label">Price (CNY)</label>
+            <el-form-item prop="price">
+              <el-input-number
+                v-model="form.price"
+                :min="0"
+                :precision="2"
+                :step="1"
+                controls-position="right"
+                style="width: 100%"
+              />
+            </el-form-item>
+          </div>
+        </div>
 
-        <el-form-item label="价格" prop="price">
-          <el-input-number
-            v-model="form.price"
-            :min="0"
-            :precision="2"
-            :step="1"
-            controls-position="right"
-            style="width: 220px"
-          />
-          <span class="unit-hint">元</span>
-        </el-form-item>
+        <div class="form-section">
+          <label class="oa-form-label">Stock</label>
+          <el-form-item prop="stock">
+            <el-input-number
+              v-model="form.stock"
+              :min="1"
+              :precision="0"
+              :step="1"
+              controls-position="right"
+              style="width: 200px"
+            />
+          </el-form-item>
+        </div>
 
-        <el-form-item label="库存" prop="stock">
-          <el-input-number
-            v-model="form.stock"
-            :min="1"
-            :precision="0"
-            :step="1"
-            controls-position="right"
-            style="width: 220px"
-          />
-        </el-form-item>
+        <div class="form-section">
+          <label class="oa-form-label">Image URLs</label>
+          <el-form-item prop="images">
+            <el-input
+              v-model="form.images"
+              type="textarea"
+              :rows="3"
+              placeholder="Comma-separated URLs, e.g. https://a.jpg,https://b.jpg"
+            />
+          </el-form-item>
+          <p class="oa-form-hint">Separate multiple image URLs with commas.</p>
+        </div>
 
-        <el-form-item label="图片URL" prop="images">
-          <el-input
-            v-model="form.images"
-            type="textarea"
-            :rows="3"
-            placeholder="图片链接，多张请用英文逗号分隔，如：https://a.jpg,https://b.jpg"
-          />
-        </el-form-item>
+        <div class="form-section">
+          <label class="oa-form-label">Description</label>
+          <el-form-item prop="description">
+            <el-input
+              v-model="form.description"
+              type="textarea"
+              :rows="5"
+              placeholder="Condition, specs, pickup method, etc."
+              maxlength="500"
+              show-word-limit
+            />
+          </el-form-item>
+        </div>
 
-        <el-form-item label="描述" prop="description">
-          <el-input
-            v-model="form.description"
-            type="textarea"
-            :rows="5"
-            placeholder="详细描述商品成色、规格、交易方式等"
-            maxlength="500"
-            show-word-limit
-          />
-        </el-form-item>
+        <hr class="oa-divider" />
 
-        <el-form-item>
-          <el-button type="primary" :loading="loading" @click="onSubmit">
-            发布
-          </el-button>
-          <el-button @click="onReset">重置</el-button>
-        </el-form-item>
+        <div class="form-actions">
+          <el-button type="primary" :loading="loading" @click="onSubmit">Publish listing</el-button>
+          <el-button @click="onReset">Reset</el-button>
+        </div>
       </el-form>
-    </el-card>
+    </div>
   </div>
 </template>
 
@@ -110,14 +131,10 @@ const rules = {
   price: [
     {
       required: true,
-      validator: (rule, value, callback) => {
-        if (value === null || value === undefined) {
-          callback(new Error('请输入价格'))
-        } else if (Number(value) <= 0) {
-          callback(new Error('价格必须大于 0'))
-        } else {
-          callback()
-        }
+      validator: (_rule, value, callback) => {
+        if (value === null || value === undefined) callback(new Error('请输入价格'))
+        else if (Number(value) <= 0) callback(new Error('价格必须大于 0'))
+        else callback()
       },
       trigger: 'blur'
     }
@@ -130,16 +147,15 @@ async function onSubmit() {
   if (!formRef.value) return
   try {
     await formRef.value.validate()
-  } catch (e) {
+  } catch {
     return
   }
   loading.value = true
   try {
-    // images 后端要求逗号分隔的 URL 字符串：清洗多余空格与空项
     const cleanImages = form.images
       .split(',')
       .map((s) => s.trim())
-      .filter((s) => !!s)
+      .filter(Boolean)
       .join(',')
 
     await createProduct({
@@ -152,33 +168,42 @@ async function onSubmit() {
     })
     ElMessage.success('发布成功')
     router.push('/my')
-  } catch (e) {
-    // 错误提示已由 axios 拦截器统一处理
   } finally {
     loading.value = false
   }
 }
 
 function onReset() {
-  formRef.value && formRef.value.resetFields()
+  formRef.value?.resetFields()
   form.price = 0
   form.stock = 1
 }
 </script>
 
 <style scoped>
-.publish-card {
-  max-width: 720px;
-  margin: 0 auto;
+.publish-panel {
+  max-width: 640px;
 }
 
-.card-title {
-  font-size: 16px;
-  font-weight: 600;
+.form-section {
+  margin-bottom: 4px;
 }
 
-.unit-hint {
-  margin-left: 8px;
-  color: #909399;
+.form-section :deep(.el-form-item) {
+  margin-bottom: 16px;
+}
+
+.form-row {
+  display: flex;
+  gap: 16px;
+}
+
+.form-row .half {
+  flex: 1;
+}
+
+.form-actions {
+  display: flex;
+  gap: 10px;
 }
 </style>
