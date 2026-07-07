@@ -1,0 +1,1150 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CampusTrade 答辩演示</title>
+  <style>
+    :root {
+      --ink: #1d222b;
+      --muted: #667085;
+      --paper: #f7f9fb;
+      --panel: #ffffff;
+      --line: #d6dde6;
+      --blue: #2663a8;
+      --teal: #1f8881;
+      --green: #3f8a5f;
+      --orange: #c2702a;
+      --red: #b24d46;
+      --purple: #6f5ba5;
+      --navy: #142b49;
+      --shadow: 0 18px 38px rgba(20, 43, 73, 0.13);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--paper);
+      font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif;
+      letter-spacing: 0;
+      overflow: hidden;
+    }
+
+    button {
+      font: inherit;
+    }
+
+    .deck {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background:
+        linear-gradient(90deg, rgba(38, 99, 168, 0.12) 0 1px, transparent 1px 100%),
+        linear-gradient(180deg, rgba(38, 99, 168, 0.08) 0 1px, transparent 1px 100%),
+        var(--paper);
+      background-size: 48px 48px;
+    }
+
+    .slides {
+      display: flex;
+      width: 100%;
+      height: 100%;
+      transition: transform 700ms cubic-bezier(.2, .85, .2, 1);
+      will-change: transform;
+    }
+
+    .slide {
+      position: relative;
+      flex: 0 0 100%;
+      min-width: 100%;
+      height: 100vh;
+      padding: 6.2vh 7vw 6vh;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.94);
+    }
+
+    .slide::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 8px;
+      height: 100%;
+      background: var(--accent, var(--blue));
+    }
+
+    .brand {
+      font-size: clamp(14px, 1.2vw, 18px);
+      font-weight: 700;
+      color: var(--muted);
+      margin-bottom: 2.3vh;
+    }
+
+    .slide h1 {
+      max-width: 980px;
+      margin: 0;
+      font-size: clamp(38px, 5vw, 72px);
+      line-height: 1.05;
+      color: var(--ink);
+    }
+
+    .slide h2 {
+      max-width: 980px;
+      margin: 0;
+      font-size: clamp(32px, 4.2vw, 56px);
+      line-height: 1.12;
+      color: var(--ink);
+    }
+
+    .lead {
+      max-width: 900px;
+      margin: 2vh 0 0;
+      font-size: clamp(16px, 1.7vw, 23px);
+      line-height: 1.6;
+      color: var(--muted);
+    }
+
+    .page-no {
+      position: absolute;
+      right: 6vw;
+      top: 6.5vh;
+      color: var(--accent, var(--blue));
+      font-weight: 800;
+      font-size: 18px;
+    }
+
+    .grid {
+      display: grid;
+      gap: 24px;
+    }
+
+    .grid.cols-3 {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .grid.cols-4 {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .grid.cols-2 {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .card {
+      position: relative;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      padding: 22px;
+      overflow: hidden;
+    }
+
+    .card::after {
+      content: "";
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 4px;
+      background: var(--card, var(--blue));
+    }
+
+    .card h3 {
+      margin: 0 0 12px;
+      font-size: clamp(18px, 1.8vw, 25px);
+      color: var(--ink);
+    }
+
+    .card p,
+    .card li {
+      color: var(--muted);
+      font-size: clamp(14px, 1.25vw, 18px);
+      line-height: 1.68;
+    }
+
+    .card p {
+      margin: 0;
+    }
+
+    .card ul {
+      margin: 0;
+      padding-left: 1.15em;
+    }
+
+    .metric {
+      display: grid;
+      place-items: start;
+      min-height: 160px;
+    }
+
+    .metric strong {
+      display: block;
+      color: var(--card, var(--blue));
+      font-size: clamp(34px, 4vw, 58px);
+      line-height: 1;
+      margin-bottom: 10px;
+    }
+
+    .metric strong.compact {
+      font-size: clamp(28px, 3.1vw, 46px);
+      line-height: .96;
+    }
+
+    .flow {
+      display: grid;
+      grid-auto-flow: column;
+      grid-auto-columns: minmax(130px, 1fr);
+      align-items: center;
+      gap: 18px;
+      margin-top: 8vh;
+    }
+
+    .node {
+      min-height: 74px;
+      border: 2px solid var(--node, var(--blue));
+      border-radius: 8px;
+      background: #fff;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      font-weight: 800;
+      color: var(--node, var(--blue));
+      box-shadow: var(--shadow);
+      padding: 10px;
+      transform: translateY(28px);
+      opacity: 0;
+    }
+
+    .slide.active .node {
+      animation: rise 700ms ease forwards;
+    }
+
+    .slide.active .node:nth-child(2) { animation-delay: 120ms; }
+    .slide.active .node:nth-child(3) { animation-delay: 240ms; }
+    .slide.active .node:nth-child(4) { animation-delay: 360ms; }
+    .slide.active .node:nth-child(5) { animation-delay: 480ms; }
+    .slide.active .node:nth-child(6) { animation-delay: 600ms; }
+
+    .arrow {
+      color: var(--muted);
+      font-size: 28px;
+      text-align: center;
+      transform: translateY(28px);
+      opacity: 0;
+    }
+
+    .slide.active .arrow {
+      animation: rise 700ms ease forwards;
+      animation-delay: 220ms;
+    }
+
+    @keyframes rise {
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+
+    .architecture {
+      position: relative;
+      height: 56vh;
+      margin-top: 5vh;
+    }
+
+    .arch-box {
+      position: absolute;
+      min-width: 150px;
+      min-height: 68px;
+      border: 2px solid var(--node, var(--blue));
+      border-radius: 8px;
+      background: #fff;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      font-weight: 800;
+      color: var(--node, var(--blue));
+      box-shadow: var(--shadow);
+      padding: 10px;
+    }
+
+    .packet {
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--orange);
+      box-shadow: 0 0 0 8px rgba(194, 112, 42, .14);
+      opacity: 0;
+    }
+
+    .slide.active .packet {
+      animation: packet 5.2s ease-in-out infinite;
+    }
+
+    @keyframes packet {
+      0% { left: 10%; top: 19%; opacity: 0; }
+      8% { opacity: 1; }
+      28% { left: 35%; top: 19%; }
+      52% { left: 55%; top: 19%; }
+      74% { left: 61%; top: 45%; }
+      100% { left: 78%; top: 45%; opacity: 0; }
+    }
+
+    .arch-line {
+      position: absolute;
+      height: 2px;
+      background: linear-gradient(90deg, var(--line), var(--accent, var(--blue)));
+      transform-origin: left center;
+    }
+
+    .table {
+      display: grid;
+      grid-template-columns: 1.3fr .55fr 2.8fr 1.7fr;
+      margin-top: 5vh;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+      background: #fff;
+    }
+
+    .table div {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      border-right: 1px solid var(--line);
+      font-size: clamp(13px, 1.15vw, 17px);
+      line-height: 1.5;
+    }
+
+    .table .head {
+      background: var(--navy);
+      color: #fff;
+      font-weight: 800;
+      text-align: center;
+    }
+
+    .table div:nth-last-child(-n+4) {
+      border-bottom: 0;
+    }
+
+    .table div:nth-child(4n) {
+      border-right: 0;
+    }
+
+    .schema {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 24px;
+      margin-top: 6vh;
+    }
+
+    .entity {
+      border: 2px solid var(--card, var(--blue));
+      border-radius: 8px;
+      background: #fff;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+
+    .entity strong {
+      display: block;
+      padding: 14px;
+      color: #fff;
+      background: var(--card, var(--blue));
+      text-align: center;
+      font-size: 18px;
+    }
+
+    .entity span {
+      display: block;
+      padding: 8px 18px;
+      color: var(--muted);
+      border-bottom: 1px solid var(--line);
+      font-size: 15px;
+    }
+
+    .entity span:last-child {
+      border-bottom: 0;
+    }
+
+    .state-machine {
+      position: relative;
+      height: 50vh;
+      margin-top: 6vh;
+    }
+
+    .state {
+      position: absolute;
+      width: 140px;
+      height: 110px;
+      border: 3px solid var(--card, var(--blue));
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      background: #fff;
+      box-shadow: var(--shadow);
+      color: var(--card, var(--blue));
+      font-weight: 800;
+    }
+
+    .state-line {
+      position: absolute;
+      height: 3px;
+      background: var(--line);
+      transform-origin: left center;
+    }
+
+    .state-label {
+      position: absolute;
+      font-weight: 800;
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    .timeline {
+      position: relative;
+      margin-top: 6vh;
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    .step {
+      position: relative;
+      min-height: 160px;
+      padding: 22px 18px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      box-shadow: var(--shadow);
+    }
+
+    .step::before {
+      content: attr(data-step);
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      margin-bottom: 14px;
+      border-radius: 50%;
+      color: #fff;
+      background: var(--card, var(--blue));
+      font-weight: 800;
+    }
+
+    .step h3 {
+      margin: 0 0 10px;
+      color: var(--ink);
+      font-size: 18px;
+    }
+
+    .step p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.6;
+      font-size: 15px;
+    }
+
+    .pulse-ring {
+      position: absolute;
+      right: 10vw;
+      top: 22vh;
+      width: 220px;
+      height: 220px;
+      border: 2px solid rgba(178, 77, 70, .32);
+      border-radius: 50%;
+      opacity: 0;
+    }
+
+    .slide.active .pulse-ring {
+      animation: ring 2.8s linear infinite;
+    }
+
+    .slide.active .pulse-ring:nth-of-type(2) {
+      animation-delay: .9s;
+    }
+
+    .slide.active .pulse-ring:nth-of-type(3) {
+      animation-delay: 1.8s;
+    }
+
+    @keyframes ring {
+      0% { transform: scale(.45); opacity: .75; }
+      100% { transform: scale(1.35); opacity: 0; }
+    }
+
+    .quote {
+      margin-top: 10vh;
+      max-width: 1060px;
+      color: var(--navy);
+      font-size: clamp(30px, 4vw, 54px);
+      line-height: 1.28;
+      font-weight: 900;
+    }
+
+    .controls {
+      position: fixed;
+      right: 30px;
+      bottom: 28px;
+      display: flex;
+      gap: 10px;
+      z-index: 20;
+    }
+
+    .controls button {
+      width: 46px;
+      height: 46px;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      color: var(--ink);
+      background: rgba(255, 255, 255, .86);
+      box-shadow: var(--shadow);
+      cursor: pointer;
+    }
+
+    .controls button:hover {
+      border-color: var(--blue);
+      color: var(--blue);
+    }
+
+    .progress {
+      position: fixed;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 4px;
+      z-index: 30;
+      background: rgba(20, 43, 73, .08);
+    }
+
+    .progress span {
+      display: block;
+      height: 100%;
+      width: 0;
+      background: linear-gradient(90deg, var(--teal), var(--blue), var(--orange));
+      transition: width 650ms cubic-bezier(.2, .85, .2, 1);
+    }
+
+    .dots {
+      position: fixed;
+      left: 26px;
+      top: 50%;
+      transform: translateY(-50%);
+      display: grid;
+      gap: 9px;
+      z-index: 20;
+    }
+
+    .dots button {
+      width: 10px;
+      height: 10px;
+      border: 0;
+      border-radius: 50%;
+      background: rgba(102, 112, 133, .35);
+      cursor: pointer;
+      padding: 0;
+    }
+
+    .dots button.active {
+      background: var(--accent-current, var(--blue));
+      transform: scale(1.5);
+    }
+
+    .hint {
+      position: fixed;
+      left: 50%;
+      bottom: 28px;
+      transform: translateX(-50%);
+      color: var(--muted);
+      font-size: 13px;
+      z-index: 20;
+      background: rgba(255, 255, 255, .74);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 8px 14px;
+      backdrop-filter: blur(12px);
+    }
+
+    .fade-in {
+      opacity: 0;
+      transform: translateY(22px);
+    }
+
+    .slide.active .fade-in {
+      animation: rise 650ms ease forwards;
+      animation-delay: var(--delay, 0ms);
+    }
+
+    @media (max-width: 900px) {
+      body {
+        overflow: auto;
+      }
+
+      .deck {
+        height: auto;
+        overflow: visible;
+      }
+
+      .slides {
+        display: block;
+        transform: none !important;
+      }
+
+      .slide {
+        min-height: 100vh;
+        height: auto;
+        padding: 56px 28px 78px;
+      }
+
+      .grid.cols-2,
+      .grid.cols-3,
+      .grid.cols-4,
+      .schema,
+      .timeline {
+        grid-template-columns: 1fr;
+      }
+
+      .flow {
+        grid-auto-flow: row;
+      }
+
+      .architecture,
+      .state-machine {
+        height: auto;
+        display: grid;
+        gap: 14px;
+      }
+
+      .arch-box,
+      .packet,
+      .arch-line,
+      .state,
+      .state-line,
+      .state-label {
+        position: static;
+      }
+
+      .arch-line,
+      .packet,
+      .state-line {
+        display: none;
+      }
+
+      .controls,
+      .dots,
+      .hint {
+        display: none;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html {
+        scroll-behavior: auto;
+      }
+
+      .slides,
+      .progress span,
+      .slide.active .node,
+      .slide.active .arrow,
+      .slide.active .packet,
+      .slide.active .pulse-ring,
+      .slide.active .fade-in {
+        animation: none;
+        transition: none;
+      }
+
+      .node,
+      .arrow,
+      .fade-in {
+        opacity: 1;
+        transform: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="deck" aria-label="CampusTrade 答辩演示">
+    <div class="progress"><span id="progress"></span></div>
+    <nav class="dots" id="dots" aria-label="页面定位"></nav>
+    <section class="slides" id="slides">
+      <article class="slide active" style="--accent: var(--blue)" data-accent="#2663a8">
+        <div class="brand">CampusTrade</div>
+        <h1>校园二手交易平台答辩演示</h1>
+        <p class="lead">系统围绕真实接口联调、可信入口、缓存与消息削峰、失败补偿和自动化门禁组织。HTML 演示稿承担答辩说明、链路展示和动态可视化三类功能。</p>
+        <div class="flow" aria-label="演示主线">
+          <div class="node" style="--node: var(--teal)">注册登录</div>
+          <div class="arrow">→</div>
+          <div class="node" style="--node: var(--blue)">发布商品</div>
+          <div class="arrow">→</div>
+          <div class="node" style="--node: var(--purple)">搜索详情</div>
+          <div class="arrow">→</div>
+          <div class="node" style="--node: var(--orange)">下单通知</div>
+          <div class="arrow">→</div>
+          <div class="node" style="--node: var(--red)">秒杀排队</div>
+        </div>
+        <div class="grid cols-3" style="margin-top: 8vh">
+          <div class="card fade-in" style="--card: var(--blue); --delay: 160ms">
+            <h3>链路完整</h3>
+            <p>浏览器、网关、业务服务、数据库和中间件之间形成可解释的数据流。</p>
+          </div>
+          <div class="card fade-in" style="--card: var(--orange); --delay: 260ms">
+            <h3>边界清晰</h3>
+            <p>服务之间不跨库直接访问，用户身份由网关注入，前端只走 API 封装。</p>
+          </div>
+          <div class="card fade-in" style="--card: var(--green); --delay: 360ms">
+            <h3>可复验</h3>
+            <p>后端测试、前端测试、生产构建、接口方法契约和初始化脚本形成交付证据。</p>
+          </div>
+        </div>
+      </article>
+
+      <article class="slide" style="--accent: var(--teal)" data-accent="#1f8881">
+        <div class="brand">CampusTrade</div>
+        <div class="page-no">02</div>
+        <h2>结论：系统可以按真实链路验收</h2>
+        <p class="lead">系统不是页面与 CRUD 的堆叠，而是把接口、鉴权、缓存、消息、部署和测试串成闭环。</p>
+        <div class="grid cols-4" style="margin-top: 7vh">
+          <div class="card metric fade-in" style="--card: var(--teal); --delay: 80ms">
+            <strong>5</strong>
+            <h3>核心模块</h3>
+            <p>gateway、user、product、order、web 共同组成完整业务面。</p>
+          </div>
+          <div class="card metric fade-in" style="--card: var(--blue); --delay: 180ms">
+            <strong>4</strong>
+            <h3>中间件</h3>
+            <p>Nacos、Redis、Elasticsearch、RabbitMQ 承担不同系统职责。</p>
+          </div>
+          <div class="card metric fade-in" style="--card: var(--orange); --delay: 280ms">
+            <strong class="compact">GET<br>POST</strong>
+            <h3>接口约束</h3>
+            <p>外部接口和前端 API 层都遵守 GET 与 POST 的交付要求。</p>
+          </div>
+          <div class="card metric fade-in" style="--card: var(--green); --delay: 380ms">
+            <strong>0</strong>
+            <h3>默认种子数据</h3>
+            <p>默认初始化脚本只建表，演示数据被放入独立 seed 文件。</p>
+          </div>
+        </div>
+      </article>
+
+      <article class="slide" style="--accent: var(--purple)" data-accent="#6f5ba5">
+        <div class="brand">CampusTrade</div>
+        <div class="page-no">03</div>
+        <h2>演示主线从新用户开始</h2>
+        <p class="lead">演示流程从页面真实创建数据，不依赖默认预置数据。每个页面动作都对应一条后端调用链路。</p>
+        <div class="timeline">
+          <div class="step" data-step="1" style="--card: var(--teal)"><h3>注册</h3><p>注册请求进入用户服务，密码通过 BCrypt 哈希后落库。</p></div>
+          <div class="step" data-step="2" style="--card: var(--teal)"><h3>登录</h3><p>登录成功返回 JWT，前端拦截器后续携带 Authorization。</p></div>
+          <div class="step" data-step="3" style="--card: var(--blue)"><h3>发布</h3><p>商品写入 MySQL，同时同步 ES，详情缓存按需重建。</p></div>
+          <div class="step" data-step="4" style="--card: var(--purple)"><h3>检索</h3><p>普通列表走 MySQL，关键词与价格筛选走 ES 检索。</p></div>
+          <div class="step" data-step="5" style="--card: var(--orange)"><h3>下单</h3><p>订单服务通过 Feign 校验商品并扣减库存。</p></div>
+          <div class="step" data-step="6" style="--card: var(--green)"><h3>通知</h3><p>RabbitMQ 消费者写入通知表，卖家端展示未读状态。</p></div>
+        </div>
+      </article>
+
+      <article class="slide" style="--accent: var(--navy)" data-accent="#142b49">
+        <div class="brand">CampusTrade</div>
+        <div class="page-no">04</div>
+        <h2>整体架构：网关可信，服务守边界</h2>
+        <p class="lead">一次浏览器请求从前端页面出发，经由网关进入业务服务，最终落到数据库或中间件。</p>
+        <div class="architecture">
+          <div class="packet" aria-hidden="true"></div>
+          <div class="arch-box" style="--node: var(--teal); left: 4%; top: 12%">Vue SPA<br>浏览器页面</div>
+          <div class="arch-box" style="--node: var(--blue); left: 28%; top: 12%">Nginx<br>静态托管</div>
+          <div class="arch-box" style="--node: var(--navy); left: 50%; top: 12%; min-width: 230px">Gateway<br>路由 / 鉴权 / CORS</div>
+          <div class="arch-box" style="--node: var(--teal); left: 43%; top: 42%">user<br>8081</div>
+          <div class="arch-box" style="--node: var(--blue); left: 58%; top: 42%">product<br>8082</div>
+          <div class="arch-box" style="--node: var(--orange); left: 73%; top: 42%">order<br>8083</div>
+          <div class="arch-box" style="--node: var(--green); left: 16%; top: 76%">MySQL</div>
+          <div class="arch-box" style="--node: var(--red); left: 34%; top: 76%">Redis</div>
+          <div class="arch-box" style="--node: var(--purple); left: 52%; top: 76%">Elasticsearch</div>
+          <div class="arch-box" style="--node: var(--orange); left: 70%; top: 76%">RabbitMQ</div>
+          <div class="arch-box" style="--node: var(--blue); left: 86%; top: 76%">Nacos</div>
+          <div class="arch-line" style="left: 19%; top: 20%; width: 9%"></div>
+          <div class="arch-line" style="left: 42%; top: 20%; width: 8%"></div>
+        </div>
+        <p class="lead" style="font-size: clamp(14px, 1.3vw, 18px)">订单服务不跨库 join，商品与用户信息通过 Feign 或交易快照保持边界。</p>
+      </article>
+
+      <article class="slide" style="--accent: var(--teal)" data-accent="#1f8881">
+        <div class="brand">CampusTrade</div>
+        <div class="page-no">05</div>
+        <h2>服务拆分：责任可定位</h2>
+        <p class="lead">每个模块负责自己的数据和核心行为，故障排查范围由服务边界自然收敛。</p>
+        <div class="table" aria-label="服务模块表">
+          <div class="head">模块</div><div class="head">端口</div><div class="head">职责</div><div class="head">依赖</div>
+          <div><strong>campus-gateway</strong></div><div>8080</div><div>路由、JWT 鉴权、CORS、身份头注入。</div><div>Nacos</div>
+          <div><strong>campus-user</strong></div><div>8081</div><div>注册、登录、个人信息、用户简要信息批量查询。</div><div>MySQL / Nacos</div>
+          <div><strong>campus-product</strong></div><div>8082</div><div>商品发布、修改、下架、详情缓存、搜索和库存内部接口。</div><div>MySQL / Redis / ES / Nacos</div>
+          <div><strong>campus-order</strong></div><div>8083</div><div>下单、订单查询、状态流转、通知和秒杀削峰。</div><div>MySQL / Redis / RabbitMQ / Feign</div>
+          <div><strong>campus-trade-web</strong></div><div>5173 / 80</div><div>Vue 页面、API 封装、登录态处理和 Nginx 托管。</div><div>Gateway</div>
+        </div>
+      </article>
+
+      <article class="slide" style="--accent: var(--blue)" data-accent="#2663a8">
+        <div class="brand">CampusTrade</div>
+        <div class="page-no">06</div>
+        <h2>鉴权链路：下游不信客户端身份</h2>
+        <p class="lead">网关是唯一可信入口，客户端传入的 X-User-Id 在进入业务服务前被清除。</p>
+        <div class="flow">
+          <div class="node" style="--node: var(--teal)">Authorization<br>来自前端</div>
+          <div class="arrow">→</div>
+          <div class="node" style="--node: var(--red)">移除<br>X-User-Id</div>
+          <div class="arrow">→</div>
+          <div class="node" style="--node: var(--blue)">解析 JWT<br>得到 userId</div>
+          <div class="arrow">→</div>
+          <div class="node" style="--node: var(--orange)">注入<br>X-User-Id</div>
+          <div class="arrow">→</div>
+          <div class="node" style="--node: var(--green)">下游读取<br>可信身份</div>
+        </div>
+        <div class="grid cols-3" style="margin-top: 8vh">
+          <div class="card" style="--card: var(--red)"><h3>身份伪造被阻断</h3><p>客户端无法通过手写 X-User-Id 获得其他用户身份。</p></div>
+          <div class="card" style="--card: var(--blue)"><h3>白名单范围固定</h3><p>注册、登录、商品列表、搜索和商品详情 GET 属于公开链路。</p></div>
+          <div class="card" style="--card: var(--green)"><h3>CORS 方法收口</h3><p>网关只允许 GET、POST 和预检 OPTIONS。</p></div>
+        </div>
+      </article>
+
+      <article class="slide" style="--accent: var(--orange)" data-accent="#c2702a">
+        <div class="brand">CampusTrade</div>
+        <div class="page-no">07</div>
+        <h2>接口约束：只用 GET 和 POST</h2>
+        <p class="lead">查询类接口保持 GET，创建、修改、删除和状态动作通过明确命名的 POST 路径表达语义。</p>
+        <div class="grid cols-2" style="margin-top: 6vh">
+          <div class="card" style="--card: var(--blue)">
+            <h3>GET 查询类</h3>
+            <ul>
+              <li><code>/api/product/list</code> 表示商品分页列表。</li>
+              <li><code>/api/product/search</code> 表示商品检索。</li>
+              <li><code>/api/order/{id}</code> 表示订单详情。</li>
+              <li><code>/api/order/notification/list</code> 表示通知列表。</li>
+            </ul>
+          </div>
+          <div class="card" style="--card: var(--orange)">
+            <h3>POST 动作类</h3>
+            <ul>
+              <li><code>/api/product/{id}/update</code> 表示商品修改。</li>
+              <li><code>/api/product/{id}/delete</code> 表示逻辑下架。</li>
+              <li><code>/api/order/{id}/pay</code> 表示支付状态流转。</li>
+              <li><code>/api/notification/{id}/read</code> 表示已读状态变更。</li>
+            </ul>
+          </div>
+        </div>
+        <div class="grid cols-2" style="margin-top: 4vh">
+          <div class="card" style="--card: var(--blue)"><h3>后端门禁</h3><p>Controller 反射测试阻止 PUT、DELETE、PATCH 注解回归。</p></div>
+          <div class="card" style="--card: var(--orange)"><h3>前端门禁</h3><p>前端测试扫描 src/api 请求方法，非 GET/POST 写法会失败。</p></div>
+        </div>
+      </article>
+
+      <article class="slide" style="--accent: var(--green)" data-accent="#3f8a5f">
+        <div class="brand">CampusTrade</div>
+        <div class="page-no">08</div>
+        <h2>数据模型：订单保留交易快照</h2>
+        <p class="lead">订单表保存成交时的商品标题和成交价，商品后续修改不影响历史订单展示。</p>
+        <div class="schema">
+          <div class="entity" style="--card: var(--teal)"><strong>t_user</strong><span>id</span><span>username</span><span>password</span><span>nickname</span><span>phone</span></div>
+          <div class="entity" style="--card: var(--blue)"><strong>t_product</strong><span>id</span><span>title</span><span>price</span><span>seller_id</span><span>status</span><span>stock</span></div>
+          <div class="entity" style="--card: var(--orange)"><strong>t_order</strong><span>order_no</span><span>product_title</span><span>price</span><span>buyer_id</span><span>seller_id</span><span>status</span></div>
+          <div class="entity" style="--card: var(--purple)"><strong>t_notification</strong><span>user_id</span><span>title</span><span>order_no</span><span>is_read</span><span>create_time</span></div>
+        </div>
+        <p class="lead" style="font-size: clamp(14px, 1.3vw, 18px)">用户昵称属于展示字段，订单服务通过用户服务批量查询补齐。</p>
+      </article>
+
+      <article class="slide" style="--accent: var(--purple)" data-accent="#6f5ba5">
+        <div class="brand">CampusTrade</div>
+        <div class="page-no">09</div>
+        <h2>商品链路：写库、搜索、缓存分开讲</h2>
+        <p class="lead">商品模块不是单纯 CRUD。写路径追求一致性，搜索路径追求检索体验，详情路径追求热点读取稳定性。</p>
+        <div class="grid cols-3" style="margin-top: 6vh">
+          <div class="card" style="--card: var(--blue)"><h3>发布 / 修改 / 下架</h3><p>商品写入 MySQL，成功后同步 ES。修改和下架会驱逐详情缓存和秒杀预热 key。</p></div>
+          <div class="card" style="--card: var(--purple)"><h3>列表 / 搜索</h3><p>无关键词列表走 MySQL，关键词、价格和排序走 ES。ES 异常时降级到 DB 模糊查询。</p></div>
+          <div class="card" style="--card: var(--green)"><h3>详情读取</h3><p>详情优先查 Redis 缓存，未命中时回源 MySQL 并回填缓存。</p></div>
+        </div>
+        <div class="grid cols-4" style="margin-top: 5vh">
+          <div class="card" style="--card: var(--red)"><h3>穿透</h3><p>不存在的商品写短 TTL 空标记。</p></div>
+          <div class="card" style="--card: var(--orange)"><h3>击穿</h3><p>缓存重建由互斥锁收敛并发。</p></div>
+          <div class="card" style="--card: var(--green)"><h3>雪崩</h3><p>真实缓存 TTL 带随机偏移。</p></div>
+          <div class="card" style="--card: var(--blue)"><h3>降级</h3><p>Redis 异常时存在本地短缓存兜底。</p></div>
+        </div>
+      </article>
+
+      <article class="slide" style="--accent: var(--orange)" data-accent="#c2702a">
+        <div class="brand">CampusTrade</div>
+        <div class="page-no">10</div>
+        <h2>下单链路：扣库存、写订单、失败补偿</h2>
+        <p class="lead">交易链路的关键风险是库存扣减成功而订单落库失败，因此补偿路径和幂等保护是重点。</p>
+        <div class="flow">
+          <div class="node" style="--node: var(--blue)">校验商品</div>
+          <div class="arrow">→</div>
+          <div class="node" style="--node: var(--red)">防止自买</div>
+          <div class="arrow">→</div>
+          <div class="node" style="--node: var(--orange)">Feign 扣库存</div>
+          <div class="arrow">→</div>
+          <div class="node" style="--node: var(--green)">写订单</div>
+          <div class="arrow">→</div>
+          <div class="node" style="--node: var(--purple)">发通知消息</div>
+        </div>
+        <div class="grid cols-2" style="margin-top: 8vh">
+          <div class="card" style="--card: var(--blue)"><h3>正常路径</h3><p>订单服务通过 ProductFeignClient 获取商品快照，商品服务用条件 UPDATE 保证 stock &gt; 0 且 status = 1。</p></div>
+          <div class="card" style="--card: var(--orange)"><h3>异常补偿</h3><p>订单落库失败时，已经扣掉的库存通过 restoreStock(productId, orderNo) 回滚。orderNo 幂等 key 防止重复加库存。</p></div>
+        </div>
+      </article>
+
+      <article class="slide" style="--accent: var(--green)" data-accent="#3f8a5f">
+        <div class="brand">CampusTrade</div>
+        <div class="page-no">11</div>
+        <h2>订单状态：条件更新挡住并发</h2>
+        <p class="lead">支付、确认收货和取消都检查当前状态。并发请求无法覆盖已经变化的订单状态。</p>
+        <div class="state-machine">
+          <div class="state" style="--card: var(--orange); left: 10%; top: 16%">待付款<br>0</div>
+          <div class="state" style="--card: var(--blue); left: 37%; top: 16%">已付款<br>1</div>
+          <div class="state" style="--card: var(--green); left: 64%; top: 16%">已完成<br>2</div>
+          <div class="state" style="--card: var(--red); left: 37%; top: 58%">已取消<br>3</div>
+          <div class="state-line" style="left: 21%; top: 28%; width: 16%"></div>
+          <div class="state-line" style="left: 48%; top: 28%; width: 16%"></div>
+          <div class="state-line" style="left: 22%; top: 42%; width: 20%; transform: rotate(32deg)"></div>
+          <div class="state-label" style="left: 27%; top: 21%">pay</div>
+          <div class="state-label" style="left: 54%; top: 21%">confirm</div>
+          <div class="state-label" style="left: 27%; top: 47%">cancel</div>
+        </div>
+        <div class="grid cols-3">
+          <div class="card" style="--card: var(--green)"><h3>乐观条件</h3><p>更新条件包含 expected status，更新行数为 0 表示状态已变化。</p></div>
+          <div class="card" style="--card: var(--red)"><h3>取消幂等</h3><p>已取消订单再次取消时保持已有结果。</p></div>
+          <div class="card" style="--card: var(--blue)"><h3>库存联动</h3><p>待付款订单取消后触发库存恢复。</p></div>
+        </div>
+      </article>
+
+      <article class="slide" style="--accent: var(--orange)" data-accent="#c2702a">
+        <div class="brand">CampusTrade</div>
+        <div class="page-no">12</div>
+        <h2>RabbitMQ：通知异步，秒杀排队</h2>
+        <p class="lead">RabbitMQ 在项目里承担两类职责。普通订单通知从主链路拆出，秒杀请求从瞬时峰值变成可控消费。</p>
+        <div class="grid cols-2" style="margin-top: 6vh">
+          <div class="card" style="--card: var(--orange)"><h3>下单通知</h3><p>订单创建后产生通知消息，消费者写入 t_notification，卖家端展示未读通知。</p></div>
+          <div class="card" style="--card: var(--red)"><h3>秒杀削峰</h3><p>入口只完成 Redis 预扣和入队，订单创建由消费者按照处理能力完成。</p></div>
+        </div>
+        <div class="grid cols-4" style="margin-top: 6vh">
+          <div class="card" style="--card: var(--blue)"><h3>重试</h3><p>消费失败后存在有限重试。</p></div>
+          <div class="card" style="--card: var(--purple)"><h3>DLQ</h3><p>多次失败消息进入死信队列。</p></div>
+          <div class="card" style="--card: var(--green)"><h3>去重</h3><p>通知消费按 orderNo 做幂等。</p></div>
+          <div class="card" style="--card: var(--red)"><h3>观测</h3><p>关键异常日志保留补偿线索。</p></div>
+        </div>
+      </article>
+
+      <article class="slide" style="--accent: var(--red)" data-accent="#b24d46">
+        <div class="brand">CampusTrade</div>
+        <div class="page-no">13</div>
+        <h2>秒杀链路：入口快返回，消费端落库</h2>
+        <p class="lead">秒杀流程先做去重和 Redis 预扣，再进入 RabbitMQ，最终由消费者创建订单。</p>
+        <div class="pulse-ring"></div>
+        <div class="pulse-ring"></div>
+        <div class="pulse-ring"></div>
+        <div class="timeline" style="grid-template-columns: repeat(3, minmax(0, 1fr)); max-width: 850px">
+          <div class="step" data-step="1" style="--card: var(--blue)"><h3>预热</h3><p>商品与库存进入 Redis。</p></div>
+          <div class="step" data-step="2" style="--card: var(--purple)"><h3>去重</h3><p>result key 阻止重复秒杀。</p></div>
+          <div class="step" data-step="3" style="--card: var(--red)"><h3>预扣</h3><p>DECR 保证入口库存原子扣减。</p></div>
+          <div class="step" data-step="4" style="--card: var(--orange)"><h3>入队</h3><p>消息进入 seckill.queue。</p></div>
+          <div class="step" data-step="5" style="--card: var(--green)"><h3>落库</h3><p>消费者创建订单并扣 DB 库存。</p></div>
+          <div class="step" data-step="6" style="--card: var(--teal)"><h3>回查</h3><p>前端轮询秒杀结果。</p></div>
+        </div>
+      </article>
+
+      <article class="slide" style="--accent: var(--navy)" data-accent="#142b49">
+        <div class="brand">CampusTrade</div>
+        <div class="page-no">14</div>
+        <h2>部署：Compose 按健康检查启动</h2>
+        <p class="lead">中间件先通过 healthcheck，应用服务随后启动，前端容器依赖 gateway healthy。</p>
+        <div class="flow">
+          <div class="node" style="--node: var(--green)">MySQL</div>
+          <div class="arrow">→</div>
+          <div class="node" style="--node: var(--red)">Redis</div>
+          <div class="arrow">→</div>
+          <div class="node" style="--node: var(--purple)">Elasticsearch</div>
+          <div class="arrow">→</div>
+          <div class="node" style="--node: var(--orange)">RabbitMQ</div>
+          <div class="arrow">→</div>
+          <div class="node" style="--node: var(--blue)">Nacos</div>
+        </div>
+        <div class="grid cols-2" style="margin-top: 8vh">
+          <div class="card" style="--card: var(--navy)"><h3>容器健康检查</h3><p>后端服务镜像包含 netcat-openbsd，端口健康检查由 nc 完成。</p></div>
+          <div class="card" style="--card: var(--orange)"><h3>交付命令证据</h3><p>后端构建命令为 <code>mvn package -DskipTests</code>，前端构建命令为 <code>npm run build</code>。</p></div>
+        </div>
+      </article>
+
+      <article class="slide" style="--accent: var(--blue)" data-accent="#2663a8">
+        <div class="brand">CampusTrade</div>
+        <div class="page-no">15</div>
+        <h2>交付门禁：测试拦住回归</h2>
+        <p class="lead">交付质量不依赖人工记忆。后端、前端和构建检查都可以复验。</p>
+        <div class="grid cols-3" style="margin-top: 6vh">
+          <div class="card" style="--card: var(--blue)"><h3>后端 mvn test</h3><p>JWT 工具测试、网关 CORS 方法测试和 Controller HTTP 方法契约测试共同覆盖关键约束。</p></div>
+          <div class="card" style="--card: var(--teal)"><h3>前端 npm test</h3><p>strict delivery check 扫描 src/api，只允许 get 和 post。</p></div>
+          <div class="card" style="--card: var(--green)"><h3>npm run build</h3><p>Vite 生产构建生成可被 Nginx 托管的 dist 产物。</p></div>
+        </div>
+        <div class="card" style="--card: var(--orange); margin-top: 6vh">
+          <h3>最近一次验证状态</h3>
+          <p><code>mvn test</code>、<code>npm test</code>、<code>npm run build</code>、<code>git diff --check</code> 均已经通过。</p>
+        </div>
+      </article>
+
+      <article class="slide" style="--accent: var(--red)" data-accent="#b24d46">
+        <div class="brand">CampusTrade</div>
+        <div class="page-no">16</div>
+        <h2>安全和风险：证据与边界</h2>
+        <p class="lead">已经处理的风险以代码证据为准，生产化增强项以边界说明为准。</p>
+        <div class="grid cols-2" style="margin-top: 6vh">
+          <div class="card" style="--card: var(--green)">
+            <h3>已经处理</h3>
+            <ul>
+              <li>网关无条件移除客户端 X-User-Id。</li>
+              <li>JWT 解析失败返回统一 401 JSON。</li>
+              <li>扣库存 SQL 带 status=1 AND stock&gt;0 条件。</li>
+              <li>restoreStock 通过 orderNo 幂等保护。</li>
+              <li>消费者重试和 DLQ 保留异常消息。</li>
+            </ul>
+          </div>
+          <div class="card" style="--card: var(--red)">
+            <h3>后续增强</h3>
+            <ul>
+              <li>内部接口适合增加内部密钥或网段限制。</li>
+              <li>JWT 密钥适合从环境变量或 Secret 注入。</li>
+              <li>前端 token 存储方式适合生产化调整。</li>
+              <li>ES 最终一致适合通过定时重建或同步链路收敛。</li>
+            </ul>
+          </div>
+        </div>
+      </article>
+
+      <article class="slide" style="--accent: var(--purple)" data-accent="#6f5ba5">
+        <div class="brand">CampusTrade</div>
+        <div class="page-no">17</div>
+        <h2>演示节奏：每步落到技术点</h2>
+        <p class="lead">演示动作与技术点一一对应，说明内容保持围绕项目链路。</p>
+        <div class="grid cols-2" style="margin-top: 5vh">
+          <div class="card" style="--card: var(--teal)"><h3>注册登录</h3><p>用户服务、BCrypt 和 JWT 形成登录链路。</p></div>
+          <div class="card" style="--card: var(--blue)"><h3>发布商品</h3><p>商品服务写 MySQL，同步 ES，并处理缓存失效。</p></div>
+          <div class="card" style="--card: var(--purple)"><h3>搜索详情</h3><p>ES 检索和 Redis cache-aside 展示读路径设计。</p></div>
+          <div class="card" style="--card: var(--orange)"><h3>购买下单</h3><p>Feign 扣库存、订单落库和失败补偿展示交易可靠性。</p></div>
+          <div class="card" style="--card: var(--red)"><h3>卖家通知</h3><p>RabbitMQ 异步通知展示主链路解耦。</p></div>
+          <div class="card" style="--card: var(--green)"><h3>秒杀说明</h3><p>Redis 预扣、MQ 削峰和消费端落库展示高并发处理。</p></div>
+        </div>
+      </article>
+
+      <article class="slide" style="--accent: var(--orange)" data-accent="#c2702a">
+        <div class="brand">CampusTrade</div>
+        <div class="page-no">18</div>
+        <h2>高频追问：短回答有细节</h2>
+        <p class="lead">回答保持简短，但每个答案都落到项目实现。</p>
+        <div class="grid cols-2" style="margin-top: 6vh">
+          <div class="card" style="--card: var(--blue)"><h3>为什么不用跨库 join</h3><p>订单服务只拥有订单数据，商品标题与成交价是交易快照，用户昵称通过 Feign 批量查询。</p></div>
+          <div class="card" style="--card: var(--purple)"><h3>缓存三类问题怎么落地</h3><p>穿透用空值标记，击穿用互斥锁重建，雪崩用随机 TTL，Redis 异常存在本地短缓存。</p></div>
+          <div class="card" style="--card: var(--orange)"><h3>MQ 的价值是什么</h3><p>普通下单把通知异步化，秒杀把峰值请求排队化，用户请求不被后续处理拖住。</p></div>
+          <div class="card" style="--card: var(--green)"><h3>为什么只用 GET 和 POST</h3><p>交付规则要求只允许 GET 和 POST。查询为 GET，状态动作通过明确命名的 POST 路径表达。</p></div>
+        </div>
+      </article>
+
+      <article class="slide" style="--accent: var(--teal)" data-accent="#1f8881">
+        <div class="brand">CampusTrade</div>
+        <div class="page-no">19</div>
+        <h2>收束：核心价值在链路完整</h2>
+        <p class="lead">结束页回到答辩结论，避免重复罗列技术名词。</p>
+        <div class="grid cols-3" style="margin-top: 7vh">
+          <div class="card" style="--card: var(--teal)"><h3>链路完整</h3><p>浏览器、网关、业务服务、数据库和中间件之间存在真实请求与真实数据流。</p></div>
+          <div class="card" style="--card: var(--blue)"><h3>边界清晰</h3><p>服务不跨库直接访问，身份由网关注入，前端只走 API 封装。</p></div>
+          <div class="card" style="--card: var(--green)"><h3>可验证</h3><p>测试、构建、接口方法约束、初始化脚本和部署文档都可以复验。</p></div>
+        </div>
+        <p class="quote">CampusTrade 围绕可信入口、清晰边界、失败补偿和自动门禁，把校园交易流程做成可演示、可解释、可验收的系统。</p>
+      </article>
+    </section>
+
+    <div class="hint">方向键、空格、鼠标滚轮均可完成页面切换</div>
+    <div class="controls" aria-label="翻页控制">
+      <button id="prev" type="button" aria-label="上一页">‹</button>
+      <button id="next" type="button" aria-label="下一页">›</button>
+    </div>
+  </main>
+
+  <script>
+    const slides = Array.from(document.querySelectorAll('.slide'));
+    const rail = document.getElementById('slides');
+    const progress = document.getElementById('progress');
+    const dots = document.getElementById('dots');
+    const prev = document.getElementById('prev');
+    const next = document.getElementById('next');
+    let index = 0;
+    let wheelLock = false;
+
+    slides.forEach((slide, i) => {
+      const dot = document.createElement('button');
+      dot.type = 'button';
+      dot.setAttribute('aria-label', `第 ${i + 1} 页`);
+      dot.addEventListener('click', () => setIndex(i));
+      dots.appendChild(dot);
+    });
+
+    const dotButtons = Array.from(dots.querySelectorAll('button'));
+
+    function setIndex(value) {
+      index = Math.max(0, Math.min(slides.length - 1, value));
+      rail.style.transform = `translateX(-${index * 100}%)`;
+      slides.forEach((slide, i) => slide.classList.toggle('active', i === index));
+      dotButtons.forEach((dot, i) => dot.classList.toggle('active', i === index));
+      const percent = ((index + 1) / slides.length) * 100;
+      progress.style.width = `${percent}%`;
+      const accent = slides[index].dataset.accent || '#2663a8';
+      document.documentElement.style.setProperty('--accent-current', accent);
+      history.replaceState(null, '', `#${index + 1}`);
+    }
+
+    function fromHash() {
+      const raw = Number(location.hash.replace('#', ''));
+      if (Number.isFinite(raw) && raw > 0) {
+        setIndex(raw - 1);
+      } else {
+        setIndex(0);
+      }
+    }
+
+    prev.addEventListener('click', () => setIndex(index - 1));
+    next.addEventListener('click', () => setIndex(index + 1));
+
+    window.addEventListener('keydown', event => {
+      if (['ArrowRight', 'PageDown', ' '].includes(event.key)) {
+        event.preventDefault();
+        setIndex(index + 1);
+      }
+      if (['ArrowLeft', 'PageUp', 'Backspace'].includes(event.key)) {
+        event.preventDefault();
+        setIndex(index - 1);
+      }
+      if (event.key === 'Home') {
+        event.preventDefault();
+        setIndex(0);
+      }
+      if (event.key === 'End') {
+        event.preventDefault();
+        setIndex(slides.length - 1);
+      }
+    });
+
+    window.addEventListener('wheel', event => {
+      if (window.matchMedia('(max-width: 900px)').matches) return;
+      if (Math.abs(event.deltaY) < 18 || wheelLock) return;
+      wheelLock = true;
+      setIndex(index + Math.sign(event.deltaY));
+      window.setTimeout(() => { wheelLock = false; }, 650);
+    }, { passive: true });
+
+    window.addEventListener('hashchange', fromHash);
+    fromHash();
+  </script>
+</body>
+</html>
