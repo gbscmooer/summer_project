@@ -20,13 +20,13 @@ export function getUnreadCount() {
 export function markNotificationRead(id) {
   return request({
     url: `/order/notification/${id}/read`,
-    method: 'put'
+    method: 'post'
   })
 }
 
 export function markAllNotificationsRead() {
   return request({
     url: '/order/notification/read-all',
-    method: 'put'
+    method: 'post'
   })
 }

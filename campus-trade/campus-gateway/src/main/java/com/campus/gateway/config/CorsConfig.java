@@ -15,6 +15,10 @@ import java.util.Collections;
 @Configuration
 public class CorsConfig {
 
+    static java.util.List<String> allowedMethods() {
+        return Arrays.asList("GET", "POST", "OPTIONS");
+    }
+
     @Bean
     public CorsWebFilter corsWebFilter() {
         CorsConfiguration config = new CorsConfiguration();
@@ -24,7 +28,7 @@ public class CorsConfig {
                 "http://127.0.0.1:*",
                 "https://*"
         ));
-        config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
+        config.setAllowedMethods(allowedMethods());
         config.setAllowedHeaders(Arrays.asList(
                 "Authorization",
                 "Content-Type",

@@ -47,7 +47,7 @@ export function getSellerOrders(params) {
 export function payOrder(id) {
   return request({
     url: `/order/${id}/pay`,
-    method: 'put'
+    method: 'post'
   })
 }
 
@@ -55,7 +55,7 @@ export function payOrder(id) {
 export function confirmOrder(id) {
   return request({
     url: `/order/${id}/confirm`,
-    method: 'put'
+    method: 'post'
   })
 }
 
@@ -63,7 +63,7 @@ export function confirmOrder(id) {
 export function cancelOrder(id) {
   return request({
     url: `/order/${id}/cancel`,
-    method: 'put'
+    method: 'post'
   })
 }
 

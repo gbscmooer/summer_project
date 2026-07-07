@@ -1,13 +1,11 @@
-version: '3.8'
-
 services:
   nacos:
     image: nacos/nacos-server:v2.3.2
+    platform: linux/amd64
     container_name: campus-nacos
     environment:
       - MODE=standalone
       - PREFER_HOST_MODE=hostname
-      - SPRING_DATASOURCE_PLATFORM=embedded
     ports:
       - "8848:8848"
       - "9848:9848"

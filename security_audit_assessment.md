@@ -102,7 +102,7 @@
 | **Medium** | `RabbitMQConfig` | 消费失败消息丢失 | **Fixed** — 订单通知/秒杀队列均配置 DLX + DLQ |
 | **Low** | `application.yml` | Feign / RabbitMQ 无超时或无限重试 | **Fixed** — Feign connect 5s/read 10s；listener retry max 3 |
 | **Low** | 秒杀链路 | Redis 预扣 + DB 扣减双轨，极端失败场景下两路库存可能短暂不一致 | **Open** |
-| **Low** | `pay` | 模拟支付，无真实支付网关与对账 | **Open**（课程设计范围） |
+| **Low** | `pay` | 平台内订单支付状态流转，无第三方支付网关 | **Resolved** — 作为订单状态接口交付 |
 | **Info** | `OrderNoGenerator` | 混合时间戳 + 自增 + 随机降低碰撞；DB `order_no` 唯一约束兜底 | **Fixed**（既有 + 增强） |
 | **Info** | `MyMetaObjectHandler` | 订单时间戳自动填充 | **Fixed**（order 模块既有） |
 
@@ -185,7 +185,7 @@
 | **Low** | Token 存 localStorage | XSS 可窃取会话 | 改 HttpOnly Cookie 或缩短有效期 + Refresh Token |
 | **Low** | 前端未对接秒杀 API | 秒杀能力仅 API 层可用 | 补充 UI 与轮询 `/order/seckill/result/{productId}` |
 | **Low** | 商品详情缓存中浏览量滞后 | 展示值略低于真实值 | 可接受；或单独 counter 不走详情缓存 |
-| **Low** | 模拟支付 | 无真实资金流 | 课程范围可接受 |
+| **Low** | 平台内支付状态流转 | 无第三方资金流 | 按订单状态接口交付 |
 | **Info** | docker-compose 默认弱密码（MySQL/RabbitMQ） | 本地演示风险低，公网部署有风险 | 生产改用 secrets 管理 |
 
 ---
@@ -250,9 +250,9 @@ docker-compose ps
 | 10 | 发布商品 | 登录后 `POST /api/product` | 返回 `productId` |
 | 11 | 商品详情 | `GET /api/product/{id}` | 返回详情，`viewCount` 递增 |
 | 12 | 常规下单 | 买家 Token + `POST /api/order` `{productId}` | 下单成功，库存减 1 |
-| 13 | 取消回滚 | `PUT /api/order/{id}/cancel` | 订单变已取消，库存恢复 |
+| 13 | 取消回滚 | `POST /api/order/{id}/cancel` | 订单变已取消，库存恢复 |
 | 14 | 不能买自己的 | 卖家 Token 购买自己的商品 | 业务错误码，提示不能购买自己的商品 |
-| 15 | 支付/确认 | `PUT .../pay` → `PUT .../confirm` | 状态 0→1→2 |
+| 15 | 支付/确认 | `POST .../pay` → `POST .../confirm` | 状态 0→1→2 |
 | 16 | 卖家通知 | 下单后查 `GET /api/notification/list`（卖家 Token） | 有新 ORDER_CREATED 通知 |
 | 17 | 搜索 | `GET /api/product/search?keyword=xxx` | 返回结果（ES 或 DB 降级） |
 

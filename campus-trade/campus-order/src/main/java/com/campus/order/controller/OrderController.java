@@ -75,7 +75,7 @@ public class OrderController {
     }
 
     /** 支付（仅买家本人，0→1）。 */
-    @PutMapping("/{id}/pay")
+    @PostMapping("/{id}/pay")
     public Result<Void> pay(
             @RequestHeader("X-User-Id") Long buyerId,
             @PathVariable Long id) {
@@ -84,7 +84,7 @@ public class OrderController {
     }
 
     /** 确认收货（仅买家本人，1→2）。 */
-    @PutMapping("/{id}/confirm")
+    @PostMapping("/{id}/confirm")
     public Result<Void> confirm(
             @RequestHeader("X-User-Id") Long buyerId,
             @PathVariable Long id) {
@@ -93,7 +93,7 @@ public class OrderController {
     }
 
     /** 取消（仅买家本人，0→3，回滚库存）。 */
-    @PutMapping("/{id}/cancel")
+    @PostMapping("/{id}/cancel")
     public Result<Void> cancel(
             @RequestHeader("X-User-Id") Long buyerId,
             @PathVariable Long id) {

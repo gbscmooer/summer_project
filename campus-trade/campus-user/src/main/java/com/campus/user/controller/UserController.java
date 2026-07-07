@@ -42,7 +42,7 @@ public class UserController {
         return Result.success(userService.getUserInfo(userId));
     }
 
-    @PutMapping("/info")
+    @PostMapping("/info")
     public Result<Void> updateUserInfo(
             @RequestHeader(value = "X-User-Id", required = false) Long userId,
             @RequestBody UpdateUserRequest request) {

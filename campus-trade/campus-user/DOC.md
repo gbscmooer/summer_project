@@ -54,7 +54,7 @@
 - **返回**：`{ "code": 200, "data": { "userId", "username", "nickname", "avatar", "phone", "createTime" } }`
 
 ### 2.4 更新个人信息 (需鉴权)
-- **接口**：`PUT /api/user/info`
+- **接口**：`POST /api/user/info`
 - **入参**：`{ "nickname", "avatar", "phone" }` (支持部分字段更新)
 - **返回**：`{ "code": 200, "message": "更新成功", "data": null }`
 

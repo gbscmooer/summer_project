@@ -33,7 +33,7 @@ public class NotificationController {
     }
 
     /** 标记单条已读。 */
-    @PutMapping("/{id}/read")
+    @PostMapping("/{id}/read")
     public Result<Void> markRead(
             @RequestHeader("X-User-Id") Long userId,
             @PathVariable Long id) {
@@ -42,7 +42,7 @@ public class NotificationController {
     }
 
     /** 一键全部已读。 */
-    @PutMapping("/read-all")
+    @PostMapping("/read-all")
     public Result<Void> markAllRead(@RequestHeader("X-User-Id") Long userId) {
         notificationService.markAllRead(userId);
         return Result.success("已全部标记已读", null);

@@ -30,7 +30,7 @@ public class ProductController {
         return Result.success("发布成功", Map.of("productId", productId));
     }
 
-    @PutMapping("/{id}")
+    @PostMapping("/{id}/update")
     public Result<Void> update(
             @RequestHeader("X-User-Id") Long sellerId,
             @PathVariable Long id,
@@ -39,7 +39,7 @@ public class ProductController {
         return Result.success("修改成功", null);
     }
 
-    @DeleteMapping("/{id}")
+    @PostMapping("/{id}/delete")
     public Result<Void> remove(
             @RequestHeader("X-User-Id") Long sellerId,
             @PathVariable Long id) {

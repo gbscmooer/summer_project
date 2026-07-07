@@ -15,8 +15,8 @@ export function createProduct(data) {
 // 更新商品（需登录）：body 同发布 -> data null
 export function updateProduct(id, data) {
   return request({
-    url: `/product/${id}`,
-    method: 'put',
+    url: `/product/${id}/update`,
+    method: 'post',
     data
   })
 }
@@ -24,8 +24,8 @@ export function updateProduct(id, data) {
 // 删除/逻辑下架商品（需登录）-> data null
 export function deleteProduct(id) {
   return request({
-    url: `/product/${id}`,
-    method: 'delete'
+    url: `/product/${id}/delete`,
+    method: 'post'
   })
 }
 

@@ -63,11 +63,11 @@
 - **逻辑**：数据写入 MySQL 并在成功后**同步双写**写入 ES。
 
 ### 3.2 修改商品 (需登录且仅卖家本人)
-- **接口**：`PUT /api/product/{id}`
+- **接口**：`POST /api/product/{id}/update`
 - **逻辑**：更新 MySQL，**双写更新 ES**，并执行 `evictDetailCache` 驱逐 Redis 商品缓存。
 
 ### 3.3 下架商品 (需登录且仅卖家本人)
-- **接口**：`DELETE /api/product/{id}`
+- **接口**：`POST /api/product/{id}/delete`
 - **逻辑**：MySQL 状态设为 0，**从 ES 索引中删除该商品**，并清除 Redis 详情缓存。
 
 ### 3.4 商品详情 (白名单)

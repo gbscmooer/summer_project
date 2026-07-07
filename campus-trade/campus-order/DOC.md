@@ -104,9 +104,9 @@
 - **接口**：`GET /api/order/buyer` / `GET /api/order/seller`
 
 ### 4.4 订单状态流转接口 (需登录)
-- **支付订单**：`PUT /api/order/{id}/pay` (待付款状态改为已付款)
-- **确认收货**：`PUT /api/order/{id}/confirm` (已付款状态改为已完成，并触发 Feign 修改商品为已售)
-- **取消订单**：`PUT /api/order/{id}/cancel` (取消待付款订单，流转状态并 Feign 远程回滚商品库存)
+- **支付订单**：`POST /api/order/{id}/pay` (待付款状态改为已付款)
+- **确认收货**：`POST /api/order/{id}/confirm` (已付款状态改为已完成，并触发 Feign 修改商品为已售)
+- **取消订单**：`POST /api/order/{id}/cancel` (取消待付款订单，流转状态并 Feign 远程回滚商品库存)
 
 ### 4.5 高并发秒杀下单 (需登录)
 - **接口**：`POST /api/order/seckill`
@@ -120,5 +120,5 @@
 ### 4.7 卖家通知 API 组 (需登录)
 - **获取通知列表**：`GET /api/order/notification/list` (分页，最新在前)
 - **获取未读通知数**：`GET /api/order/notification/unread-count` (用于前台小红点)
-- **标记已读**：`PUT /api/order/notification/{id}/read`
-- **全部已读**：`PUT /api/order/notification/read-all`
+- **标记已读**：`POST /api/order/notification/{id}/read`
+- **全部已读**：`POST /api/order/notification/read-all`

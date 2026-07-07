@@ -1,0 +1,23 @@
+-- Optional development seed data.
+-- Run manually only when a local demo dataset is needed.
+
+USE campus_trade;
+
+-- Password for all seeded users: 123456
+-- BCrypt("123456") = $2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBpwTTyRTceFGK
+INSERT INTO t_user (username, password, nickname, avatar, phone) VALUES
+('zhangsan', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBpwTTyRTceFGK', '张三', 'https://api.dicebear.com/7.x/avataaars/svg?seed=zhangsan', '13800138001'),
+('lisi',     '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBpwTTyRTceFGK', '李四', 'https://api.dicebear.com/7.x/avataaars/svg?seed=lisi',     '13800138002'),
+('wangwu',   '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBpwTTyRTceFGK', '王五', 'https://api.dicebear.com/7.x/avataaars/svg?seed=wangwu',   '13800138003'),
+('admin',    '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBpwTTyRTceFGK', '管理员', 'https://api.dicebear.com/7.x/avataaars/svg?seed=admin', '13800138000');
+
+INSERT INTO t_product (title, description, price, images, category, seller_id, status, stock, view_count) VALUES
+('同济版高等数学（上下册）',    '九成新，无笔迹无划线，适合大一学生',                    25.00,  'https://picsum.photos/seed/math/400/300',       '教材', 1, 1, 1, 128),
+('MacBook Pro 充电线',          'MagSafe2 原装充电线，功能正常，有轻微磨损',             80.00,  'https://picsum.photos/seed/cable/400/300',      '数码', 1, 1, 1,  56),
+('大学英语四级词汇书',           '新东方出版，只用了一半，整体完好',                      12.00,  'https://picsum.photos/seed/book/400/300',       '教材', 2, 1, 1,  89),
+('索尼WH-1000XM3降噪耳机',      '成色9成新，附原装包装和线材，降噪效果好',              800.00,  'https://picsum.photos/seed/headphone/400/300',  '数码', 2, 1, 1, 234),
+('IKEA台灯（白色LED）',          '宿舍用，LED灯泡，亮度可调，用了一学期',                35.00,  'https://picsum.photos/seed/lamp/400/300',       '生活', 3, 1, 1,  45),
+('线性代数教材（浙大版）',        '考研参考用书，有部分笔记，助理解',                      20.00,  'https://picsum.photos/seed/linear/400/300',     '教材', 3, 1, 1,  67),
+('自动折叠雨伞（深蓝色）',        '用过两次，结实耐用',                                  18.00,  'https://picsum.photos/seed/umbrella/400/300',   '生活', 1, 1, 1,  23),
+('数据结构与算法分析（C语言版）', '严蔚敏版，有少量铅笔标注，可擦除',                     30.00,  'https://picsum.photos/seed/ds/400/300',         '教材', 2, 1, 1,  91),
+('小米移动电源 10000mAh',        '充过约50次，容量正常，两个USB口',                      45.00,  'https://picsum.photos/seed/powerbank/400/300',  '数码', 3, 1, 1, 112);

@@ -32,7 +32,7 @@ export function getUserInfo() {
 export function updateUserInfo(data) {
   return request({
     url: '/user/info',
-    method: 'put',
+    method: 'post',
     data
   })
 }
