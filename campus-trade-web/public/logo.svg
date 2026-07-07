@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="CampusTrade logo">
+  <defs>
+    <linearGradient id="bg" x1="86" y1="42" x2="426" y2="470" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1f8881"/>
+      <stop offset="0.52" stop-color="#2663a8"/>
+      <stop offset="1" stop-color="#142b49"/>
+    </linearGradient>
+    <linearGradient id="page" x1="164" y1="306" x2="348" y2="398" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#e9f7f4"/>
+      <stop offset="1" stop-color="#ffffff"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#0f2f4d" flood-opacity="0.28"/>
+    </filter>
+  </defs>
+
+  <rect x="42" y="42" width="428" height="428" rx="112" fill="url(#bg)"/>
+  <path d="M132 348c40 44 94 67 154 67 56 0 102-18 137-54" fill="none" stroke="#7fd9c9" stroke-width="18" stroke-linecap="round" opacity=".28"/>
+
+  <g filter="url(#shadow)">
+    <path d="M154 179h204c18 0 33 14 35 32l20 151c3 23-15 43-38 43H137c-23 0-41-20-38-43l20-151c2-18 17-32 35-32z" fill="#ffffff"/>
+    <path d="M173 179v-20c0-45 36-82 82-82h2c46 0 82 37 82 82v20" fill="none" stroke="#ffffff" stroke-width="34" stroke-linecap="round"/>
+    <path d="M184 179v-18c0-39 32-71 71-71h2c39 0 71 32 71 71v18" fill="none" stroke="#2663a8" stroke-width="18" stroke-linecap="round"/>
+  </g>
+
+  <path d="M168 313c27-18 55-23 88-13v88c-33-10-61-5-88 13v-88z" fill="url(#page)" stroke="#1f8881" stroke-width="10" stroke-linejoin="round"/>
+  <path d="M344 313c-27-18-55-23-88-13v88c33-10 61-5 88 13v-88z" fill="url(#page)" stroke="#1f8881" stroke-width="10" stroke-linejoin="round"/>
+  <path d="M256 300v88" stroke="#1f8881" stroke-width="10" stroke-linecap="round"/>
+
+  <path d="M188 250h112" fill="none" stroke="#2663a8" stroke-width="20" stroke-linecap="round"/>
+  <path d="M276 218l39 32-39 32" fill="none" stroke="#2663a8" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M324 292H212" fill="none" stroke="#c2702a" stroke-width="20" stroke-linecap="round"/>
+  <path d="M236 324l-39-32 39-32" fill="none" stroke="#c2702a" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <circle cx="372" cy="134" r="28" fill="#ffd166"/>
+  <path d="M352 130l20-18 20 18v28h-40v-28z" fill="#ffffff" opacity=".86"/>
+</svg>

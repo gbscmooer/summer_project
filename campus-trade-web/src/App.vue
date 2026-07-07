@@ -5,7 +5,7 @@
       <div class="navbar-inner">
         <!-- Logo -->
         <div class="logo" @click="$router.push('/')">
-          <span class="logo-icon">🛒</span>
+          <img class="logo-icon" src="/logo.png" alt="校园淘 logo" />
           <span class="logo-text">校园淘</span>
         </div>
 
@@ -199,8 +199,11 @@ function handleCommand(command) {
 }
 
 .logo-icon {
-  font-size: 24px;
-  margin-right: 6px;
+  width: 32px;
+  height: 32px;
+  margin-right: 8px;
+  border-radius: 8px;
+  display: block;
 }
 
 .logo-text {
