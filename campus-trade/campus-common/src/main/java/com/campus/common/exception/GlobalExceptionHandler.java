@@ -5,6 +5,8 @@ import com.campus.common.result.ResultCode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.validation.BindException;
 import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MissingRequestHeaderException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -30,6 +32,19 @@ public class GlobalExceptionHandler {
         }
         log.warn("参数校验异常: {}", message);
         return Result.error(ResultCode.BAD_REQUEST.getCode(), message);
+    }
+
+    @ExceptionHandler(MissingRequestHeaderException.class)
+    public Result<?> handleMissingRequestHeader(MissingRequestHeaderException e) {
+        if ("X-User-Id".equalsIgnoreCase(e.getHeaderName())) {
+            return Result.error(ResultCode.UNAUTHORIZED);
+        }
+        return Result.error(ResultCode.BAD_REQUEST.getCode(), "缺少请求头: " + e.getHeaderName());
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public Result<?> handleMissingRequestParameter(MissingServletRequestParameterException e) {
+        return Result.error(ResultCode.BAD_REQUEST.getCode(), "缺少请求参数: " + e.getParameterName());
     }
 
     @ExceptionHandler(Exception.class)

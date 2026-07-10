@@ -5,6 +5,7 @@ import lombok.Data;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Arrays;
 
 @Data
 public class ProductListVO {
@@ -25,7 +26,11 @@ public class ProductListVO {
         vo.setStatus(p.getStatus());
         vo.setCreateTime(p.getCreateTime());
         if (p.getImages() != null && !p.getImages().isBlank()) {
-            vo.setCover(p.getImages().split(",")[0].trim());
+            vo.setCover(Arrays.stream(p.getImages().split(","))
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .findFirst()
+                    .orElse(null));
         }
         return vo;
     }

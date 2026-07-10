@@ -49,7 +49,7 @@ campus-trade-web/
 
 在首页 `Home.vue` 中集成了常规列表与 ES 全文检索过滤器的平滑切换：
 * **无关键词与无筛选**：请求 [api/product.js](file:///Users/katisarrow/summer/campus-trade-web/src/api/product.js) 中的 `getProductList` 接口，向网关索取常规 MySQL 分页分类商品。
-* **输入关键词/设定价格过滤/选择非时间排序**：触发 ES 检索判定，自动向网关发送 `searchProducts` 请求，走 Elasticsearch 完成多维度分词排序。
+* **输入关键词**：自动向网关发送 `searchProducts` 请求，走 Elasticsearch 完成分词检索；分类条件会随列表或搜索请求一起发送。
 
 ---
 
@@ -70,7 +70,7 @@ campus-trade-web/
 - **网关反向代理**：将所有 `/api/` 前缀的请求利用 Nginx 反向代理转发到后端的 Spring Cloud Gateway (微服务内部容器互联地址 `campus-gateway:8080`)，从而解决开发和生产中的跨域问题：
   ```nginx
   location /api/ {
-      proxy_pass http://campus-gateway:8080/api/;
+      proxy_pass http://campus-gateway:8080;
       proxy_set_header Host $host;
       proxy_set_header X-Real-IP $remote_addr;
       proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -78,6 +78,6 @@ campus-trade-web/
   ```
 
 ### 4.2 Dockerfile 打包机制 ([Dockerfile](file:///Users/katisarrow/summer/campus-trade-web/Dockerfile))
-- **多阶段构建**：
-  1. 使用 `node:18-alpine` 镜像作为构建阶段，下载依赖并执行 `npm run build` 生成 `dist/` 编译静态文件。
-  2. 使用轻量级 `nginx:alpine` 镜像作为最终阶段，将构建阶段产生的 `dist/` 文件复制到 `/usr/share/nginx/html`，并将自定义的 [nginx.conf](file:///Users/katisarrow/summer/campus-trade-web/nginx.conf) 覆盖到容器 `/etc/nginx/conf.d/default.conf`，暴露 80 端口启动。
+- **单阶段 Nginx 镜像**：
+  1. 本地先执行 `npm install`、`npm test`、`npm run build` 生成 `dist/`。
+  2. Dockerfile 使用 `nginx:1.25-alpine`，将本地 `dist/` 复制到 `/usr/share/nginx/html`，并将 [nginx.conf](file:///Users/katisarrow/summer/campus-trade-web/nginx.conf) 覆盖到容器 `/etc/nginx/nginx.conf`，暴露 80 端口启动。

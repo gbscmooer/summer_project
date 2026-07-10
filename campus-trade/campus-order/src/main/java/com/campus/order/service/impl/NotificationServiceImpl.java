@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.campus.common.exception.BizException;
 import com.campus.common.result.PageResult;
 import com.campus.common.result.ResultCode;
+import com.campus.common.util.PageParamUtil;
 import com.campus.order.dto.NotificationVO;
 import com.campus.order.entity.Notification;
 import com.campus.order.mapper.NotificationMapper;
@@ -22,7 +23,9 @@ public class NotificationServiceImpl extends ServiceImpl<NotificationMapper, Not
 
     @Override
     public PageResult<NotificationVO> listByUser(Long userId, Integer pageNum, Integer pageSize) {
-        Page<Notification> page = new Page<>(pageNum, pageSize);
+        int pageNo = PageParamUtil.normalizePageNum(pageNum);
+        int size = PageParamUtil.normalizePageSize(pageSize);
+        Page<Notification> page = new Page<>(pageNo, size);
         lambdaQuery()
                 .eq(Notification::getUserId, userId)
                 .orderByDesc(Notification::getCreateTime)
@@ -32,7 +35,7 @@ public class NotificationServiceImpl extends ServiceImpl<NotificationMapper, Not
                 .map(NotificationVO::from)
                 .collect(Collectors.toList());
 
-        return PageResult.of(page.getTotal(), pageNum, pageSize, list);
+        return PageResult.of(page.getTotal(), pageNo, size, list);
     }
 
     @Override

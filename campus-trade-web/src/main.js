@@ -7,15 +7,16 @@ import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 
 import App from './App.vue'
 import router from './router'
+import { useSettingsStore } from './store/settings'
 import './styles.css'
-
-document.documentElement.classList.add('dark')
 
 const app = createApp(App)
 
 // 注意顺序：先装 Pinia，再装 Router。
 // 因为 router 的全局守卫与 axios 拦截器都会用到 useUserStore()。
-app.use(createPinia())
+const pinia = createPinia()
+app.use(pinia)
+useSettingsStore(pinia).init()
 app.use(router)
 app.use(ElementPlus)
 

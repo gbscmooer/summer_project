@@ -6,7 +6,7 @@
 | --- | --- | --- | --- |
 | `campus-gateway` | 8080 | `/api/**` 路由、JWT 鉴权、`X-User-Id` 注入、CORS | Nacos |
 | `campus-user` | 8081 | 注册、登录、用户信息、用户简要信息内部查询 | MySQL、Nacos |
-| `campus-product` | 8082 | 商品发布、修改、下架、列表、详情、搜索、库存内部接口 | MySQL、Redis、Elasticsearch、Nacos |
+| `campus-product` | 8082 | 商品发布、修改、下架、列表、详情、搜索、库存内部接口 | MySQL、Redis、Elasticsearch、Nacos、OpenFeign |
 | `campus-order` | 8083 | 下单、订单查询、状态流转、通知、秒杀削峰 | MySQL、Redis、RabbitMQ、Nacos、OpenFeign |
 | `campus-trade-web` | 5173/80 | Vue 前端、Nginx 静态托管 | Gateway |
 
@@ -99,9 +99,9 @@
 
 | 方法 | 路径 | 调用方 | 功能 |
 | --- | --- | --- | --- |
-| GET | `/user/batch?ids=1,2` | `campus-order` | 批量查询用户简要信息 |
+| GET | `/user/batch?ids=1,2` | `campus-order`、`campus-product` | 批量查询用户简要信息 |
 | GET | `/product/inner/{id}` | `campus-order` | 查询单个商品 |
-| POST | `/product/inner/{id}/deduct` | `campus-order` | 扣减库存 |
+| POST | `/product/inner/{id}/deduct` | `campus-order` | 扣减库存；query: `preserveSeckillCache` 可选 |
 | POST | `/product/inner/{id}/restore` | `campus-order` | 恢复库存 |
 
 ## 数据表

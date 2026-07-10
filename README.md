@@ -43,9 +43,28 @@ docker compose -f docker-compose-mw.yml up -d
 
 ```bash
 cd /Users/katisarrow/summer/campus-trade
+mvn install -DskipTests
+```
+
+分别打开 4 个终端运行：
+
+```bash
+cd /Users/katisarrow/summer/campus-trade
 mvn -pl campus-gateway spring-boot:run
+```
+
+```bash
+cd /Users/katisarrow/summer/campus-trade
 mvn -pl campus-user spring-boot:run
+```
+
+```bash
+cd /Users/katisarrow/summer/campus-trade
 mvn -pl campus-product spring-boot:run
+```
+
+```bash
+cd /Users/katisarrow/summer/campus-trade
 mvn -pl campus-order spring-boot:run
 ```
 

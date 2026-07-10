@@ -30,7 +30,10 @@ public class ProductDetailVO {
         vo.setDescription(p.getDescription());
         vo.setPrice(p.getPrice());
         vo.setImages(p.getImages() != null
-                ? Arrays.asList(p.getImages().split(","))
+                ? Arrays.stream(p.getImages().split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toList()
                 : List.of());
         vo.setCategory(p.getCategory());
         vo.setSellerId(p.getSellerId());

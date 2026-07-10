@@ -26,7 +26,7 @@
           :class="{ active: isActive(item.path) }"
         >
           <el-icon class="nav-icon"><component :is="item.icon" /></el-icon>
-          <span class="nav-label">{{ item.label }}</span>
+          <span class="nav-label">{{ t(item.labelKey) }}</span>
           <el-badge
             v-if="item.path === '/notifications' && unreadCount > 0"
             :value="unreadCount"
@@ -38,8 +38,8 @@
 
       <!-- 底部引导卡片 -->
       <div v-if="!userStore.isLogin" class="sidebar-promo">
-        <p class="promo-text">登录后即可发布闲置、下单交易</p>
-        <button class="promo-btn" @click="$router.push('/login')">去登录</button>
+        <p class="promo-text">{{ t('common.promo') }}</p>
+        <button class="promo-btn" @click="$router.push('/login')">{{ t('common.login') }}</button>
       </div>
 
       <!-- 底部用户 -->
@@ -56,8 +56,8 @@
             <template #dropdown>
               <el-dropdown-menu>
                 <div class="dropdown-email">{{ userStore.displayName }}</div>
-                <el-dropdown-item command="my">个人中心</el-dropdown-item>
-                <el-dropdown-item command="logout" divided>退出登录</el-dropdown-item>
+                <el-dropdown-item command="my">{{ t('common.profile') }}</el-dropdown-item>
+                <el-dropdown-item command="logout" divided>{{ t('common.logout') }}</el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
@@ -66,8 +66,8 @@
           <div class="user-block guest" @click="$router.push('/login')">
             <div class="user-avatar guest-avatar">?</div>
             <div class="user-info">
-              <span class="user-name">未登录</span>
-              <span class="user-org">点击登录</span>
+              <span class="user-name">{{ t('common.notLoggedIn') }}</span>
+              <span class="user-org">{{ t('common.clickToLogin') }}</span>
             </div>
           </div>
         </template>
@@ -95,26 +95,26 @@ import {
 } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/user'
 import { getUnreadCount } from '@/api/notification'
+import { useI18n } from '@/i18n'
 
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
+const { t } = useI18n()
 const unreadCount = ref(0)
 let unreadTimer = null
+const unreadRefreshEvent = 'campus:unread-count-refresh'
 
 const isAuthPage = computed(() => ['/login', '/register'].includes(route.path))
 
-const navItems = computed(() => {
-  const items = [
-    { path: '/', label: 'Home', icon: House },
-    { path: '/publish', label: 'Publish', icon: EditPen },
-    { path: '/orders', label: 'Orders', icon: ShoppingCart },
-    { path: '/notifications', label: 'Notifications', icon: Bell },
-    { path: '/my', label: 'Profile', icon: User },
-    { path: '/settings', label: 'Settings', icon: Setting }
-  ]
-  return items
-})
+const navItems = [
+  { path: '/', labelKey: 'nav.home', icon: House },
+  { path: '/publish', labelKey: 'nav.publish', icon: EditPen },
+  { path: '/orders', labelKey: 'nav.orders', icon: ShoppingCart },
+  { path: '/notifications', labelKey: 'nav.notifications', icon: Bell },
+  { path: '/my', labelKey: 'nav.profile', icon: User },
+  { path: '/settings', labelKey: 'nav.settings', icon: Setting }
+]
 
 const avatarLetter = computed(() => {
   const name = userStore.displayName || 'U'
@@ -123,7 +123,6 @@ const avatarLetter = computed(() => {
 
 function isActive(path) {
   if (path === '/') return route.path === '/'
-  if (path === '/settings') return false
   return route.path.startsWith(path)
 }
 
@@ -169,27 +168,30 @@ watch(
   () => route.path,
   (path) => {
     if (path === '/notifications' || path === '/orders') refreshUnreadCount()
-    if (path === '/settings') router.replace('/my')
   }
 )
 
 onMounted(() => {
+  window.addEventListener(unreadRefreshEvent, refreshUnreadCount)
   if (userStore.isLogin) startUnreadPolling()
 })
 
-onUnmounted(stopUnreadPolling)
+onUnmounted(() => {
+  window.removeEventListener(unreadRefreshEvent, refreshUnreadCount)
+  stopUnreadPolling()
+})
 
 function handleCommand(command) {
   if (command === 'my') router.push('/my')
   else if (command === 'logout') {
-    ElMessageBox.confirm('确定要退出登录吗？', '提示', {
-      confirmButtonText: '退出',
-      cancelButtonText: '取消',
+    ElMessageBox.confirm(t('settings.logoutConfirm'), t('settings.tip'), {
+      confirmButtonText: t('settings.confirm'),
+      cancelButtonText: t('settings.cancel'),
       type: 'warning'
     })
       .then(() => {
         userStore.logout()
-        ElMessage.success('已退出登录')
+        ElMessage.success(t('settings.logoutSuccess'))
         router.push('/login')
       })
       .catch(() => {})
@@ -329,17 +331,17 @@ function handleCommand(command) {
   width: 100%;
   padding: 6px 12px;
   background: var(--oa-text);
-  color: #000;
+  color: var(--oa-on-primary);
   border: none;
   border-radius: 6px;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: opacity 0.15s;
 }
 
 .promo-btn:hover {
-  background: #d9d9d9;
+  opacity: 0.88;
 }
 
 .sidebar-footer {

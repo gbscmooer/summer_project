@@ -3,17 +3,6 @@
     <!-- 页头 -->
     <div class="home-header">
       <h1 class="home-title">Home</h1>
-      <div class="time-pills">
-        <button
-          v-for="t in timeRanges"
-          :key="t"
-          class="time-pill"
-          :class="{ active: activeRange === t }"
-          @click="activeRange = t"
-        >
-          {{ t }}
-        </button>
-      </div>
     </div>
 
     <div class="home-grid">
@@ -62,60 +51,13 @@
               <el-icon class="stat-info"><InfoFilled /></el-icon>
             </div>
             <div class="stat-value">{{ stats.totalListings }}</div>
-            <svg class="stat-chart" viewBox="0 0 200 40" preserveAspectRatio="none">
-              <polyline
-                fill="none"
-                stroke="#ef4444"
-                stroke-width="1.5"
-                points="0,35 25,30 50,32 75,20 100,22 125,15 150,18 175,10 200,12"
-              />
-            </svg>
-          </div>
-
-          <div class="stat-card">
-            <div class="stat-head">
-              <span class="stat-label">Orders &amp; trades</span>
-            </div>
-            <div class="stat-value">{{ stats.totalOrders }}</div>
-            <svg class="stat-chart" viewBox="0 0 200 40" preserveAspectRatio="none">
-              <polyline
-                fill="none"
-                stroke="#6b7280"
-                stroke-width="1.5"
-                stroke-dasharray="4 3"
-                points="0,30 40,28 80,32 120,25 160,28 200,20"
-              />
-            </svg>
-          </div>
-
-          <div class="stat-card stat-card-yellow">
-            <div class="stat-head">
-              <span class="stat-label dark">Pending orders</span>
-            </div>
-            <div class="stat-value dark">{{ stats.pendingOrders }}</div>
-            <button class="yellow-btn" @click="$router.push('/orders')">View orders</button>
-          </div>
-
-          <div class="stat-card">
-            <div class="stat-head">
-              <span class="stat-label">Total views</span>
-            </div>
-            <div class="stat-value">{{ stats.totalViews }}</div>
-            <svg class="stat-chart" viewBox="0 0 200 40" preserveAspectRatio="none">
-              <polyline
-                fill="none"
-                stroke="#22c55e"
-                stroke-width="1.5"
-                points="0,38 30,35 60,30 90,25 120,20 150,15 180,10 200,8"
-              />
-            </svg>
           </div>
         </section>
 
         <!-- Safety insights 横幅 -->
-        <section class="insights-banner">
-          <button class="dismiss-btn" @click="showBanner = false">Dismiss</button>
-          <div v-if="showBanner" class="banner-inner">
+        <section v-if="showBanner" class="insights-banner">
+          <div class="banner-inner">
+            <button class="dismiss-btn" @click="showBanner = false">Dismiss</button>
             <div class="banner-text">
               <h3>Introducing safety insights</h3>
               <p>校园淘现已支持交易安全提醒，保障每一笔闲置交易。</p>
@@ -247,8 +189,6 @@ const router = useRouter()
 const userStore = useUserStore()
 const categories = CATEGORIES
 
-const timeRanges = ['24h', '7d', '30d', '90d']
-const activeRange = ref('30d')
 const showBanner = ref(true)
 
 const loading = ref(false)
@@ -260,10 +200,7 @@ const activeCategory = ref('')
 const keyword = ref('')
 
 const stats = ref({
-  totalListings: 0,
-  totalOrders: 0,
-  pendingOrders: 0,
-  totalViews: 0
+  totalListings: 0
 })
 
 const recommendedList = computed(() => list.value.slice(0, 4))
@@ -288,7 +225,7 @@ const updates = [
   {
     date: '5 months ago',
     title: 'Multi-category search',
-    desc: '支持按分类、价格区间、关键词多维度搜索，快速找到心仪好物。'
+    desc: '支持按分类和关键词搜索，快速找到心仪好物。'
   }
 ]
 
@@ -316,7 +253,6 @@ async function fetchList() {
     list.value = res.data.list || []
     total.value = res.data.total || 0
     stats.value.totalListings = res.data.total || list.value.length
-    stats.value.totalViews = Math.floor((res.data.total || 0) * 12.5)
   } catch {
     list.value = []
     total.value = 0

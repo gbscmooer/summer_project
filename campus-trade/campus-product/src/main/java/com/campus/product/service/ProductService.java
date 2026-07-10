@@ -28,6 +28,6 @@ public interface ProductService {
 
     // 内部接口（供 OpenFeign）
     Product innerGetProduct(Long productId);
-    boolean deductStock(Long productId);
+    boolean deductStock(Long productId, boolean preserveSeckillCache);
     void restoreStock(Long productId, String orderNo);
 }

@@ -64,7 +64,7 @@
 
 ### 3.2 修改商品 (需登录且仅卖家本人)
 - **接口**：`POST /api/product/{id}/update`
-- **逻辑**：更新 MySQL，**双写更新 ES**，并执行 `evictDetailCache` 驱逐 Redis 商品缓存。
+- **逻辑**：更新 MySQL，清除商品详情缓存与秒杀预热缓存；商品仍在售时同步写入 ES，非在售时从 ES 删除。
 
 ### 3.3 下架商品 (需登录且仅卖家本人)
 - **接口**：`POST /api/product/{id}/delete`
@@ -72,7 +72,7 @@
 
 ### 3.4 商品详情 (白名单)
 - **接口**：`GET /api/product/{id}`
-- **逻辑**：走详情缓存逻辑（见第二章）。
+- **逻辑**：走详情缓存逻辑（见第二章），并通过用户服务内部接口补全 `sellerNickname`。
 
 ### 3.5 分类列表分页查询 (白名单)
 - **接口**：`GET /api/product/list?pageNum=1&pageSize=10&category=教材`
@@ -80,7 +80,7 @@
 
 ### 3.6 ES 商品搜索 (白名单)
 - **接口**：`GET /api/product/search?keyword=高数&category=教材&minPrice=0&maxPrice=100&sort=price_asc`
-- **逻辑**：使用 `CriteriaQuery` 构造器组合高亮、多级过滤和排序规则，直接在 Elasticsearch 检索，**不查 MySQL**。
+- **逻辑**：优先使用 `CriteriaQuery` 构造器组合多级过滤和排序规则在 Elasticsearch 检索；ES 不可用时降级为 MySQL 模糊查询。
 
 ---
 
@@ -90,9 +90,9 @@
 - **接口**：`GET /product/inner/{id}`
 
 ### 4.2 扣减商品库存 (Feign)
-- **接口**：`POST /product/inner/{id}/deduct`
-- **说明**：下单时由 `campus-order` 服务调用。若库存被扣减为 0，本服务会自动将其状态设为 `2`（已售）。
+- **接口**：`POST /product/inner/{id}/deduct?preserveSeckillCache=false`
+- **说明**：下单时由 `campus-order` 服务调用。若库存被扣减为 0，本服务会自动将其状态设为 `2`（已售）。秒杀消费者扣减 DB 库存时传 `preserveSeckillCache=true`，避免删除 Redis 秒杀预扣库存。
 
 ### 4.3 恢复/回滚商品库存 (Feign)
 - **接口**：`POST /product/inner/{id}/restore`
-- **说明**：订单支付超时取消时，回滚库存为 1 并将状态恢复为 `1`（在售）。
+- **说明**：订单取消或下单补偿时恢复库存；商品未下架时将状态恢复为 `1`（在售），已下架商品只恢复库存不重新上架。

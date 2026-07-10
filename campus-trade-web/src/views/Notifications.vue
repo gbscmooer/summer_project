@@ -71,6 +71,11 @@ const pageNum = ref(1)
 const pageSize = ref(10)
 const loading = ref(false)
 const markingAll = ref(false)
+const unreadRefreshEvent = 'campus:unread-count-refresh'
+
+function refreshUnreadBadge() {
+  window.dispatchEvent(new Event(unreadRefreshEvent))
+}
 
 function formatTime(t) {
   if (!t) return ''
@@ -107,6 +112,7 @@ async function onItemClick(item) {
   try {
     await markNotificationRead(item.id)
     item.isRead = 1
+    refreshUnreadBadge()
     ElMessage.success('Marked as read')
   } catch {
     // handled by interceptor
@@ -119,6 +125,7 @@ async function onMarkAllRead() {
     await markAllNotificationsRead()
     ElMessage.success('All marked as read')
     await fetchList()
+    refreshUnreadBadge()
   } finally {
     markingAll.value = false
   }

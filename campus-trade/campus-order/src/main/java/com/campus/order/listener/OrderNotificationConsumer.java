@@ -49,10 +49,16 @@ public class OrderNotificationConsumer {
         }
 
         String dupKey = DUP_KEY_PREFIX + message.getOrderNo();
-        Boolean acquired = stringRedisTemplate.opsForValue().setIfAbsent(dupKey, "1", DUP_TTL);
-        if (Boolean.FALSE.equals(acquired)) {
-            log.info("订单 {} 通知已处理，跳过重复消费", message.getOrderNo());
-            return;
+        boolean dedupKeyWritten = false;
+        try {
+            Boolean acquired = stringRedisTemplate.opsForValue().setIfAbsent(dupKey, "1", DUP_TTL);
+            if (Boolean.FALSE.equals(acquired)) {
+                log.info("订单 {} 通知已处理，跳过重复消费", message.getOrderNo());
+                return;
+            }
+            dedupKeyWritten = Boolean.TRUE.equals(acquired);
+        } catch (Exception e) {
+            log.warn("Redis 通知幂等键写入失败，降级继续写入数据库通知. orderNo={}", message.getOrderNo(), e);
         }
 
         log.info("====== [RabbitMQ 消费者] 收到下单通知 ======");
@@ -75,7 +81,18 @@ public class OrderNotificationConsumer {
         notification.setOrderNo(message.getOrderNo());
         notification.setIsRead(0);
         notification.setCreateTime(LocalDateTime.now());
-        notificationMapper.insert(notification);
+        try {
+            notificationMapper.insert(notification);
+        } catch (RuntimeException e) {
+            if (dedupKeyWritten) {
+                try {
+                    stringRedisTemplate.delete(dupKey);
+                } catch (Exception ex) {
+                    log.warn("通知入库失败后删除幂等键失败. orderNo={}", message.getOrderNo(), ex);
+                }
+            }
+            throw e;
+        }
 
         log.info("====== 通知已写入数据库（卖家 {} 将收到通知）======", message.getSellerId());
     }

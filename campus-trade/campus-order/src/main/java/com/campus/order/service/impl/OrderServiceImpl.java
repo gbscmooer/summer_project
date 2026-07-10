@@ -6,6 +6,7 @@ import com.campus.common.exception.BizException;
 import com.campus.common.result.PageResult;
 import com.campus.common.result.Result;
 import com.campus.common.result.ResultCode;
+import com.campus.common.util.PageParamUtil;
 import com.campus.order.dto.CreateOrderVO;
 import com.campus.order.dto.OrderDetailVO;
 import com.campus.order.dto.OrderListVO;
@@ -65,6 +66,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     private static final int STATUS_CANCELLED = 3;
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public CreateOrderVO createOrder(Long buyerId, Long productId) {
         // 1. 查商品（透传 2001 商品不存在）
         ProductDTO product = unwrap(productFeign.getProduct(productId));
@@ -84,7 +86,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         String orderNo = OrderNoGenerator.generate();
 
         // 4. 扣库存（库存不足透传 2003；扣到 0 商品服务会自动置已售）
-        unwrap(productFeign.deductStock(productId));
+        unwrap(productFeign.deductStock(productId, false));
 
         try {
             // 5. 落库（冗余 title/price/seller，status=待付款）
@@ -143,26 +145,30 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
 
     @Override
     public PageResult<OrderListVO> buyerOrders(Long buyerId, Integer status, Integer pageNum, Integer pageSize) {
-        Page<Order> page = new Page<>(pageNum, pageSize);
+        int pageNo = PageParamUtil.normalizePageNum(pageNum);
+        int size = PageParamUtil.normalizePageSize(pageSize);
+        Page<Order> page = new Page<>(pageNo, size);
         lambdaQuery()
                 .eq(Order::getBuyerId, buyerId)
                 .eq(status != null, Order::getStatus, status)
                 .orderByDesc(Order::getCreateTime)
                 .page(page);
         // 买家视角：对方=卖家
-        return toListResult(page, pageNum, pageSize, Order::getSellerId);
+        return toListResult(page, pageNo, size, Order::getSellerId);
     }
 
     @Override
     public PageResult<OrderListVO> sellerOrders(Long sellerId, Integer status, Integer pageNum, Integer pageSize) {
-        Page<Order> page = new Page<>(pageNum, pageSize);
+        int pageNo = PageParamUtil.normalizePageNum(pageNum);
+        int size = PageParamUtil.normalizePageSize(pageSize);
+        Page<Order> page = new Page<>(pageNo, size);
         lambdaQuery()
                 .eq(Order::getSellerId, sellerId)
                 .eq(status != null, Order::getStatus, status)
                 .orderByDesc(Order::getCreateTime)
                 .page(page);
         // 卖家视角：对方=买家
-        return toListResult(page, pageNum, pageSize, Order::getBuyerId);
+        return toListResult(page, pageNo, size, Order::getBuyerId);
     }
 
     @Override
@@ -408,7 +414,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         boolean deducted = false;
         try {
             // 扣减 DB 库存
-            unwrap(productFeign.deductStock(productId));
+            unwrap(productFeign.deductStock(productId, true));
             deducted = true;
 
             // 创建订单并落库

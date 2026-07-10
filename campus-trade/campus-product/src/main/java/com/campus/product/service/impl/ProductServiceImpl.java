@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.campus.common.exception.BizException;
 import com.campus.common.result.PageResult;
 import com.campus.common.result.ResultCode;
+import com.campus.common.util.PageParamUtil;
 import com.campus.product.constant.ProductCacheConstants;
 import com.campus.product.dto.NullValueMarker;
 import com.campus.product.dto.ProductDetailVO;
@@ -13,6 +14,8 @@ import com.campus.product.dto.ProductRequest;
 import com.campus.product.entity.Product;
 import com.campus.product.es.ProductDocument;
 import com.campus.product.es.ProductRepository;
+import com.campus.product.feign.UserFeignClient;
+import com.campus.product.feign.dto.UserBriefDTO;
 import com.campus.product.mapper.ProductMapper;
 import com.campus.product.service.ProductService;
 import lombok.RequiredArgsConstructor;
@@ -48,6 +51,7 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
     private final RedisTemplate<String, Object> redisTemplate;
     private final ProductRepository productRepository;
     private final ElasticsearchTemplate elasticsearchTemplate;
+    private final UserFeignClient userFeignClient;
 
     private static final ZoneId ZONE = ZoneId.systemDefault();
 
@@ -104,8 +108,9 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
         updateById(product);
         // 改商品后删缓存，保证下次读取到最新数据
         evictDetailCache(productId);
-        // 双写 ES：更新文档
-        saveToEs(product);
+        evictSeckillCache(productId);
+        // 双写 ES：仅在售商品保留索引，已下架/已售则删除索引
+        syncToEs(product);
     }
 
     @Override
@@ -115,6 +120,7 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
         updateById(product);
         // 下架后删缓存
         evictDetailCache(productId);
+        evictSeckillCache(productId);
         // 下架后从 ES 删除该文档，搜索只返回在售商品
         deleteFromEs(productId);
     }
@@ -134,6 +140,7 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
             }
             if (cached instanceof ProductDetailVO vo) {
                 baseMapper.incrementViewCount(productId);
+                enrichSellerNickname(vo);
                 return vo;
             }
         }
@@ -150,6 +157,7 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
                     }
                     if (cached instanceof ProductDetailVO vo) {
                         baseMapper.incrementViewCount(productId);
+                        enrichSellerNickname(vo);
                         return vo;
                     }
                 }
@@ -185,6 +193,7 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
                     }
                     if (cached instanceof ProductDetailVO vo) {
                         baseMapper.incrementViewCount(productId);
+                        enrichSellerNickname(vo);
                         return vo;
                     }
                     // 查库回填
@@ -201,6 +210,7 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
             }
             if (cached instanceof ProductDetailVO vo) {
                 baseMapper.incrementViewCount(productId);
+                enrichSellerNickname(vo);
                 return vo;
             }
         }
@@ -226,6 +236,7 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
         baseMapper.incrementViewCount(productId);
         product.setViewCount(product.getViewCount() + 1);
         ProductDetailVO vo = ProductDetailVO.from(product);
+        enrichSellerNickname(vo);
         // 缓存雪崩防护：基础 30 分钟 + 随机 0~5 分钟，错峰过期
         safeSetCache(cacheKey, vo, randomDetailTtlMillis());
         if (!isRedisHealthy()) {
@@ -240,8 +251,8 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
     public PageResult<ProductListVO> search(String keyword, String category,
                                             BigDecimal minPrice, BigDecimal maxPrice,
                                             String sort, Integer pageNum, Integer pageSize) {
-        int page = (pageNum == null || pageNum < 1) ? 1 : pageNum;
-        int size = (pageSize == null || pageSize < 1) ? 10 : pageSize;
+        int page = PageParamUtil.normalizePageNum(pageNum);
+        int size = PageParamUtil.normalizePageSize(pageSize);
 
         // 仅查在售商品
         Criteria criteria = new Criteria("status").is(1);
@@ -332,6 +343,8 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
 
     @Override
     public int reindexAll() {
+        // 先清空旧索引，避免曾经删除/下架失败的 ES 脏文档继续被搜索命中。
+        productRepository.deleteAll();
         // 存量刷入：把 MySQL 中 status=1 的全部商品 bulk 写入 ES
         List<Product> products = lambdaQuery().eq(Product::getStatus, 1).list();
         if (products.isEmpty()) {
@@ -376,7 +389,9 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
 
     @Override
     public PageResult<ProductListVO> listProducts(String category, Integer pageNum, Integer pageSize) {
-        Page<Product> page = new Page<>(pageNum, pageSize);
+        int pageNo = PageParamUtil.normalizePageNum(pageNum);
+        int size = PageParamUtil.normalizePageSize(pageSize);
+        Page<Product> page = new Page<>(pageNo, size);
         lambdaQuery()
                 .eq(Product::getStatus, 1)
                 .eq(StringUtils.hasText(category), Product::getCategory, category)
@@ -384,19 +399,21 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
                 .page(page);
         List<ProductListVO> list = page.getRecords().stream()
                 .map(ProductListVO::from).collect(Collectors.toList());
-        return PageResult.of(page.getTotal(), pageNum, pageSize, list);
+        return PageResult.of(page.getTotal(), pageNo, size, list);
     }
 
     @Override
     public PageResult<ProductListVO> myProducts(Long sellerId, Integer pageNum, Integer pageSize) {
-        Page<Product> page = new Page<>(pageNum, pageSize);
+        int pageNo = PageParamUtil.normalizePageNum(pageNum);
+        int size = PageParamUtil.normalizePageSize(pageSize);
+        Page<Product> page = new Page<>(pageNo, size);
         lambdaQuery()
                 .eq(Product::getSellerId, sellerId)
                 .orderByDesc(Product::getCreateTime)
                 .page(page);
         List<ProductListVO> list = page.getRecords().stream()
                 .map(ProductListVO::from).collect(Collectors.toList());
-        return PageResult.of(page.getTotal(), pageNum, pageSize, list);
+        return PageResult.of(page.getTotal(), pageNo, size, list);
     }
 
     @Override
@@ -408,7 +425,7 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public boolean deductStock(Long productId) {
+    public boolean deductStock(Long productId, boolean preserveSeckillCache) {
         int updated = baseMapper.deductStock(productId);
         if (updated == 0) {
             Product product = getById(productId);
@@ -418,11 +435,16 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
             throw new BizException(ResultCode.PRODUCT_STOCK_INSUFFICIENT);
         }
 
-        // 扣减库存成功，清除缓存并双写 ES
+        // 扣减库存成功，清除详情缓存并双写 ES。
+        // 秒杀消费者已在 Redis 预扣库存，消费阶段扣 DB 时不能删掉 seckill:stock，
+        // 否则后续请求会按剩余 DB 库存重新预热，造成超量排队。
         evictDetailCache(productId);
+        if (!preserveSeckillCache) {
+            evictSeckillCache(productId);
+        }
         Product updatedProduct = getById(productId);
         if (updatedProduct != null) {
-            saveToEs(updatedProduct);
+            syncToEs(updatedProduct);
         }
         return true;
     }
@@ -460,9 +482,10 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
         if (product.getStatus() == 0) {
             baseMapper.restoreStock(productId);
             evictDetailCache(productId);
+            evictSeckillCache(productId);
             Product updatedProduct = getById(productId);
             if (updatedProduct != null) {
-                saveToEs(updatedProduct);
+                syncToEs(updatedProduct);
             }
             return;
         }
@@ -472,9 +495,35 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
         lambdaUpdate().eq(Product::getId, productId).set(Product::getStatus, 1).update();
 
         evictDetailCache(productId);
+        evictSeckillCache(productId);
         Product updatedProduct = getById(productId);
         if (updatedProduct != null) {
-            saveToEs(updatedProduct);
+            syncToEs(updatedProduct);
+        }
+    }
+
+    private void enrichSellerNickname(ProductDetailVO vo) {
+        if (vo == null || vo.getSellerId() == null || StringUtils.hasText(vo.getSellerNickname())) {
+            return;
+        }
+        try {
+            var result = userFeignClient.batchGetUsers(String.valueOf(vo.getSellerId()));
+            if (result == null
+                    || result.getCode() == null
+                    || result.getCode() != ResultCode.SUCCESS.getCode()
+                    || result.getData() == null
+                    || result.getData().isEmpty()) {
+                return;
+            }
+            result.getData().stream()
+                    .filter(user -> vo.getSellerId().equals(user.getUserId()))
+                    .map(UserBriefDTO::getNickname)
+                    .filter(StringUtils::hasText)
+                    .findFirst()
+                    .ifPresent(vo::setSellerNickname);
+        } catch (Exception e) {
+            log.warn("补全商品卖家昵称失败，降级返回基础商品信息. productId={}, sellerId={}",
+                    vo.getProductId(), vo.getSellerId(), e);
         }
     }
 
@@ -540,13 +589,22 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
     }
 
     private void evictDetailCache(Long productId) {
+        localCache.remove(productId);
         try {
             redisTemplate.delete(ProductCacheConstants.detailKey(productId));
-            // 同时清理秒杀预热缓存，防止双轨不同步
+        } catch (Exception e) {
+            lastRedisErrorTime = System.currentTimeMillis();
+            log.warn("删除 Redis 商品详情缓存失败，已忽略，productId={}", productId, e);
+        }
+    }
+
+    private void evictSeckillCache(Long productId) {
+        try {
             redisTemplate.delete("seckill:stock:" + productId);
             redisTemplate.delete("seckill:product:" + productId);
         } catch (Exception e) {
-            log.warn("删除 Redis 缓存失败，已忽略，productId={}", productId, e);
+            lastRedisErrorTime = System.currentTimeMillis();
+            log.warn("删除 Redis 秒杀缓存失败，已忽略，productId={}", productId, e);
         }
     }
 
@@ -594,6 +652,17 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
     }
 
     // ==================== ES 辅助（统一降级：ES 不可用打 warn 不阻断主流程） ====================
+
+    private void syncToEs(Product product) {
+        if (product == null || product.getId() == null) {
+            return;
+        }
+        if (product.getStatus() == null || product.getStatus() != 1) {
+            deleteFromEs(product.getId());
+            return;
+        }
+        saveToEs(product);
+    }
 
     private void saveToEs(Product product) {
         try {

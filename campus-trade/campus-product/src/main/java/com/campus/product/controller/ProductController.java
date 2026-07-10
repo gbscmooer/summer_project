@@ -94,8 +94,10 @@ public class ProductController {
     }
 
     @PostMapping("/inner/{id}/deduct")
-    public Result<Boolean> deductStock(@PathVariable Long id) {
-        return Result.success(productService.deductStock(id));
+    public Result<Boolean> deductStock(
+            @PathVariable Long id,
+            @RequestParam(value = "preserveSeckillCache", defaultValue = "false") boolean preserveSeckillCache) {
+        return Result.success(productService.deductStock(id, preserveSeckillCache));
     }
 
     @PostMapping("/inner/{id}/restore")

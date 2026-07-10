@@ -1,6 +1,6 @@
 # 订单与通知服务文档 (campus-order)
 
-`campus-order` 微服务负责常规下单与秒杀削峰下单、订单状态流转与超时取消、服务间远程 Feign 调用，以及基于 RabbitMQ 异步生成的通知消息推送。
+`campus-order` 微服务负责常规下单与秒杀削峰下单、订单状态流转、服务间远程 Feign 调用，以及基于 RabbitMQ 异步生成的通知消息推送。
 
 ---
 
@@ -105,7 +105,7 @@
 
 ### 4.4 订单状态流转接口 (需登录)
 - **支付订单**：`POST /api/order/{id}/pay` (待付款状态改为已付款)
-- **确认收货**：`POST /api/order/{id}/confirm` (已付款状态改为已完成，并触发 Feign 修改商品为已售)
+- **确认收货**：`POST /api/order/{id}/confirm` (已付款状态改为已完成；商品库存与已售状态在下单扣库存阶段处理)
 - **取消订单**：`POST /api/order/{id}/cancel` (取消待付款订单，流转状态并 Feign 远程回滚商品库存)
 
 ### 4.5 高并发秒杀下单 (需登录)
@@ -114,7 +114,7 @@
 - **返回**：快速返回排队状态及排队标识 ID。
 
 ### 4.6 轮询秒杀结果 (需登录)
-- **接口**：`GET /api/order/seckill/result?productId={id}`
+- **接口**：`GET /api/order/seckill/result/{productId}`
 - **返回**：`status` (0-排队中，1-秒杀成功，-1-秒杀失败) 与 `orderNo` (秒杀成功后的正式订单号)。
 
 ### 4.7 卖家通知 API 组 (需登录)

@@ -160,7 +160,7 @@
         <el-form-item label="Price" prop="price">
           <el-input-number
             v-model="productEditForm.price"
-            :min="0"
+            :min="0.01"
             :precision="2"
             :step="1"
             controls-position="right"
@@ -293,7 +293,17 @@ const productEditForm = reactive({
 const productEditRules = {
   title: [{ required: true, message: '请输入标题', trigger: 'blur' }],
   category: [{ required: true, message: '请选择分类', trigger: 'change' }],
-  price: [{ required: true, message: '请输入价格', trigger: 'blur' }],
+  price: [
+    {
+      required: true,
+      validator: (_rule, value, callback) => {
+        if (value === null || value === undefined) callback(new Error('请输入价格'))
+        else if (Number(value) <= 0) callback(new Error('价格必须大于 0'))
+        else callback()
+      },
+      trigger: 'blur'
+    }
+  ],
   stock: [{ required: true, message: '请输入库存', trigger: 'blur' }],
   images: [{ required: true, message: '请至少填写一张图片URL', trigger: 'blur' }]
 }

@@ -53,6 +53,12 @@ const routes = [
     component: () => import('@/views/Notifications.vue'),
     meta: { title: '消息通知', requiresAuth: true }
   },
+  {
+    path: '/settings',
+    name: 'Settings',
+    component: () => import('@/views/Settings.vue'),
+    meta: { title: '设置', requiresAuth: true }
+  },
   // 兜底：未匹配路由回首页
   {
     path: '/:pathMatch(.*)*',

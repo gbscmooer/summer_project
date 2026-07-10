@@ -1,5 +1,28 @@
-/* OpenAI Platform 深色主题 */
+/* OpenAI Platform 主题（默认浅色，html.dark 切换深色） */
 :root {
+  --oa-bg: #f7f7f8;
+  --oa-bg-sidebar: #ffffff;
+  --oa-bg-elevated: #f0f0f0;
+  --oa-bg-hover: #ececec;
+  --oa-bg-input: #ffffff;
+  --oa-border: #d9d9de;
+  --oa-border-subtle: #e8e8ed;
+  --oa-text: #0d0d0d;
+  --oa-text-secondary: #6e6e80;
+  --oa-text-muted: #8e8e9a;
+  --oa-accent: #10a37f;
+  --oa-accent-hover: #1a7f64;
+  --oa-yellow-card: #0d0d0d;
+  --oa-yellow-text: #ffffff;
+  --oa-on-primary: #ffffff;
+  --oa-sidebar-width: 240px;
+  --oa-radius: 12px;
+  --oa-radius-sm: 8px;
+  --oa-loading-mask: rgba(247, 247, 248, 0.72);
+  color-scheme: light;
+}
+
+html.dark {
   --oa-bg: #212121;
   --oa-bg-sidebar: #171717;
   --oa-bg-elevated: #2f2f2f;
@@ -14,9 +37,9 @@
   --oa-accent-hover: #1a7f64;
   --oa-yellow-card: #ececec;
   --oa-yellow-text: #1a1a1a;
-  --oa-sidebar-width: 240px;
-  --oa-radius: 12px;
-  --oa-radius-sm: 8px;
+  --oa-on-primary: #000000;
+  --oa-loading-mask: rgba(33, 33, 33, 0.7);
+  color-scheme: dark;
 }
 
 * {
@@ -29,10 +52,6 @@ html,
 body,
 #app {
   height: 100%;
-}
-
-html.dark {
-  color-scheme: dark;
 }
 
 body {
@@ -83,21 +102,30 @@ a {
   border-radius: var(--oa-radius);
 }
 
-/* Element Plus 深色覆盖 */
-html.dark {
+/* Element Plus 主题变量 */
+:root {
   --el-bg-color: var(--oa-bg-sidebar);
   --el-bg-color-page: var(--oa-bg);
-  --el-bg-color-overlay: #2f2f2f;
+  --el-bg-color-overlay: var(--oa-bg-elevated);
   --el-text-color-primary: var(--oa-text);
-  --el-text-color-regular: #b4b4b4;
+  --el-text-color-regular: var(--oa-text-secondary);
   --el-text-color-secondary: var(--oa-text-secondary);
   --el-text-color-placeholder: var(--oa-text-muted);
   --el-border-color: var(--oa-border-subtle);
-  --el-border-color-light: #333;
-  --el-border-color-lighter: #2a2a2a;
+  --el-border-color-light: var(--oa-border-subtle);
+  --el-border-color-lighter: var(--oa-border-subtle);
   --el-fill-color-blank: var(--oa-bg-input);
-  --el-fill-color-light: #2a2a2a;
+  --el-fill-color-light: var(--oa-bg-hover);
   --el-color-primary: var(--oa-text);
+  --el-color-primary-light-3: #555;
+  --el-color-primary-light-5: #777;
+  --el-color-primary-light-7: #999;
+  --el-color-primary-light-8: #bbb;
+  --el-color-primary-light-9: #ddd;
+  --el-color-primary-dark-2: #000;
+}
+
+html.dark {
   --el-color-primary-light-3: #555;
   --el-color-primary-light-5: #444;
   --el-color-primary-light-7: #333;
@@ -138,13 +166,12 @@ html.dark {
 .el-button--primary {
   background-color: var(--oa-text) !important;
   border-color: var(--oa-text) !important;
-  color: #000 !important;
+  color: var(--oa-on-primary) !important;
   font-weight: 500;
 }
 
 .el-button--primary:hover {
-  background-color: #d9d9d9 !important;
-  border-color: #d9d9d9 !important;
+  opacity: 0.88;
 }
 
 .el-button.is-text {
@@ -190,7 +217,7 @@ html.dark {
 
 .el-pagination.is-background .el-pager li.is-active {
   background-color: var(--oa-text) !important;
-  color: #000 !important;
+  color: var(--oa-on-primary) !important;
 }
 
 .el-dialog {
@@ -238,7 +265,7 @@ html.dark {
 }
 
 .el-loading-mask {
-  background-color: rgba(33, 33, 33, 0.7) !important;
+  background-color: var(--oa-loading-mask) !important;
 }
 
 /* ---- 共享 OpenAI 页面组件 ---- */
@@ -587,4 +614,35 @@ html.dark {
 .el-select-dropdown__item.is-selected {
   color: var(--oa-text) !important;
   font-weight: 500;
+}
+
+/* 紧凑模式 */
+html.compact .main-content {
+  padding: 20px 24px 32px;
+}
+
+html.compact .page-header {
+  margin-bottom: 16px;
+}
+
+html.compact .page-title {
+  font-size: 24px;
+}
+
+html.compact .oa-panel {
+  padding: 14px 16px;
+}
+
+html.compact .oa-panel + .oa-panel {
+  margin-top: 10px;
+}
+
+/* 减少动效 */
+html.reduce-motion *,
+html.reduce-motion *::before,
+html.reduce-motion *::after {
+  transition-duration: 0.01ms !important;
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
 }

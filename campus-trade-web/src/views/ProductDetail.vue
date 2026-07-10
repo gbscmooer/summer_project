@@ -59,7 +59,7 @@
             </div>
             <div class="meta-item">
               <span class="meta-label">Seller</span>
-              <span class="meta-value">{{ detail.sellerNickname }}</span>
+              <span class="meta-value">{{ sellerText }}</span>
             </div>
             <div class="meta-item">
               <span class="meta-label">Views</span>
@@ -120,6 +120,11 @@ const seckilling = ref(false)
 const images = computed(() => {
   if (!detail.value || !Array.isArray(detail.value.images)) return []
   return detail.value.images.filter(Boolean)
+})
+
+const sellerText = computed(() => {
+  if (!detail.value) return '-'
+  return detail.value.sellerNickname || (detail.value.sellerId ? `用户 #${detail.value.sellerId}` : '-')
 })
 
 function statusClass(status) {

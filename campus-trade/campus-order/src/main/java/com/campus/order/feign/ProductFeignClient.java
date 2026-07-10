@@ -20,7 +20,9 @@ public interface ProductFeignClient {
 
     /** 扣减库存（下单时调用）。 */
     @PostMapping("/product/inner/{id}/deduct")
-    Result<Boolean> deductStock(@PathVariable("id") Long id);
+    Result<Boolean> deductStock(
+            @PathVariable("id") Long id,
+            @RequestParam(value = "preserveSeckillCache", defaultValue = "false") boolean preserveSeckillCache);
 
     /** 回滚库存（下单失败/取消时调用）。 */
     @PostMapping("/product/inner/{id}/restore")
