@@ -12,6 +12,27 @@ export function createProduct(data) {
   })
 }
 
+// 上传1~5张商品实拍图（需登录），返回 data { images: ['/api/product/image/...'] }
+export function uploadProductImages(files) {
+  const formData = new FormData()
+  files.forEach((file) => formData.append('files', file))
+  return request({
+    url: '/product/image/upload',
+    method: 'post',
+    data: formData,
+    timeout: 60000
+  })
+}
+
+// 删除本人上传的商品实拍图（需登录）
+export function deleteProductImage(url) {
+  return request({
+    url: '/product/image/delete',
+    method: 'post',
+    data: { url }
+  })
+}
+
 // 更新商品（需登录）：body 同发布 -> data null
 export function updateProduct(id, data) {
   return request({

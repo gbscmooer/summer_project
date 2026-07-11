@@ -9,6 +9,7 @@ import java.io.Serializable;
 @NoArgsConstructor
 @AllArgsConstructor
 public class SeckillMessage implements Serializable {
+    private String requestId;
     private Long productId;
     private Long buyerId;
 }

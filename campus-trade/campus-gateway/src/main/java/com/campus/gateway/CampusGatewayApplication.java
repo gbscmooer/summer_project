@@ -1,5 +1,6 @@
 package com.campus.gateway;
 
+import com.campus.common.util.JwtUtil;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
@@ -14,6 +15,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 @SpringBootApplication(scanBasePackages = "com.campus.gateway")
 public class CampusGatewayApplication {
     public static void main(String[] args) {
+        JwtUtil.validateConfiguration();
         SpringApplication.run(CampusGatewayApplication.class, args);
     }
 }

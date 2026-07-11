@@ -26,8 +26,8 @@ class OrderFlowContractTest {
 
     @Test
     void productDeductFeignExposesSeckillCachePreserveFlag() throws Exception {
-        Method method = ProductFeignClient.class.getMethod("deductStock", Long.class, boolean.class);
-        Annotation[] annotations = method.getParameterAnnotations()[1];
+        Method method = ProductFeignClient.class.getMethod("deductStock", Long.class, String.class, boolean.class);
+        Annotation[] annotations = method.getParameterAnnotations()[2];
 
         RequestParam requestParam = null;
         for (Annotation annotation : annotations) {

@@ -86,6 +86,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import {
   House,
+  MagicStick,
   EditPen,
   ShoppingCart,
   Bell,
@@ -109,6 +110,7 @@ const isAuthPage = computed(() => ['/login', '/register'].includes(route.path))
 
 const navItems = [
   { path: '/', labelKey: 'nav.home', icon: House },
+  { path: '/ai-shopping', labelKey: 'nav.aiShopping', icon: MagicStick },
   { path: '/publish', labelKey: 'nav.publish', icon: EditPen },
   { path: '/orders', labelKey: 'nav.orders', icon: ShoppingCart },
   { path: '/notifications', labelKey: 'nav.notifications', icon: Bell },

@@ -7,12 +7,12 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://localhost:3306/campus_trade?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
     username: campus
-    password: campus123
+    password: ${SPRING_DATASOURCE_PASSWORD:}
   rabbitmq:
     host: ${SPRING_RABBITMQ_HOST:localhost}
     port: ${SPRING_RABBITMQ_PORT:5672}
-    username: ${SPRING_RABBITMQ_USERNAME:guest}
-    password: ${SPRING_RABBITMQ_PASSWORD:guest}
+    username: ${SPRING_RABBITMQ_USERNAME:}
+    password: ${SPRING_RABBITMQ_PASSWORD:}
     listener:
       simple:
         retry:
@@ -23,6 +23,7 @@ spring:
     redis:
       host: ${SPRING_DATA_REDIS_HOST:localhost}
       port: ${SPRING_DATA_REDIS_PORT:6379}
+      password: ${SPRING_DATA_REDIS_PASSWORD:}
   cloud:
     nacos:
       discovery:
@@ -33,6 +34,8 @@ spring:
           default:
             connectTimeout: 5000
             readTimeout: 10000
+campus:
+  internal-api-token: ${INTERNAL_API_TOKEN:}
 mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true
@@ -41,4 +44,4 @@ mybatis-plus:
       id-type: auto
 logging:
   level:
-    com.campus: debug
+    com.campus: ${LOGGING_LEVEL_COM_CAMPUS:INFO}

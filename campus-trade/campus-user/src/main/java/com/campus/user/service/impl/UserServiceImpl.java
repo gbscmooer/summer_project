@@ -1,6 +1,6 @@
 package com.campus.user.service.impl;
 
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.campus.common.exception.BizException;
 import com.campus.common.result.ResultCode;
 import com.campus.common.util.JwtUtil;
@@ -37,6 +37,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         user.setNickname(request.getNickname() != null ? request.getNickname() : request.getUsername());
         user.setPhone(request.getPhone());
+        user.setRole(0);
 
         try {
             save(user);
@@ -58,7 +59,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             throw new BizException(ResultCode.INTERNAL_ERROR);
         }
         String token = JwtUtil.generateToken(user.getId());
-        return new LoginResponse(token, user.getId(), user.getNickname(), user.getAvatar());
+        int role = user.getRole() == null ? 0 : user.getRole();
+        return new LoginResponse(token, user.getId(), user.getNickname(), user.getAvatar(), role);
     }
 
     @Override
@@ -99,7 +101,16 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     public List<UserBriefVO> batchGetUsers(List<Long> ids) {
         if (ids == null || ids.isEmpty()) return List.of();
         return listByIds(ids).stream()
-                .map(u -> new UserBriefVO(u.getId(), u.getNickname(), u.getPhone()))
+                .map(u -> new UserBriefVO(u.getId(), u.getNickname()))
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    public int getRole(Long userId) {
+        User user = getById(userId);
+        if (user == null) {
+            throw new BizException(ResultCode.NOT_FOUND);
+        }
+        return user.getRole() == null ? 0 : user.getRole();
     }
 }

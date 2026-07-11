@@ -5,6 +5,7 @@ const messages = {
   'zh-CN': {
     nav: {
       home: '首页',
+      aiShopping: 'AI 帮我找',
       publish: '发布',
       orders: '订单',
       notifications: '通知',
@@ -47,7 +48,24 @@ const messages = {
       about: '关于',
       aboutDesc: '校园淘 · 校园二手交易平台',
       version: '版本',
-      savedLocally: '偏好保存在本机，切换设备后需重新设置'
+      savedLocally: '偏好保存在本机，切换设备后需重新设置',
+      aiAdmin: 'AI 接口配置',
+      aiAdminDesc: '管理员可热更新 OpenAI-compatible API，无需重启服务',
+      aiEnabled: '启用管理端覆盖',
+      aiEnabledHint: '关闭后回退到环境变量配置',
+      aiBaseUrl: 'API Base URL',
+      aiModel: '模型',
+      aiApiKey: 'API Key',
+      aiApiKeyPlaceholder: '留空则保留原 Key',
+      aiApiKeyHint: '响应中只显示脱敏 Key；留空保存表示不修改现有密钥',
+      aiTimeout: '超时（秒）',
+      aiVision: '支持图片识别',
+      aiReload: '重新加载',
+      aiSave: '保存配置',
+      aiSaveDone: 'AI 配置已保存',
+      aiSourceAdmin: '当前生效：管理端',
+      aiSourceEnv: '当前生效：环境变量',
+      aiEnvFallback: '环境变量兜底'
     },
     common: {
       login: '去登录',
@@ -61,6 +79,7 @@ const messages = {
   'en-US': {
     nav: {
       home: 'Home',
+      aiShopping: 'AI Shopping',
       publish: 'Publish',
       orders: 'Orders',
       notifications: 'Notifications',
@@ -103,7 +122,24 @@ const messages = {
       about: 'About',
       aboutDesc: 'CampusTrade · campus second-hand marketplace',
       version: 'Version',
-      savedLocally: 'Preferences are stored on this device only'
+      savedLocally: 'Preferences are stored on this device only',
+      aiAdmin: 'AI API settings',
+      aiAdminDesc: 'Admins can hot-update the OpenAI-compatible API without restarting',
+      aiEnabled: 'Use admin override',
+      aiEnabledHint: 'When off, fall back to environment variables',
+      aiBaseUrl: 'API Base URL',
+      aiModel: 'Model',
+      aiApiKey: 'API Key',
+      aiApiKeyPlaceholder: 'Leave blank to keep the current key',
+      aiApiKeyHint: 'Responses only show a masked key; blank save keeps the existing secret',
+      aiTimeout: 'Timeout (seconds)',
+      aiVision: 'Vision support',
+      aiReload: 'Reload',
+      aiSave: 'Save',
+      aiSaveDone: 'AI settings saved',
+      aiSourceAdmin: 'Active: admin',
+      aiSourceEnv: 'Active: environment',
+      aiEnvFallback: 'Env fallback'
     },
     common: {
       login: 'Sign in',

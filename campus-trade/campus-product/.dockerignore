@@ -1,0 +1,4 @@
+*
+!Dockerfile
+!target/
+!target/campus-product-1.0.0-SNAPSHOT.jar

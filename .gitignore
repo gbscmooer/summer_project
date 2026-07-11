@@ -27,3 +27,8 @@ logs/
 node_modules/
 dist/
 *.local
+
+# ===== 本地环境变量 / 密钥 =====
+.env
+.env.*
+!.env.example

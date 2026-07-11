@@ -19,6 +19,12 @@ export const useUserStore = defineStore('user', {
   getters: {
     // 是否已登录
     isLogin: (state) => !!state.token,
+    // 0-普通用户 1-管理员
+    role: (state) => (state.userInfo && state.userInfo.role != null ? Number(state.userInfo.role) : 0),
+    isAdmin: (state) => {
+      const role = state.userInfo && state.userInfo.role != null ? Number(state.userInfo.role) : 0
+      return role === 1
+    },
     // 顶部导航展示用昵称，兜底用户名
     displayName: (state) => {
       if (!state.userInfo) return ''
@@ -28,9 +34,14 @@ export const useUserStore = defineStore('user', {
 
   actions: {
     // 登录成功后写入 token + 用户信息，并持久化
-    setLoginInfo({ token, userId, nickname, avatar }) {
+    setLoginInfo({ token, userId, nickname, avatar, role }) {
       this.token = token || ''
-      this.userInfo = { userId, nickname, avatar }
+      this.userInfo = {
+        userId,
+        nickname,
+        avatar,
+        role: role == null ? 0 : Number(role)
+      }
       localStorage.setItem('token', this.token)
       localStorage.setItem('userInfo', JSON.stringify(this.userInfo))
     },
@@ -38,6 +49,9 @@ export const useUserStore = defineStore('user', {
     // 合并更新用户信息（如个人中心拉取到完整资料后）
     setUserInfo(info) {
       this.userInfo = { ...(this.userInfo || {}), ...info }
+      if (this.userInfo.role != null) {
+        this.userInfo.role = Number(this.userInfo.role)
+      }
       localStorage.setItem('userInfo', JSON.stringify(this.userInfo))
     },
 

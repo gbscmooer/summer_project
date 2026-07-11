@@ -1,6 +1,6 @@
 # 商品服务文档 (campus-product)
 
-`campus-product` 微服务负责商品发布、修改、下架、MySQL持久化、高性能 Redis 缓存逻辑以及基于 Elasticsearch 的商品全文检索。
+`campus-product` 微服务负责商品发布、图片存储、修改、下架、MySQL持久化、Redis 缓存、Elasticsearch 全文检索，以及独立 AI Core 提供的自然语言检索与多图发布草稿。
 
 ---
 
@@ -81,6 +81,36 @@
 ### 3.6 ES 商品搜索 (白名单)
 - **接口**：`GET /api/product/search?keyword=高数&category=教材&minPrice=0&maxPrice=100&sort=price_asc`
 - **逻辑**：优先使用 `CriteriaQuery` 构造器组合多级过滤和排序规则在 Elasticsearch 检索；ES 不可用时降级为 MySQL 模糊查询。
+
+### 3.7 商品图片上传与读取
+- **上传**：`POST /api/product/image/upload`，需登录，multipart 字段 `files`，1～5 张，支持 JPG/PNG/WEBP，单张不超过 8MB；写入 `t_product_image` 记录上传者。
+- **删除**：`POST /api/product/image/delete`，需登录，仅可删除本人上传的图片。
+- **读取**：`GET /api/product/image/{filename}`，公开访问。
+- **存储**：目录由 `PRODUCT_IMAGE_DIR` 配置，文件名使用随机 UUID，路径解析禁止目录穿越。
+
+### 3.8 AI 自然语言检索
+- **接口**：`POST /api/ai/search`，需登录。
+- **入参**：`query`、`pageSize`。
+- **逻辑**：模型仅解析检索意图，商品候选由 `ProductService.search` 返回，禁止生成不存在的商品。
+
+### 3.9 AI 多图发布草稿
+- **接口**：`POST /api/ai/listing-draft`，需登录。
+- **入参**：站内 `images` 地址数组和可选 `notes`。
+- **逻辑**：校验图片归属后，视觉模型最多读取前 3 张提取商品信息；Core 层查询站内同类商品，按价格分布和成色计算建议价。返回草稿，不直接发布。
+
+### 3.10 管理员 AI 配置
+- **接口**：`GET/POST /api/admin/ai-config`，需 `role=1` 管理员。
+- **逻辑**：配置写入 `t_ai_config`，启用后覆盖环境变量并立即生效；响应中 API Key 脱敏，空 Key 表示保留原值。
+
+### 3.11 AI 环境变量（兜底）
+| 变量 | 默认值 | 说明 |
+| :--- | :--- | :--- |
+| AI_API_KEY | 空 | 环境变量兜底；管理端也可配置 |
+| AI_BASE_URL | https://api.openai.com/v1 | OpenAI-compatible 根地址 |
+| AI_MODEL | gpt-4.1-mini | JSON 与视觉模型 |
+| AI_SUPPORTS_VISION | true | 是否支持图片消息；不支持时发布草稿返回 4004 |
+| AI_TIMEOUT_SECONDS | 60 | 调用超时秒数 |
+| PRODUCT_IMAGE_DIR | ./data/product-images | 图片存储目录 |
 
 ---
 

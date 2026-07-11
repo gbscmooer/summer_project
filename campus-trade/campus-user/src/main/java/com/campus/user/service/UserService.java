@@ -10,4 +10,6 @@ public interface UserService {
     UserInfoResponse getUserInfo(Long userId);
     void updateUserInfo(Long userId, UpdateUserRequest request);
     List<UserBriefVO> batchGetUsers(List<Long> ids);
+    /** 返回角色：0-普通用户 1-管理员 */
+    int getRole(Long userId);
 }

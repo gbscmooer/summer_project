@@ -15,6 +15,8 @@ public class User {
     private String nickname;
     private String avatar;
     private String phone;
+    /** 0-普通用户 1-管理员 */
+    private Integer role;
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
     @TableField(fill = FieldFill.INSERT_UPDATE)

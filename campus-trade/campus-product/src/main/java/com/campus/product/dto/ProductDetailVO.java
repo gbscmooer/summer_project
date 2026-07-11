@@ -5,6 +5,7 @@ import lombok.Data;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -30,11 +31,11 @@ public class ProductDetailVO {
         vo.setDescription(p.getDescription());
         vo.setPrice(p.getPrice());
         vo.setImages(p.getImages() != null
-                ? Arrays.stream(p.getImages().split(","))
+                ? new ArrayList<>(Arrays.stream(p.getImages().split(","))
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())
-                .toList()
-                : List.of());
+                .toList())
+                : new ArrayList<>());
         vo.setCategory(p.getCategory());
         vo.setSellerId(p.getSellerId());
         vo.setStatus(p.getStatus());

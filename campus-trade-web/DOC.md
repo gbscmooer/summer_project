@@ -10,6 +10,7 @@
 campus-trade-web/
 ├── src/
 │   ├── api/                       # axios 网络请求集，对应后端各个微服务
+│   │   ├── ai.js                  # AI 自然语言检索与图片发布草稿请求
 │   │   ├── user.js                # 用户登录、注册、修改信息请求
 │   │   ├── product.js             # 商品发布、详情、ES 搜索等请求
 │   │   └── order.js               # 下单、秒杀、通知管理请求
@@ -17,8 +18,9 @@ campus-trade-web/
 │   │   ├── Login.vue              # 登录页面
 │   │   ├── Register.vue           # 注册页面
 │   │   ├── Home.vue               # 首页列表（支持分类Tab、ES检索过滤）
+│   │   ├── AiShopping.vue         # 自然语言找商品与 AI 交付结果
 │   │   ├── ProductDetail.vue      # 商品详情与常规/秒杀下单流程
-│   │   ├── Publish.vue            # 发布商品与修改表单
+│   │   ├── Publish.vue            # 多图上传、AI 草稿回填与发布确认表单
 │   │   ├── My.vue                 # 个人中心（我买的/我卖的商品与订单列表）
 │   │   └── Orders.vue             # 订单处理详情页
 │   ├── router/                    # Vue Router 路由配置，包含全局导航守卫
@@ -51,13 +53,19 @@ campus-trade-web/
 * **无关键词与无筛选**：请求 [api/product.js](file:///Users/katisarrow/summer/campus-trade-web/src/api/product.js) 中的 `getProductList` 接口，向网关索取常规 MySQL 分页分类商品。
 * **输入关键词**：自动向网关发送 `searchProducts` 请求，走 Elasticsearch 完成分词检索；分类条件会随列表或搜索请求一起发送。
 
----
+## 4. AI 页面数据流
 
-## 4. 生产环境托管与 Docker 部署
+- `/ai-shopping` 需登录，调用 `src/api/ai.js` 的 `searchProductsByAi`，展示 AI 解析后的真实商品候选。
+- `/publish` 先调用 `uploadProductImages` 上传实拍图，再调用 `createAiListingDraft` 生成草稿；移除图片时调用 `deleteProductImage`。
+- AI 草稿只回填表单；最终发布仍由用户点击发布按钮调用 `createProduct`。
+- 管理员在 `/settings` 可配置 AI API（`src/api/admin.js`）。
+- Nginx 允许最大 40MB 请求体，AI API 代理读写超时为 95 秒。
+
+## 5. 生产环境托管与 Docker 部署
 
 在项目打包为静态资源后，通过轻量级 Nginx 容器运行部署。
 
-### 4.1 Nginx 配置文件 ([nginx.conf](file:///Users/katisarrow/summer/campus-trade-web/nginx.conf))
+### 5.1 Nginx 配置文件 (`nginx.conf`)
 - **端口**：80
 - **静态资源托管**：根路径指向 `/usr/share/nginx/html`。为支持 Vue Router 的 HTML5 History 模式，配置 `try_files`，在未匹配到静态物理文件时回退到 `index.html`：
   ```nginx
@@ -77,7 +85,7 @@ campus-trade-web/
   }
   ```
 
-### 4.2 Dockerfile 打包机制 ([Dockerfile](file:///Users/katisarrow/summer/campus-trade-web/Dockerfile))
+### 5.2 Dockerfile 打包机制 (`Dockerfile`)
 - **单阶段 Nginx 镜像**：
   1. 本地先执行 `npm install`、`npm test`、`npm run build` 生成 `dist/`。
   2. Dockerfile 使用 `nginx:1.25-alpine`，将本地 `dist/` 复制到 `/usr/share/nginx/html`，并将 [nginx.conf](file:///Users/katisarrow/summer/campus-trade-web/nginx.conf) 覆盖到容器 `/etc/nginx/nginx.conf`，暴露 80 端口启动。

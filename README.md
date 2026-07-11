@@ -6,6 +6,7 @@
 - Maven 3.9+
 - Node.js 18+
 - Docker Desktop 或兼容 Docker Compose 的运行环境
+- 可访问的 OpenAI-compatible 多模态模型 API 与 API Key
 
 ## 安装依赖
 
@@ -22,6 +23,21 @@ npm run build
 
 ## Docker 启动
 
+复制环境变量模板，并为每个必填 Secret 生成独立随机值（不要复用）：
+
+```bash
+cp .env.example .env
+openssl rand -base64 48
+```
+
+将生成值分别写入 `.env` 的 `MYSQL_ROOT_PASSWORD`、`MYSQL_PASSWORD`、`REDIS_PASSWORD`、`RABBITMQ_PASSWORD`、`JWT_SECRET`、`INTERNAL_API_TOKEN` 和 `AI_CONFIG_ENCRYPTION_KEY`。`RABBITMQ_USERNAME` 也必须设置。AI Key 仅写入部署 Secret；如曾使用审计前的本地 `.env` Key，部署前必须先在供应商后台吊销并轮换。
+
+Compose 默认只在 `127.0.0.1:8080` 暴露 Web，适用于同机 HTTPS 反向代理。将 `TRUSTED_PROXY_CIDR` 精确设置为该代理连接 Web 容器时使用的源网段（通常是 Docker bridge 网段），禁止填写 `0.0.0.0/0`。
+
+若使用实例外部的 HTTPS Load Balancer，将 `WEB_BIND_ADDRESS` 设置为实例私网 IP，将 `TRUSTED_PROXY_CIDR` 设置为 LB 的实际源 CIDR，并用安全组限制 Web 端口只能由 LB 访问。公网只开放 80/443；不要公开 8081～8083、3306、6379、8848、9200、9300、5672 或 15672。
+
+已有 MySQL 数据卷先执行 `sql/migrate-ai-admin.sql`。该脚本不创建或提升管理员；管理员角色须通过受控离线数据库操作授予。
+
 ```bash
 cd /Users/katisarrow/summer
 docker compose up -d --build
@@ -35,6 +51,20 @@ docker compose down
 ```
 
 ## 本地开发启动
+
+启动商品服务前在对应终端设置：
+
+```bash
+export AI_API_KEY="你的API Key"
+export AI_BASE_URL="https://api.openai.com/v1"
+export AI_MODEL="gpt-4.1-mini"
+export AI_SUPPORTS_VISION="true"
+export PRODUCT_IMAGE_DIR="/Users/katisarrow/summer/data/product-images"
+export JWT_SECRET="$(openssl rand -base64 48)"
+export INTERNAL_API_TOKEN="$(openssl rand -base64 48)"
+export AI_CONFIG_ENCRYPTION_KEY="$(openssl rand -base64 48)"
+export SPRING_DATASOURCE_PASSWORD="campus123"
+```
 
 ```bash
 cd /Users/katisarrow/summer
@@ -74,6 +104,8 @@ npm run dev
 ```
 
 ## 可选演示数据
+
+仅限本地开发；生产环境禁止执行。演示数据不包含管理员账号，也不会覆盖已有用户密码。
 
 ```bash
 mysql -h 127.0.0.1 -P 3306 -u campus -pcampus123 campus_trade < sql/seed-dev.sql

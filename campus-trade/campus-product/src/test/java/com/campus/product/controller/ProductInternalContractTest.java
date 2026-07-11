@@ -13,8 +13,8 @@ class ProductInternalContractTest {
 
     @Test
     void deductStockAcceptsOptionalSeckillCachePreserveFlag() throws Exception {
-        Method method = ProductController.class.getMethod("deductStock", Long.class, boolean.class);
-        Annotation[] annotations = method.getParameterAnnotations()[1];
+        Method method = ProductController.class.getMethod("deductStock", String.class, Long.class, String.class, boolean.class);
+        Annotation[] annotations = method.getParameterAnnotations()[3];
 
         RequestParam requestParam = null;
         for (Annotation annotation : annotations) {

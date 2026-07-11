@@ -1,7 +1,7 @@
 package com.campus.product.service.impl;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.campus.common.exception.BizException;
 import com.campus.common.result.PageResult;
 import com.campus.common.result.ResultCode;
@@ -12,25 +12,32 @@ import com.campus.product.dto.ProductDetailVO;
 import com.campus.product.dto.ProductListVO;
 import com.campus.product.dto.ProductRequest;
 import com.campus.product.entity.Product;
+import com.campus.product.entity.StockDeductionLogEntity;
+import com.campus.product.entity.StockRestoreLogEntity;
 import com.campus.product.es.ProductDocument;
 import com.campus.product.es.ProductRepository;
 import com.campus.product.feign.UserFeignClient;
 import com.campus.product.feign.dto.UserBriefDTO;
 import com.campus.product.mapper.ProductMapper;
+import com.campus.product.mapper.StockDeductionLogMapper;
+import com.campus.product.mapper.StockRestoreLogMapper;
 import com.campus.product.service.ProductService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.elasticsearch.client.elc.ElasticsearchTemplate;
+import org.springframework.data.elasticsearch.client.elc.NativeQuery;
 import org.springframework.data.elasticsearch.core.SearchHit;
 import org.springframework.data.elasticsearch.core.SearchHits;
-import org.springframework.data.elasticsearch.core.query.Criteria;
-import org.springframework.data.elasticsearch.core.query.CriteriaQuery;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+
+import co.elastic.clients.elasticsearch._types.query_dsl.Operator;
+import co.elastic.clients.elasticsearch._types.query_dsl.TextQueryType;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -52,6 +59,8 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
     private final ProductRepository productRepository;
     private final ElasticsearchTemplate elasticsearchTemplate;
     private final UserFeignClient userFeignClient;
+    private final StockDeductionLogMapper stockDeductionLogMapper;
+    private final StockRestoreLogMapper stockRestoreLogMapper;
 
     private static final ZoneId ZONE = ZoneId.systemDefault();
 
@@ -254,32 +263,35 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
         int page = PageParamUtil.normalizePageNum(pageNum);
         int size = PageParamUtil.normalizePageSize(pageSize);
 
-        // 仅查在售商品
-        Criteria criteria = new Criteria("status").is(1);
-        // 关键词：标题或描述命中（分词匹配）
-        if (StringUtils.hasText(keyword)) {
-            Criteria kw = new Criteria("title").matches(keyword)
-                    .or(new Criteria("description").matches(keyword));
-            criteria = criteria.and(kw);
-        }
-        if (StringUtils.hasText(category)) {
-            criteria = criteria.and(new Criteria("category").is(category));
-        }
-        // 价格区间，min/max 各自可空
-        if (minPrice != null) {
-            criteria = criteria.and(new Criteria("price").greaterThanEqual(minPrice.doubleValue()));
-        }
-        if (maxPrice != null) {
-            criteria = criteria.and(new Criteria("price").lessThanEqual(maxPrice.doubleValue()));
-        }
-
-        CriteriaQuery query = new CriteriaQuery(criteria);
-        query.setPageable(PageRequest.of(page - 1, size));
-        query.addSort(resolveSort(sort));
-
-        SearchHits<ProductDocument> hits;
         try {
-            hits = elasticsearchTemplate.search(query, ProductDocument.class);
+            NativeQuery query = NativeQuery.builder()
+                    .withQuery(q -> q.bool(b -> {
+                        // 仅在售且有库存（与首页市场一致）
+                        b.filter(f -> f.term(t -> t.field("status").value(1)));
+                        b.filter(f -> f.range(r -> r.number(n -> n.field("stock").gt(0.0))));
+                        if (StringUtils.hasText(keyword)) {
+                            // AND：中文 standard 分词下要求字都命中，避免“高数”扫到全站
+                            b.must(m -> m.multiMatch(mm -> mm
+                                    .query(keyword.trim())
+                                    .fields("title^3", "description")
+                                    .type(TextQueryType.BestFields)
+                                    .operator(Operator.And)));
+                        }
+                        if (StringUtils.hasText(category)) {
+                            b.filter(f -> f.term(t -> t.field("category").value(category)));
+                        }
+                        if (minPrice != null) {
+                            b.filter(f -> f.range(r -> r.number(n -> n.field("price").gte(minPrice.doubleValue()))));
+                        }
+                        if (maxPrice != null) {
+                            b.filter(f -> f.range(r -> r.number(n -> n.field("price").lte(maxPrice.doubleValue()))));
+                        }
+                        return b;
+                    }))
+                    .withPageable(PageRequest.of(page - 1, size, resolveSort(sort)))
+                    .build();
+
+            SearchHits<ProductDocument> hits = elasticsearchTemplate.search(query, ProductDocument.class);
             List<ProductListVO> list = hits.getSearchHits().stream()
                     .map(SearchHit::getContent)
                     .map(this::toListVO)
@@ -287,31 +299,38 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
             return PageResult.of(hits.getTotalHits(), page, size, list);
         } catch (Exception e) {
             log.warn("ES 搜索不可用，降级为 DB 模糊查询. keyword={}, category={}", keyword, category, e);
-            Page<Product> dbPage = new Page<>(page, size);
-            var queryChain = lambdaQuery()
-                    .eq(Product::getStatus, 1)
-                    .eq(StringUtils.hasText(category), Product::getCategory, category)
-                    .ge(minPrice != null, Product::getPrice, minPrice)
-                    .le(maxPrice != null, Product::getPrice, maxPrice);
-
-            if (StringUtils.hasText(keyword)) {
-                queryChain.and(q -> q.like(Product::getTitle, keyword).or().like(Product::getDescription, keyword));
-            }
-
-            if ("price_asc".equals(sort)) {
-                queryChain.orderByAsc(Product::getPrice);
-            } else if ("price_desc".equals(sort)) {
-                queryChain.orderByDesc(Product::getPrice);
-            } else {
-                queryChain.orderByDesc(Product::getCreateTime);
-            }
-
-            queryChain.page(dbPage);
-            List<ProductListVO> list = dbPage.getRecords().stream()
-                    .map(ProductListVO::from)
-                    .collect(Collectors.toList());
-            return PageResult.of(dbPage.getTotal(), page, size, list);
+            return searchFromDb(keyword, category, minPrice, maxPrice, sort, page, size);
         }
+    }
+
+    private PageResult<ProductListVO> searchFromDb(String keyword, String category,
+                                                   BigDecimal minPrice, BigDecimal maxPrice,
+                                                   String sort, int page, int size) {
+        Page<Product> dbPage = new Page<>(page, size);
+        var queryChain = lambdaQuery()
+                .eq(Product::getStatus, 1)
+                .gt(Product::getStock, 0)
+                .eq(StringUtils.hasText(category), Product::getCategory, category)
+                .ge(minPrice != null, Product::getPrice, minPrice)
+                .le(maxPrice != null, Product::getPrice, maxPrice);
+
+        if (StringUtils.hasText(keyword)) {
+            queryChain.and(q -> q.like(Product::getTitle, keyword).or().like(Product::getDescription, keyword));
+        }
+
+        if ("price_asc".equals(sort)) {
+            queryChain.orderByAsc(Product::getPrice);
+        } else if ("price_desc".equals(sort)) {
+            queryChain.orderByDesc(Product::getPrice);
+        } else {
+            queryChain.orderByDesc(Product::getCreateTime);
+        }
+
+        queryChain.page(dbPage);
+        List<ProductListVO> list = dbPage.getRecords().stream()
+                .map(ProductListVO::from)
+                .collect(Collectors.toList());
+        return PageResult.of(dbPage.getTotal(), page, size, list);
     }
 
     /** sort 解析：price_asc/price_desc 按 price，time_desc（默认）按 createTime desc */
@@ -322,7 +341,6 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
         if ("price_desc".equals(sort)) {
             return Sort.by(Sort.Direction.DESC, "price");
         }
-        // time_desc 默认
         return Sort.by(Sort.Direction.DESC, "createTime");
     }
 
@@ -331,6 +349,7 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
         ProductListVO vo = new ProductListVO();
         vo.setProductId(doc.getId());
         vo.setTitle(doc.getTitle());
+        vo.setDescription(doc.getDescription());
         vo.setPrice(doc.getPrice() != null ? BigDecimal.valueOf(doc.getPrice()) : null);
         vo.setCover(doc.getCover());
         vo.setCategory(doc.getCategory());
@@ -343,10 +362,26 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
 
     @Override
     public int reindexAll() {
-        // 先清空旧索引，避免曾经删除/下架失败的 ES 脏文档继续被搜索命中。
-        productRepository.deleteAll();
-        // 存量刷入：把 MySQL 中 status=1 的全部商品 bulk 写入 ES
-        List<Product> products = lambdaQuery().eq(Product::getStatus, 1).list();
+        // 重建索引映射（含 stock 字段），避免旧 mapping 缺字段导致过滤失效
+        try {
+            var indexOps = elasticsearchTemplate.indexOps(ProductDocument.class);
+            if (indexOps.exists()) {
+                indexOps.delete();
+            }
+            indexOps.createWithMapping();
+        } catch (Exception e) {
+            log.warn("重建 ES 索引失败，尝试清空后继续刷入", e);
+            try {
+                productRepository.deleteAll();
+            } catch (Exception ignored) {
+                // ignore
+            }
+        }
+        // 存量刷入：在售且有库存的商品
+        List<Product> products = lambdaQuery()
+                .eq(Product::getStatus, 1)
+                .gt(Product::getStock, 0)
+                .list();
         if (products.isEmpty()) {
             return 0;
         }
@@ -394,6 +429,7 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
         Page<Product> page = new Page<>(pageNo, size);
         lambdaQuery()
                 .eq(Product::getStatus, 1)
+                .gt(Product::getStock, 0)
                 .eq(StringUtils.hasText(category), Product::getCategory, category)
                 .orderByDesc(Product::getCreateTime)
                 .page(page);
@@ -425,7 +461,20 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public boolean deductStock(Long productId, boolean preserveSeckillCache) {
+    public boolean deductStock(Long productId, String orderNo, boolean preserveSeckillCache) {
+        if (!StringUtils.hasText(orderNo)) {
+            throw new BizException(ResultCode.BAD_REQUEST.getCode(), "扣减库存必须提供订单号");
+        }
+        StockDeductionLogEntity deductionLog = new StockDeductionLogEntity();
+        deductionLog.setProductId(productId);
+        deductionLog.setOrderNo(orderNo.trim());
+        deductionLog.setCreateTime(LocalDateTime.now());
+        try {
+            stockDeductionLogMapper.insert(deductionLog);
+        } catch (DuplicateKeyException e) {
+            log.info("检测到重复的库存扣减请求，productId={}, orderNo={}", productId, orderNo);
+            return true;
+        }
         int updated = baseMapper.deductStock(productId);
         if (updated == 0) {
             Product product = getById(productId);
@@ -452,25 +501,25 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void restoreStock(Long productId, String orderNo) {
-        // 幂等性校验
-        if (StringUtils.hasText(orderNo)) {
-            String dupKey = "product:restore:dup:" + orderNo;
-            Boolean isFirst = false;
-            if (isRedisHealthy()) {
-                try {
-                    isFirst = redisTemplate.opsForValue().setIfAbsent(dupKey, "1", java.time.Duration.ofDays(7));
-                } catch (Exception e) {
-                    lastRedisErrorTime = System.currentTimeMillis();
-                    log.warn("写入 Redis 幂等键失败，降级允许重试以保证最终一致性", e);
-                    isFirst = true; // Redis 挂了时降级放行，保证最少一次回滚
-                }
-            } else {
-                isFirst = true; // Redis 挂了时放行
-            }
-            if (Boolean.FALSE.equals(isFirst)) {
-                log.info("检测到重复的库存回滚请求，productId={}, orderNo={}, 直接返回", productId, orderNo);
-                return;
-            }
+        if (!StringUtils.hasText(orderNo)) {
+            throw new BizException(ResultCode.BAD_REQUEST.getCode(), "库存恢复必须提供订单号");
+        }
+        long deductionCount = stockDeductionLogMapper.selectCount(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<StockDeductionLogEntity>()
+                        .eq(StockDeductionLogEntity::getProductId, productId)
+                        .eq(StockDeductionLogEntity::getOrderNo, orderNo.trim()));
+        if (deductionCount == 0) {
+            throw new BizException(409, "对应的库存扣减尚未提交，请稍后重试");
+        }
+        StockRestoreLogEntity restoreLog = new StockRestoreLogEntity();
+        restoreLog.setProductId(productId);
+        restoreLog.setOrderNo(orderNo.trim());
+        restoreLog.setCreateTime(LocalDateTime.now());
+        try {
+            stockRestoreLogMapper.insert(restoreLog);
+        } catch (DuplicateKeyException e) {
+            log.info("检测到重复的库存回滚请求，productId={}, orderNo={}, 直接返回", productId, orderNo);
+            return;
         }
 
         Product product = getById(productId);
@@ -657,7 +706,9 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
         if (product == null || product.getId() == null) {
             return;
         }
-        if (product.getStatus() == null || product.getStatus() != 1) {
+        // 非在售或已售罄：从搜索索引移除，避免 AI/搜索命中市场看不到的商品
+        if (product.getStatus() == null || product.getStatus() != 1
+                || product.getStock() == null || product.getStock() <= 0) {
             deleteFromEs(product.getId());
             return;
         }

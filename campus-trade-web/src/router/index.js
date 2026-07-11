@@ -34,6 +34,12 @@ const routes = [
     meta: { title: '发布商品', requiresAuth: true }
   },
   {
+    path: '/ai-shopping',
+    name: 'AiShopping',
+    component: () => import('@/views/AiShopping.vue'),
+    meta: { title: 'AI 帮我找', requiresAuth: true }
+  },
+  {
     path: '/my',
     name: 'My',
     component: () => import('@/views/My.vue'),

@@ -11,6 +11,7 @@ import java.util.Arrays;
 public class ProductListVO {
     private Long productId;
     private String title;
+    private String description;
     private BigDecimal price;
     private String cover;
     private String category;
@@ -21,6 +22,7 @@ public class ProductListVO {
         ProductListVO vo = new ProductListVO();
         vo.setProductId(p.getId());
         vo.setTitle(p.getTitle());
+        vo.setDescription(p.getDescription());
         vo.setPrice(p.getPrice());
         vo.setCategory(p.getCategory());
         vo.setStatus(p.getStatus());

@@ -12,6 +12,8 @@ public class UserInfoResponse {
     private String nickname;
     private String avatar;
     private String phone;
+    /** 0-普通用户 1-管理员 */
+    private Integer role;
     private LocalDateTime createTime;
 
     public static UserInfoResponse from(User user) {
@@ -21,6 +23,7 @@ public class UserInfoResponse {
         vo.setNickname(user.getNickname());
         vo.setAvatar(user.getAvatar());
         vo.setPhone(user.getPhone());
+        vo.setRole(user.getRole() == null ? 0 : user.getRole());
         vo.setCreateTime(user.getCreateTime());
         return vo;
     }

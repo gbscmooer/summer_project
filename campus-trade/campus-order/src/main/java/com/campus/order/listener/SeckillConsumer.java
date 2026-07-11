@@ -24,11 +24,12 @@ public class SeckillConsumer {
         log.info("开始处理秒杀异步订单创建: {}", message);
         Long productId = message.getProductId();
         Long buyerId = message.getBuyerId();
+        String requestId = message.getRequestId();
         String resultKey = "seckill:result:" + productId + ":" + buyerId;
 
         String orderNo = null;
         try {
-            orderNo = orderService.createSeckillOrder(buyerId, productId);
+            orderNo = orderService.createSeckillOrder(requestId, buyerId, productId);
         } catch (Exception e) {
             log.error("秒杀订单创建失败: user={}, product={}", buyerId, productId, e);
             // 只有当 DB 创建订单失败时，才标记 failed 且回滚 Redis 库存

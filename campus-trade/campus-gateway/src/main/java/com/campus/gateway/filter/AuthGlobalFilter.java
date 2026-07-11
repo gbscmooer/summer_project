@@ -2,6 +2,7 @@ package com.campus.gateway.filter;
 
 import com.campus.common.result.Result;
 import com.campus.common.util.JwtUtil;
+import com.campus.common.security.InternalApiTokenValidator;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
@@ -46,6 +47,9 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
     /** 商品详情白名单：GET /api/product/{纯数字id}。 */
     private static final Pattern PRODUCT_DETAIL_PATTERN = Pattern.compile("^/api/product/\\d+$");
 
+    /** 商品图片公开读取：GET /api/product/image/{安全文件名}。 */
+    private static final Pattern PRODUCT_IMAGE_PATTERN = Pattern.compile("^/api/product/image/[a-zA-Z0-9._-]+$");
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
@@ -56,21 +60,29 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
 
         // 1. 先剥离客户端伪造的 X-User-Id，防止越权（无论白名单与否都要剥离）。
         ServerHttpRequest sanitizedRequest = request.mutate()
-                .headers(headers -> headers.remove(HEADER_USER_ID))
+                .headers(headers -> {
+                    headers.remove(HEADER_USER_ID);
+                    headers.remove(InternalApiTokenValidator.HEADER_NAME);
+                })
                 .build();
         ServerWebExchange sanitizedExchange = exchange.mutate().request(sanitizedRequest).build();
 
-        // 2. CORS 预检请求直接放行。
+        // 2. Internal endpoints are never reachable through the public gateway.
+        if (isInternalPath(path)) {
+            return notFound(sanitizedExchange);
+        }
+
+        // 3. CORS 预检请求直接放行。
         if (HttpMethod.OPTIONS.equals(method)) {
             return chain.filter(sanitizedExchange);
         }
 
-        // 3. 白名单放行（已剥离 X-User-Id，即便携带 token 也无需注入下游）。
+        // 4. 白名单放行（已剥离 X-User-Id，即便携带 token 也无需注入下游）。
         if (isWhiteList(path, method)) {
             return chain.filter(sanitizedExchange);
         }
 
-        // 4. 非白名单：校验 Authorization 头中的 Bearer token（JWT 解析放到 boundedElastic，避免阻塞 Netty event loop）。
+        // 5. 非白名单：校验 Authorization 头中的 Bearer token（JWT 解析放到 boundedElastic，避免阻塞 Netty event loop）。
         String authorization = sanitizedRequest.getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
         String token = extractToken(authorization);
         if (token == null) {
@@ -91,11 +103,16 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
     /**
      * 白名单判定：满足任一即跳过鉴权。
      */
-    private boolean isWhiteList(String path, HttpMethod method) {
-        if ("/api/user/register".equals(path)
-                || "/api/user/login".equals(path)
-                || "/api/product/list".equals(path)
-                || "/api/product/search".equals(path)) {
+    boolean isWhiteList(String path, HttpMethod method) {
+        if (HttpMethod.POST.equals(method) && ("/api/user/register".equals(path)
+                || "/api/user/login".equals(path))) {
+            return true;
+        }
+        if (HttpMethod.GET.equals(method) && ("/api/product/list".equals(path)
+                || "/api/product/search".equals(path))) {
+            return true;
+        }
+        if (HttpMethod.GET.equals(method) && PRODUCT_IMAGE_PATTERN.matcher(path).matches()) {
             return true;
         }
         // 商品详情：GET /api/product/{纯数字id}
@@ -111,6 +128,21 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
         }
         String token = authorization.substring(BEARER_PREFIX.length()).trim();
         return StringUtils.hasText(token) ? token : null;
+    }
+
+    boolean isInternalPath(String path) {
+        return "/api/user/batch".equals(path)
+                || path.startsWith("/api/user/internal/")
+                || path.startsWith("/api/product/inner/");
+    }
+
+    private Mono<Void> notFound(ServerWebExchange exchange) {
+        ServerHttpResponse response = exchange.getResponse();
+        response.setStatusCode(HttpStatus.NOT_FOUND);
+        response.getHeaders().setContentType(MediaType.parseMediaType(MediaType.APPLICATION_JSON_VALUE + ";charset=UTF-8"));
+        byte[] bytes = "{\"code\":404,\"message\":\"资源不存在\",\"data\":null}"
+                .getBytes(StandardCharsets.UTF_8);
+        return response.writeWith(Mono.just(response.bufferFactory().wrap(bytes)));
     }
 
     /**

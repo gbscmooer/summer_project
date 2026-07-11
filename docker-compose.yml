@@ -1,21 +1,25 @@
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   # ==========================================
   # 1. Middleware Services
   # ==========================================
   nacos:
+    logging: *default-logging
     image: nacos/nacos-server:v2.3.2
     platform: linux/amd64
     container_name: campus-nacos
     environment:
       - MODE=standalone
       - PREFER_HOST_MODE=hostname
-    ports:
-      - "8848:8848"
-      - "9848:9848"
     volumes:
       - nacos-data:/home/nacos/data
     networks:
-      - campus-net
+      - service-net
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8848/nacos/actuator/health"]
@@ -24,16 +28,15 @@ services:
       retries: 5
 
   mysql:
+    logging: *default-logging
     image: mysql:8.0
     container_name: campus-mysql
     environment:
-      MYSQL_ROOT_PASSWORD: root123
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
       MYSQL_DATABASE: campus_trade
       MYSQL_USER: campus
-      MYSQL_PASSWORD: campus123
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}
       TZ: Asia/Shanghai
-    ports:
-      - "3306:3306"
     volumes:
       - mysql-data:/var/lib/mysql
       - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
@@ -42,32 +45,34 @@ services:
       --collation-server=utf8mb4_unicode_ci
       --default-authentication-plugin=mysql_native_password
     networks:
-      - campus-net
+      - data-net
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot123"]
+      test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_ROOT_PASSWORD mysqladmin ping -h localhost -uroot --silent"]
       interval: 30s
       timeout: 10s
       retries: 5
 
   redis:
+    logging: *default-logging
     image: redis:7.2
     container_name: campus-redis
-    ports:
-      - "6379:6379"
     volumes:
       - redis-data:/data
-    command: redis-server --appendonly yes
+    command: ["sh", "-c", "exec redis-server --appendonly yes --requirepass \"$$REDIS_PASSWORD\""]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
     networks:
-      - campus-net
+      - data-net
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
       interval: 30s
       timeout: 10s
       retries: 3
 
   elasticsearch:
+    logging: *default-logging
     image: elasticsearch:8.13.0
     container_name: campus-es
     environment:
@@ -76,13 +81,10 @@ services:
       - xpack.security.enabled=false
       - xpack.security.http.ssl.enabled=false
       - xpack.security.transport.ssl.enabled=false
-    ports:
-      - "9200:9200"
-      - "9300:9300"
     volumes:
       - es-data:/usr/share/elasticsearch/data
     networks:
-      - campus-net
+      - data-net
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9200/_cluster/health"]
@@ -91,18 +93,16 @@ services:
       retries: 5
 
   rabbitmq:
+    logging: *default-logging
     image: rabbitmq:3.13-management
     container_name: campus-rabbitmq
     environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
-    ports:
-      - "5672:5672"
-      - "15672:15672"
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:?RABBITMQ_USERNAME is required}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
     networks:
-      - campus-net
+      - data-net
     restart: unless-stopped
     healthcheck:
       test: rabbitmq-diagnostics -q ping
@@ -114,18 +114,25 @@ services:
   # 2. Application Services
   # ==========================================
   campus-gateway:
+    logging: *default-logging
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
     build: ./campus-trade/campus-gateway
     container_name: campus-gateway
-    ports:
-      - "8080:8080"
     environment:
       - SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR=campus-nacos:8848
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required and must be at least 32 bytes}
+      - JWT_EXPIRATION_MINUTES=${JWT_EXPIRATION_MINUTES:-120}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-}
       - JAVA_OPTS=-Xms256m -Xmx256m
     depends_on:
       nacos:
         condition: service_healthy
     networks:
-      - campus-net
+      - edge-net
+      - service-net
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "nc -z localhost 8080 || exit 1"]
@@ -135,15 +142,21 @@ services:
       start_period: 15s
 
   campus-user:
+    logging: *default-logging
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
     build: ./campus-trade/campus-user
     container_name: campus-user
-    ports:
-      - "8081:8081"
     environment:
       - SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR=campus-nacos:8848
       - SPRING_DATASOURCE_URL=jdbc:mysql://campus-mysql:3306/campus_trade?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
       - SPRING_DATASOURCE_USERNAME=campus
-      - SPRING_DATASOURCE_PASSWORD=campus123
+      - SPRING_DATASOURCE_PASSWORD=${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required and must be at least 32 bytes}
+      - JWT_EXPIRATION_MINUTES=${JWT_EXPIRATION_MINUTES:-120}
+      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN:?INTERNAL_API_TOKEN is required and must be at least 32 bytes}
       - JAVA_OPTS=-Xms256m -Xmx256m
     depends_on:
       nacos:
@@ -151,7 +164,8 @@ services:
       mysql:
         condition: service_healthy
     networks:
-      - campus-net
+      - service-net
+      - data-net
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "nc -z localhost 8081 || exit 1"]
@@ -160,19 +174,50 @@ services:
       retries: 3
       start_period: 15s
 
+  product-images-init:
+    image: amazoncorretto:17-alpine@sha256:223ebda8690566648f5cc77a69d661ecf7c35a9f977fd7cbf0d19545491ad1c6
+    logging: *default-logging
+    user: "0:0"
+    entrypoint: ["/bin/chown", "-R", "10001:10001", "/data/product-images"]
+    network_mode: none
+    read_only: true
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    cap_add: [CHOWN]
+    volumes:
+      - product-images:/data/product-images
+    restart: "no"
+
   campus-product:
+    logging: *default-logging
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
     build: ./campus-trade/campus-product
     container_name: campus-product
-    ports:
-      - "8082:8082"
     environment:
       - SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR=campus-nacos:8848
       - SPRING_DATASOURCE_URL=jdbc:mysql://campus-mysql:3306/campus_trade?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
       - SPRING_DATASOURCE_USERNAME=campus
-      - SPRING_DATASOURCE_PASSWORD=campus123
+      - SPRING_DATASOURCE_PASSWORD=${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}
       - SPRING_DATA_REDIS_HOST=campus-redis
+      - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD:?REDIS_PASSWORD is required}
       - SPRING_ELASTICSEARCH_URIS=http://campus-es:9200
+      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN:?INTERNAL_API_TOKEN is required and must be at least 32 bytes}
+      - AI_API_KEY=${AI_API_KEY:-}
+      - AI_BASE_URL=${AI_BASE_URL:-https://api.openai.com/v1}
+      - AI_MODEL=${AI_MODEL:-gpt-4.1-mini}
+      - AI_SUPPORTS_VISION=${AI_SUPPORTS_VISION:-true}
+      - AI_TIMEOUT_SECONDS=${AI_TIMEOUT_SECONDS:-60}
+      - AI_DAILY_USER_LIMIT=${AI_DAILY_USER_LIMIT:-100}
+      - AI_GLOBAL_CONCURRENCY=${AI_GLOBAL_CONCURRENCY:-8}
+      - AI_CONFIG_ENCRYPTION_KEY=${AI_CONFIG_ENCRYPTION_KEY:?AI_CONFIG_ENCRYPTION_KEY is required and must be at least 32 bytes}
+      - PRODUCT_IMAGE_DIR=/data/product-images
+      - PRODUCT_REINDEX_ON_STARTUP=false
       - JAVA_OPTS=-Xms256m -Xmx256m
+    volumes:
+      - product-images:/data/product-images
     depends_on:
       nacos:
         condition: service_healthy
@@ -182,8 +227,12 @@ services:
         condition: service_healthy
       elasticsearch:
         condition: service_healthy
+      product-images-init:
+        condition: service_completed_successfully
     networks:
-      - campus-net
+      - service-net
+      - data-net
+      - egress-net
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "nc -z localhost 8082 || exit 1"]
@@ -193,17 +242,24 @@ services:
       start_period: 15s
 
   campus-order:
+    logging: *default-logging
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
     build: ./campus-trade/campus-order
     container_name: campus-order
-    ports:
-      - "8083:8083"
     environment:
       - SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR=campus-nacos:8848
       - SPRING_DATASOURCE_URL=jdbc:mysql://campus-mysql:3306/campus_trade?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
       - SPRING_DATASOURCE_USERNAME=campus
-      - SPRING_DATASOURCE_PASSWORD=campus123
+      - SPRING_DATASOURCE_PASSWORD=${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}
       - SPRING_DATA_REDIS_HOST=campus-redis
+      - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD:?REDIS_PASSWORD is required}
       - SPRING_RABBITMQ_HOST=campus-rabbitmq
+      - SPRING_RABBITMQ_USERNAME=${RABBITMQ_USERNAME:?RABBITMQ_USERNAME is required}
+      - SPRING_RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}
+      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN:?INTERNAL_API_TOKEN is required and must be at least 32 bytes}
       - JAVA_OPTS=-Xms256m -Xmx256m
     depends_on:
       nacos:
@@ -215,7 +271,8 @@ services:
       rabbitmq:
         condition: service_healthy
     networks:
-      - campus-net
+      - service-net
+      - data-net
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "nc -z localhost 8083 || exit 1"]
@@ -225,19 +282,36 @@ services:
       start_period: 15s
 
   campus-web:
+    logging: *default-logging
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx:uid=101,gid=101,mode=0755
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
     build: ./campus-trade-web
     container_name: campus-web
+    environment:
+      TRUSTED_PROXY_CIDR: ${TRUSTED_PROXY_CIDR:?TRUSTED_PROXY_CIDR is required}
     ports:
-      - "80:80"
+      - "${WEB_BIND_ADDRESS:-127.0.0.1}:${WEB_PORT:-8080}:8080"
     depends_on:
       campus-gateway:
         condition: service_healthy
     networks:
-      - campus-net
+      - edge-net
     restart: unless-stopped
 
 networks:
-  campus-net:
+  edge-net:
+    driver: bridge
+  service-net:
+    driver: bridge
+    internal: true
+  data-net:
+    driver: bridge
+    internal: true
+  egress-net:
     driver: bridge
 
 volumes:
@@ -246,3 +320,4 @@ volumes:
   redis-data:
   es-data:
   rabbitmq-data:
+  product-images:

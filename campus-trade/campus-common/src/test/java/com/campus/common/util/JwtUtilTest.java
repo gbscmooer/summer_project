@@ -5,6 +5,10 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class JwtUtilTest {
 
+    static {
+        System.setProperty("campus.jwt-secret", "unit-test-jwt-secret-at-least-32-bytes-long");
+    }
+
     @Test
     void generateAndParseToken() {
         Long userId = 1001L;

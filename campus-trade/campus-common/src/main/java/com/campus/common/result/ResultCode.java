@@ -20,6 +20,12 @@ public enum ResultCode {
     PRODUCT_OFF_SHELF(2002, "商品已下架或已售"),
     PRODUCT_STOCK_INSUFFICIENT(2003, "库存不足"),
 
+    // AI 业务码
+    AI_NOT_CONFIGURED(4001, "AI 服务未配置，请设置 AI_API_KEY"),
+    AI_RESPONSE_INVALID(4002, "AI 返回内容无法解析，请稍后重试"),
+    AI_IMAGE_INVALID(4003, "商品图片不存在或格式不受支持"),
+    AI_VISION_NOT_SUPPORTED(4004, "当前 AI 模型不支持图片识别，请配置支持视觉的模型"),
+
     // 订单业务码
     ORDER_NOT_FOUND(3001, "订单不存在"),
     ORDER_CANNOT_BUY_OWN(3002, "不能购买自己发布的商品"),

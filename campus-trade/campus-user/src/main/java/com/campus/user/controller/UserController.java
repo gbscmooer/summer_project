@@ -3,6 +3,7 @@ package com.campus.user.controller;
 import com.campus.common.exception.BizException;
 import com.campus.common.result.Result;
 import com.campus.common.result.ResultCode;
+import com.campus.common.security.InternalApiTokenValidator;
 import com.campus.user.dto.*;
 import com.campus.user.service.UserService;
 import jakarta.validation.Valid;
@@ -19,6 +20,7 @@ import java.util.Map;
 public class UserController {
 
     private final UserService userService;
+    private final InternalApiTokenValidator internalApiTokenValidator;
 
     @PostMapping("/register")
     public Result<Map<String, Long>> register(@Valid @RequestBody RegisterRequest request) {
@@ -54,8 +56,19 @@ public class UserController {
     }
 
     // 内部接口，供 OpenFeign 调用，不经过网关
+    @GetMapping("/internal/role")
+    public Result<Integer> getUserRole(
+            @RequestHeader(value = InternalApiTokenValidator.HEADER_NAME, required = false) String internalToken,
+            @RequestParam Long userId) {
+        internalApiTokenValidator.requireValid(internalToken);
+        return Result.success(userService.getRole(userId));
+    }
+
     @GetMapping("/batch")
-    public Result<List<UserBriefVO>> batchGetUsers(@RequestParam String ids) {
+    public Result<List<UserBriefVO>> batchGetUsers(
+            @RequestHeader(value = InternalApiTokenValidator.HEADER_NAME, required = false) String internalToken,
+            @RequestParam String ids) {
+        internalApiTokenValidator.requireValid(internalToken);
         List<Long> idList = new ArrayList<>();
         for (String part : ids.split(",")) {
             String trimmed = part.trim();
@@ -67,6 +80,9 @@ public class UserController {
             } catch (NumberFormatException e) {
                 throw new BizException(ResultCode.BAD_REQUEST);
             }
+        }
+        if (idList.size() > 100) {
+            throw new BizException(ResultCode.BAD_REQUEST.getCode(), "单次最多查询100个用户");
         }
         return Result.success(userService.batchGetUsers(idList));
     }

@@ -3,13 +3,17 @@ package com.campus.product.service;
 import com.campus.common.result.Result;
 import com.campus.product.dto.ProductDetailVO;
 import com.campus.product.entity.Product;
+import com.campus.product.entity.StockRestoreLogEntity;
 import com.campus.product.feign.UserFeignClient;
 import com.campus.product.feign.dto.UserBriefDTO;
 import com.campus.product.mapper.ProductMapper;
+import com.campus.product.mapper.StockDeductionLogMapper;
+import com.campus.product.mapper.StockRestoreLogMapper;
 import com.campus.product.service.impl.ProductServiceImpl;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
@@ -19,12 +23,14 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 
 class ProductServiceImplTest {
@@ -76,7 +82,9 @@ class ProductServiceImplTest {
                 redisTemplate,
                 null,
                 null,
-                userFeignClient);
+                userFeignClient,
+                mock(StockDeductionLogMapper.class),
+                mock(StockRestoreLogMapper.class));
         ReflectionTestUtils.setField(service, "baseMapper", productMapper);
 
         ProductDetailVO detail = service.getDetail(10L);
@@ -86,5 +94,21 @@ class ProductServiceImplTest {
         assertEquals("product:lock:10", deletedKey.get());
         verify(productMapper).incrementViewCount(10L);
         verify(valueOperations).set(eq("product:detail:10"), any(ProductDetailVO.class), anyLong(), eq(TimeUnit.MILLISECONDS));
+    }
+
+    @Test
+    void duplicatePersistentRestoreLogPreventsStockInflation() {
+        ProductMapper productMapper = mock(ProductMapper.class);
+        StockDeductionLogMapper deductionLogMapper = mock(StockDeductionLogMapper.class);
+        when(deductionLogMapper.selectCount(any())).thenReturn(1L);
+        StockRestoreLogMapper restoreLogMapper = mock(StockRestoreLogMapper.class);
+        when(restoreLogMapper.insert(any(StockRestoreLogEntity.class)))
+                .thenThrow(new DuplicateKeyException("duplicate"));
+        ProductServiceImpl service = new ProductServiceImpl(
+                mock(RedisTemplate.class), null, null, mock(UserFeignClient.class), deductionLogMapper, restoreLogMapper);
+        ReflectionTestUtils.setField(service, "baseMapper", productMapper);
+
+        assertDoesNotThrow(() -> service.restoreStock(10L, "ORDER-1"));
+        verify(productMapper, never()).restoreStock(anyLong());
     }
 }

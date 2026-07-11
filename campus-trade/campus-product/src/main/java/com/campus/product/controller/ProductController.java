@@ -2,10 +2,12 @@ package com.campus.product.controller;
 
 import com.campus.common.result.PageResult;
 import com.campus.common.result.Result;
+import com.campus.common.security.InternalApiTokenValidator;
 import com.campus.product.dto.ProductDetailVO;
 import com.campus.product.dto.ProductListVO;
 import com.campus.product.dto.ProductRequest;
 import com.campus.product.service.ProductService;
+import com.campus.product.service.AdminAuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -19,6 +21,8 @@ import java.util.Map;
 public class ProductController {
 
     private final ProductService productService;
+    private final AdminAuthService adminAuthService;
+    private final InternalApiTokenValidator internalApiTokenValidator;
 
     // ==================== 对外接口（经网关） ====================
 
@@ -73,7 +77,8 @@ public class ProductController {
     }
 
     @PostMapping("/reindex")
-    public Result<Integer> reindex() {
+    public Result<Integer> reindex(@RequestHeader("X-User-Id") Long userId) {
+        adminAuthService.requireAdmin(userId);
         int count = productService.reindexAll();
         return Result.success("全量同步完成，共刷入商品: " + count, count);
     }
@@ -89,19 +94,29 @@ public class ProductController {
     // ==================== 内部接口（供 OpenFeign，不经网关） ====================
 
     @GetMapping("/inner/{id}")
-    public Result<ProductDetailVO> innerGetProduct(@PathVariable Long id) {
+    public Result<ProductDetailVO> innerGetProduct(
+            @RequestHeader(value = InternalApiTokenValidator.HEADER_NAME, required = false) String internalToken,
+            @PathVariable Long id) {
+        internalApiTokenValidator.requireValid(internalToken);
         return Result.success(ProductDetailVO.from(productService.innerGetProduct(id)));
     }
 
     @PostMapping("/inner/{id}/deduct")
     public Result<Boolean> deductStock(
+            @RequestHeader(value = InternalApiTokenValidator.HEADER_NAME, required = false) String internalToken,
             @PathVariable Long id,
+            @RequestParam("orderNo") String orderNo,
             @RequestParam(value = "preserveSeckillCache", defaultValue = "false") boolean preserveSeckillCache) {
-        return Result.success(productService.deductStock(id, preserveSeckillCache));
+        internalApiTokenValidator.requireValid(internalToken);
+        return Result.success(productService.deductStock(id, orderNo, preserveSeckillCache));
     }
 
     @PostMapping("/inner/{id}/restore")
-    public Result<Void> restoreStock(@PathVariable Long id, @RequestParam(value = "orderNo", required = false) String orderNo) {
+    public Result<Void> restoreStock(
+            @RequestHeader(value = InternalApiTokenValidator.HEADER_NAME, required = false) String internalToken,
+            @PathVariable Long id,
+            @RequestParam("orderNo") String orderNo) {
+        internalApiTokenValidator.requireValid(internalToken);
         productService.restoreStock(id, orderNo);
         return Result.success();
     }

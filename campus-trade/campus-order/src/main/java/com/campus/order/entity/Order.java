@@ -26,6 +26,9 @@ public class Order {
     /** 订单号（业务唯一，长度 ≤ 32），如 {@code 20260622153012001}。 */
     private String orderNo;
 
+    /** Unique idempotency key carried by a seckill message; null for ordinary orders. */
+    private String requestId;
+
     private Long productId;
 
     /** 冗余：下单时的商品标题（成交快照）。 */

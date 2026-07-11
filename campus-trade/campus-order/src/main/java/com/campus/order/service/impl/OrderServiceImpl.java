@@ -1,7 +1,7 @@
 package com.campus.order.service.impl;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.campus.common.exception.BizException;
 import com.campus.common.result.PageResult;
 import com.campus.common.result.Result;
@@ -17,6 +17,7 @@ import com.campus.order.feign.dto.ProductDTO;
 import com.campus.order.feign.dto.UserBriefDTO;
 import com.campus.order.mapper.OrderMapper;
 import com.campus.order.service.OrderService;
+import com.campus.order.service.StockCompensationService;
 import com.campus.order.util.OrderNoGenerator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,6 +39,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -58,6 +60,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     private final RabbitTemplate rabbitTemplate;
     private final RedisTemplate<String, Object> redisTemplate;
     private final StringRedisTemplate stringRedisTemplate;
+    private final StockCompensationService stockCompensationService;
 
     // ==================== 状态常量 ====================
     private static final int STATUS_UNPAID = 0;
@@ -84,9 +87,18 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
 
         // 生成唯一订单号，用于幂等库存回滚
         String orderNo = OrderNoGenerator.generate();
+        stockCompensationService.register(productId, orderNo);
+        stockCompensationService.lockForOrderTransaction(orderNo);
 
         // 4. 扣库存（库存不足透传 2003；扣到 0 商品服务会自动置已售）
-        unwrap(productFeign.deductStock(productId, false));
+        try {
+            unwrap(productFeign.deductStock(productId, orderNo, false));
+        } catch (BizException e) {
+            if (isDefinitiveNoDeduction(e)) {
+                stockCompensationService.completeAfterCompletion(orderNo);
+            }
+            throw e;
+        }
 
         try {
             // 5. 落库（冗余 title/price/seller，status=待付款）
@@ -114,11 +126,13 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                     RabbitMQConfig.ORDER_NOTIFY_ROUTING_KEY,
                     notifyMessage);
 
+            stockCompensationService.completeAfterCommit(orderNo);
             return CreateOrderVO.from(order);
         } catch (Exception e) {
             log.error("常规订单落库或消息发送异常，启动远程库存补偿回滚. productId={}, orderNo={}", productId, orderNo, e);
             try {
-                productFeign.restoreStock(productId, orderNo);
+                unwrap(productFeign.restoreStock(productId, orderNo));
+                stockCompensationService.completeAfterCompletion(orderNo);
             } catch (Exception ex) {
                 log.error("CRITICAL: 常规订单补偿回滚库存失败. productId={}, orderNo={}", productId, orderNo, ex);
             }
@@ -341,7 +355,9 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
 
         // 5. 发送秒杀消息入队列
         try {
-            com.campus.order.dto.SeckillMessage seckillMessage = new com.campus.order.dto.SeckillMessage(productId, buyerId);
+            String requestId = UUID.randomUUID().toString().replace("-", "");
+            com.campus.order.dto.SeckillMessage seckillMessage =
+                    new com.campus.order.dto.SeckillMessage(requestId, productId, buyerId);
             rabbitTemplate.convertAndSend(
                     RabbitMQConfig.SECKILL_EXCHANGE,
                     RabbitMQConfig.SECKILL_ROUTING_KEY,
@@ -404,22 +420,32 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public String createSeckillOrder(Long buyerId, Long productId) {
+    public String createSeckillOrder(String requestId, Long buyerId, Long productId) {
+        if (requestId == null || requestId.isBlank()) {
+            throw new BizException(ResultCode.BAD_REQUEST.getCode(), "秒杀请求缺少幂等标识");
+        }
+        Order existingOrder = lambdaQuery().eq(Order::getRequestId, requestId).one();
+        if (existingOrder != null) {
+            return existingOrder.getOrderNo();
+        }
         ProductDTO product = unwrap(productFeign.getProduct(productId));
         if (product == null) {
             throw new BizException(ResultCode.PRODUCT_NOT_FOUND);
         }
 
         String orderNo = OrderNoGenerator.generate();
+        stockCompensationService.register(productId, orderNo);
+        stockCompensationService.lockForOrderTransaction(orderNo);
         boolean deducted = false;
         try {
             // 扣减 DB 库存
-            unwrap(productFeign.deductStock(productId, true));
+            unwrap(productFeign.deductStock(productId, orderNo, true));
             deducted = true;
 
             // 创建订单并落库
             Order order = new Order();
             order.setOrderNo(orderNo);
+            order.setRequestId(requestId);
             order.setProductId(productId);
             order.setProductTitle(product.getTitle());
             order.setPrice(product.getPrice());
@@ -442,18 +468,29 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                     RabbitMQConfig.ORDER_NOTIFY_ROUTING_KEY,
                     notifyMessage);
 
+            stockCompensationService.completeAfterCommit(orderNo);
             return order.getOrderNo();
         } catch (Exception e) {
             log.error("创建秒杀订单异常，启动远程库存回滚。buyerId={}, productId={}, orderNo={}", buyerId, productId, orderNo, e);
+            if (!deducted && e instanceof BizException bizException && isDefinitiveNoDeduction(bizException)) {
+                stockCompensationService.completeAfterCompletion(orderNo);
+            }
             if (deducted) {
                 try {
-                    productFeign.restoreStock(productId, orderNo);
+                    unwrap(productFeign.restoreStock(productId, orderNo));
+                    stockCompensationService.completeAfterCompletion(orderNo);
                 } catch (Exception ex) {
                     log.error("CRITICAL: 秒杀库存回滚失败，productId={}, orderNo={}", productId, orderNo, ex);
                 }
             }
             throw e;
         }
+    }
+
+    private boolean isDefinitiveNoDeduction(BizException exception) {
+        return exception.getCode() == ResultCode.PRODUCT_NOT_FOUND.getCode()
+                || exception.getCode() == ResultCode.PRODUCT_OFF_SHELF.getCode()
+                || exception.getCode() == ResultCode.PRODUCT_STOCK_INSUFFICIENT.getCode();
     }
 
     @Override

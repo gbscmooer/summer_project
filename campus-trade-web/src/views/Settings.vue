@@ -87,6 +87,54 @@
       </div>
     </div>
 
+    <!-- 管理员：AI API 配置 -->
+    <div v-if="userStore.isAdmin" class="oa-panel">
+      <div class="oa-panel-header">
+        <div>
+          <div class="oa-panel-title">{{ t('settings.aiAdmin') }}</div>
+          <p class="setting-desc">{{ t('settings.aiAdminDesc') }}</p>
+        </div>
+        <el-tag effect="plain">{{ aiForm.activeSource === 'admin' ? t('settings.aiSourceAdmin') : t('settings.aiSourceEnv') }}</el-tag>
+      </div>
+
+      <el-form label-position="top" class="ai-admin-form" @submit.prevent>
+        <el-form-item :label="t('settings.aiEnabled')">
+          <el-switch v-model="aiForm.enabled" />
+          <span class="setting-hint inline-hint">{{ t('settings.aiEnabledHint') }}</span>
+        </el-form-item>
+        <el-form-item :label="t('settings.aiBaseUrl')">
+          <el-input v-model="aiForm.baseUrl" placeholder="https://api.openai.com/v1" />
+        </el-form-item>
+        <el-form-item :label="t('settings.aiModel')">
+          <el-input v-model="aiForm.model" placeholder="gpt-4.1-mini" />
+        </el-form-item>
+        <el-form-item :label="t('settings.aiApiKey')">
+          <el-input
+            v-model="aiForm.apiKey"
+            type="password"
+            show-password
+            :placeholder="aiForm.apiKeyMasked || t('settings.aiApiKeyPlaceholder')"
+          />
+          <p class="setting-hint">{{ t('settings.aiApiKeyHint') }}</p>
+        </el-form-item>
+        <div class="ai-admin-row">
+          <el-form-item :label="t('settings.aiTimeout')">
+            <el-input-number v-model="aiForm.timeoutSeconds" :min="5" :max="180" />
+          </el-form-item>
+          <el-form-item :label="t('settings.aiVision')">
+            <el-switch v-model="aiForm.supportsVision" />
+          </el-form-item>
+        </div>
+        <div class="setting-actions">
+          <el-button :loading="aiLoading" @click="loadAiConfig">{{ t('settings.aiReload') }}</el-button>
+          <el-button type="primary" :loading="aiSaving" @click="saveAiConfig">{{ t('settings.aiSave') }}</el-button>
+        </div>
+        <p v-if="aiForm.envModel" class="setting-hint">
+          {{ t('settings.aiEnvFallback') }}：{{ aiForm.envBaseUrl }} / {{ aiForm.envModel }}
+        </p>
+      </el-form>
+    </div>
+
     <!-- 数据 -->
     <div class="oa-panel">
       <div class="oa-panel-header">
@@ -137,16 +185,93 @@
 </template>
 
 <script setup>
+import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { useI18n } from '@/i18n'
 import { useSettingsStore } from '@/store/settings'
 import { useUserStore } from '@/store/user'
+import { getUserInfo } from '@/api/user'
+import { getAiAdminConfig, saveAiAdminConfig } from '@/api/admin'
 
 const { t } = useI18n()
 const settings = useSettingsStore()
 const userStore = useUserStore()
 const router = useRouter()
+
+const aiLoading = ref(false)
+const aiSaving = ref(false)
+const aiForm = reactive({
+  enabled: false,
+  baseUrl: '',
+  model: '',
+  apiKey: '',
+  apiKeyMasked: '',
+  timeoutSeconds: 60,
+  supportsVision: true,
+  activeSource: 'env',
+  envBaseUrl: '',
+  envModel: ''
+})
+
+onMounted(async () => {
+  if (!userStore.isLogin) return
+  try {
+    const res = await getUserInfo()
+    userStore.setUserInfo(res.data)
+  } catch (_) {
+    /* 保持本地缓存 */
+  }
+  if (userStore.isAdmin) {
+    await loadAiConfig()
+  }
+})
+
+async function loadAiConfig() {
+  aiLoading.value = true
+  try {
+    const res = await getAiAdminConfig()
+    const data = res.data || {}
+    aiForm.enabled = !!data.enabled
+    aiForm.baseUrl = data.baseUrl || ''
+    aiForm.model = data.model || ''
+    aiForm.apiKey = ''
+    aiForm.apiKeyMasked = data.apiKeyMasked || ''
+    aiForm.timeoutSeconds = data.timeoutSeconds || 60
+    aiForm.supportsVision = data.supportsVision !== false
+    aiForm.activeSource = data.activeSource || 'env'
+    aiForm.envBaseUrl = data.envBaseUrl || ''
+    aiForm.envModel = data.envModel || ''
+  } finally {
+    aiLoading.value = false
+  }
+}
+
+async function saveAiConfig() {
+  aiSaving.value = true
+  try {
+    const res = await saveAiAdminConfig({
+      enabled: aiForm.enabled,
+      baseUrl: aiForm.baseUrl.trim(),
+      model: aiForm.model.trim(),
+      apiKey: aiForm.apiKey,
+      timeoutSeconds: aiForm.timeoutSeconds,
+      supportsVision: aiForm.supportsVision
+    })
+    const data = res.data || {}
+    aiForm.enabled = !!data.enabled
+    aiForm.baseUrl = data.baseUrl || aiForm.baseUrl
+    aiForm.model = data.model || aiForm.model
+    aiForm.apiKey = ''
+    aiForm.apiKeyMasked = data.apiKeyMasked || ''
+    aiForm.timeoutSeconds = data.timeoutSeconds || aiForm.timeoutSeconds
+    aiForm.supportsVision = data.supportsVision !== false
+    aiForm.activeSource = data.activeSource || aiForm.activeSource
+    ElMessage.success(t('settings.aiSaveDone'))
+  } finally {
+    aiSaving.value = false
+  }
+}
 
 function onLocaleChange(locale) {
   settings.setLocale(locale)
@@ -241,6 +366,20 @@ function onResetPrefs() {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+.ai-admin-form :deep(.el-form-item) {
+  margin-bottom: 14px;
+}
+
+.ai-admin-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+}
+
+.inline-hint {
+  margin-left: 12px;
 }
 
 .about-grid {

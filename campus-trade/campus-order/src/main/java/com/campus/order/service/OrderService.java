@@ -35,7 +35,7 @@ public interface OrderService {
     String seckill(Long buyerId, Long productId);
 
     /** 异步消费秒杀消息并落库，带补偿事务。 */
-    String createSeckillOrder(Long buyerId, Long productId);
+    String createSeckillOrder(String requestId, Long buyerId, Long productId);
 
     /** 查询秒杀排队与下单结果。 */
     com.campus.order.dto.SeckillResultVO getSeckillResult(Long buyerId, Long productId);

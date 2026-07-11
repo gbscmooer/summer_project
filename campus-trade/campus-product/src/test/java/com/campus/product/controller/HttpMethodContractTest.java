@@ -14,6 +14,9 @@ class HttpMethodContractTest {
     @Test
     void productControllerUsesOnlyGetAndPostMappings() {
         assertNoForbiddenMappings(ProductController.class);
+        assertNoForbiddenMappings(ProductImageController.class);
+        assertNoForbiddenMappings(AiController.class);
+        assertNoForbiddenMappings(AdminAiConfigController.class);
     }
 
     private void assertNoForbiddenMappings(Class<?> controllerClass) {

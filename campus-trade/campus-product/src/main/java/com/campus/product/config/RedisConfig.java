@@ -4,7 +4,7 @@ import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.PropertyAccessor;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.databind.jsontype.impl.LaissezFaireSubTypeValidator;
+import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -49,13 +49,18 @@ public class RedisConfig {
      * - activateDefaultTyping：GenericJackson2JsonRedisSerializer 需写入 @class 类型信息，
      *   才能把缓存反序列化回 ProductDetailVO 而非 LinkedHashMap。
      */
-    private ObjectMapper buildObjectMapper() {
+    static ObjectMapper buildObjectMapper() {
         ObjectMapper mapper = new ObjectMapper();
         mapper.registerModule(new JavaTimeModule());
         mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
         mapper.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
+        BasicPolymorphicTypeValidator allowedTypes = BasicPolymorphicTypeValidator.builder()
+                .allowIfSubType("com.campus.product.dto.")
+                .allowIfSubType("java.util.ArrayList")
+                .allowIfSubType("java.math.BigDecimal")
+                .build();
         mapper.activateDefaultTyping(
-                LaissezFaireSubTypeValidator.instance,
+                allowedTypes,
                 ObjectMapper.DefaultTyping.NON_FINAL,
                 JsonTypeInfoAsProperty());
         return mapper;

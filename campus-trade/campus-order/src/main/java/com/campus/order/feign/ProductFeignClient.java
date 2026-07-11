@@ -22,9 +22,10 @@ public interface ProductFeignClient {
     @PostMapping("/product/inner/{id}/deduct")
     Result<Boolean> deductStock(
             @PathVariable("id") Long id,
+            @RequestParam("orderNo") String orderNo,
             @RequestParam(value = "preserveSeckillCache", defaultValue = "false") boolean preserveSeckillCache);
 
     /** 回滚库存（下单失败/取消时调用）。 */
     @PostMapping("/product/inner/{id}/restore")
-    Result<Void> restoreStock(@PathVariable("id") Long id, @RequestParam(value = "orderNo", required = false) String orderNo);
+    Result<Void> restoreStock(@PathVariable("id") Long id, @RequestParam("orderNo") String orderNo);
 }

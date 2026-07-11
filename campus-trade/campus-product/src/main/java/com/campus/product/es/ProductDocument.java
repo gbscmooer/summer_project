@@ -45,6 +45,10 @@ public class ProductDocument {
     @Field(type = FieldType.Integer)
     private Integer status;
 
+    /** 库存；搜索仅展示 stock>0 的在售商品 */
+    @Field(type = FieldType.Integer)
+    private Integer stock;
+
     /** 创建时间，epoch 毫秒 */
     @Field(type = FieldType.Long)
     private Long createTime;
@@ -62,6 +66,7 @@ public class ProductDocument {
         doc.setCover(extractCover(p.getImages()));
         doc.setSellerId(p.getSellerId());
         doc.setStatus(p.getStatus());
+        doc.setStock(p.getStock());
         if (p.getCreateTime() != null) {
             doc.setCreateTime(p.getCreateTime().atZone(ZONE).toInstant().toEpochMilli());
         }

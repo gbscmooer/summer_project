@@ -24,6 +24,21 @@ spring:
             - Path=/api/product/**
           filters:
             - StripPrefix=1
+        - id: ai-service
+          uri: lb://campus-product
+          predicates:
+            - Path=/api/ai/**
+          filters:
+            - StripPrefix=1
+          metadata:
+            connect-timeout: 5000
+            response-timeout: 90000
+        - id: admin-service
+          uri: lb://campus-product
+          predicates:
+            - Path=/api/admin/**
+          filters:
+            - StripPrefix=1
         - id: order-service
           uri: lb://campus-order
           predicates:
@@ -33,4 +48,4 @@ spring:
 
 logging:
   level:
-    com.campus: debug
+    com.campus: ${LOGGING_LEVEL_COM_CAMPUS:INFO}

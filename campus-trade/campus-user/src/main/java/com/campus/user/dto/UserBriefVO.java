@@ -10,5 +10,4 @@ import lombok.NoArgsConstructor;
 public class UserBriefVO {
     private Long userId;
     private String nickname;
-    private String phone;
 }

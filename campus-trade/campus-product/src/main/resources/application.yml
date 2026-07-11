@@ -1,5 +1,7 @@
 server:
   port: 8082
+  tomcat:
+    max-swallow-size: 50MB
 
 spring:
   application:
@@ -8,11 +10,12 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://localhost:3306/campus_trade?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
     username: campus
-    password: campus123
+    password: ${SPRING_DATASOURCE_PASSWORD:}
   data:
     redis:
       host: localhost
       port: 6379
+      password: ${SPRING_DATA_REDIS_PASSWORD:}
   elasticsearch:
     uris: http://localhost:9200
     connection-timeout: 5s
@@ -21,6 +24,29 @@ spring:
     nacos:
       discovery:
         server-addr: ${SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR:localhost:8848}
+  servlet:
+    multipart:
+      max-file-size: 8MB
+      max-request-size: 40MB
+
+campus:
+  internal-api-token: ${INTERNAL_API_TOKEN:}
+  search:
+    reindex-on-startup: ${PRODUCT_REINDEX_ON_STARTUP:false}
+  ai:
+    base-url: ${AI_BASE_URL:https://api.openai.com/v1}
+    api-key: ${AI_API_KEY:}
+    model: ${AI_MODEL:gpt-4.1-mini}
+    timeout-seconds: ${AI_TIMEOUT_SECONDS:60}
+    supports-vision: ${AI_SUPPORTS_VISION:true}
+    config-encryption-key: ${AI_CONFIG_ENCRYPTION_KEY:}
+    daily-user-limit: ${AI_DAILY_USER_LIMIT:100}
+    global-concurrency: ${AI_GLOBAL_CONCURRENCY:8}
+  product-images:
+    directory: ${PRODUCT_IMAGE_DIR:./data/product-images}
+    max-file-size: 8388608
+    max-images-per-user: ${PRODUCT_IMAGE_MAX_PER_USER:50}
+    min-free-space-bytes: ${PRODUCT_IMAGE_MIN_FREE_BYTES:1073741824}
 
 mybatis-plus:
   configuration:
@@ -31,4 +57,4 @@ mybatis-plus:
 
 logging:
   level:
-    com.campus: debug
+    com.campus: ${LOGGING_LEVEL_COM_CAMPUS:INFO}

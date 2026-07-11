@@ -10,6 +10,7 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 @Slf4j
 @RestControllerAdvice
@@ -45,6 +46,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MissingServletRequestParameterException.class)
     public Result<?> handleMissingRequestParameter(MissingServletRequestParameterException e) {
         return Result.error(ResultCode.BAD_REQUEST.getCode(), "缺少请求参数: " + e.getParameterName());
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public Result<?> handleMaxUploadSizeExceededException(MaxUploadSizeExceededException e) {
+        return Result.error(ResultCode.BAD_REQUEST.getCode(), "上传文件总大小超过限制");
     }
 
     @ExceptionHandler(Exception.class)
