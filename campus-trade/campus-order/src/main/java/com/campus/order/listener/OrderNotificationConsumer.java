@@ -74,7 +74,7 @@ public class OrderNotificationConsumer {
         notification.setType("ORDER_CREATED");
         notification.setTitle("你的商品被拍下啦！");
         notification.setContent(
-                String.format("买家已下单「%s」，订单号 %s，成交价 ¥%s",
+                String.format("买家已下单「%s」，订单号 %s，成交积分 %s",
                         message.getProductTitle(),
                         message.getOrderNo(),
                         priceText));

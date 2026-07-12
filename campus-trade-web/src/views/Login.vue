@@ -9,19 +9,19 @@
       label-position="top"
       @submit.prevent="onSubmit"
     >
-      <el-form-item label="Username" prop="username">
+      <el-form-item label="用户名" prop="username">
         <el-input
           v-model="form.username"
-          placeholder="Enter username"
+          placeholder="请输入用户名"
           clearable
           :prefix-icon="User"
         />
       </el-form-item>
-      <el-form-item label="Password" prop="password">
+      <el-form-item label="密码" prop="password">
         <el-input
           v-model="form.password"
           type="password"
-          placeholder="Enter password"
+          placeholder="请输入密码"
           show-password
           :prefix-icon="Lock"
           @keyup.enter="onSubmit"
@@ -29,13 +29,16 @@
       </el-form-item>
       <el-form-item>
         <el-button type="primary" class="auth-submit" :loading="loading" @click="onSubmit">
-          Continue
+          登录
         </el-button>
       </el-form-item>
     </el-form>
+    <div class="auth-extra">
+      <el-link type="primary" @click="$router.push('/forgot-password')">忘记密码？</el-link>
+    </div>
     <div class="auth-footer">
-      Don't have an account?
-      <el-link type="primary" @click="$router.push('/register')">Sign up</el-link>
+      没有账号？
+      <el-link type="primary" @click="$router.push('/register')">去注册</el-link>
     </div>
   </el-card>
 </template>
@@ -117,6 +120,12 @@ async function onSubmit() {
 .auth-submit {
   width: 100%;
   height: 40px;
+}
+
+.auth-extra {
+  text-align: right;
+  margin-top: -8px;
+  margin-bottom: 8px;
 }
 
 .auth-footer {

@@ -38,8 +38,8 @@
         <!-- 右侧信息 -->
         <div class="info-panel">
           <div class="price-card">
-            <span class="price-label">Price</span>
-            <span class="price">¥{{ formatPrice(detail.price) }}</span>
+            <span class="price-label">{{ t('common.points') }}</span>
+            <span class="price">{{ formatPoints(detail.price) }}</span>
           </div>
 
           <div class="meta-grid">
@@ -85,6 +85,13 @@
               @click="onSeckill"
             >
               {{ seckilling ? 'Queuing...' : 'Flash sale' }}
+            </el-button>
+            <el-button
+              v-if="canContactSeller"
+              size="large"
+              @click="onContactSeller"
+            >
+              {{ t('messages.contactSeller') }}
             </el-button>
           </div>
         </div>
@@ -152,11 +159,13 @@ import { createOrder, seckillOrder, getSeckillResult } from '@/api/order'
 import { useUserStore } from '@/store/user'
 import { getStatusText } from '@/constants/product'
 import { useOnboarding } from '@/composables/useOnboarding'
+import { useI18n } from '@/i18n'
 
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
 const onboarding = useOnboarding()
+const { t } = useI18n()
 const loading = ref(false)
 const detail = ref(null)
 const buying = ref(false)
@@ -179,14 +188,25 @@ const sellerText = computed(() => {
   return detail.value.sellerNickname || (detail.value.sellerId ? `用户 #${detail.value.sellerId}` : '-')
 })
 
+const canContactSeller = computed(() => {
+  if (!userStore.isLogin || !detail.value?.sellerId) return false
+  return detail.value.sellerId !== userStore.userInfo?.userId
+})
+
+function onContactSeller() {
+  if (!canContactSeller.value) return
+  router.push({ path: '/messages', query: { peerUserId: String(detail.value.sellerId) } })
+}
+
 function statusClass(status) {
   const map = { 0: 'oa-status-info', 1: 'oa-status-success', 2: 'oa-status-danger' }
   return map[status] || 'oa-status-info'
 }
 
-function formatPrice(price) {
+function formatPoints(price) {
   const n = Number(price)
-  return Number.isFinite(n) ? n.toFixed(2) : price
+  const value = Number.isFinite(n) ? (Number.isInteger(n) ? String(n) : n.toFixed(0)) : String(price ?? 0)
+  return `${value} ${t('common.pointsUnit')}`
 }
 
 async function fetchDetail() {

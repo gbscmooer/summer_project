@@ -5,6 +5,7 @@ import com.campus.common.result.Result;
 import com.campus.common.result.ResultCode;
 import com.campus.common.security.InternalApiTokenValidator;
 import com.campus.user.dto.*;
+import com.campus.user.service.PasswordResetService;
 import com.campus.user.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +21,7 @@ import java.util.Map;
 public class UserController {
 
     private final UserService userService;
+    private final PasswordResetService passwordResetService;
     private final InternalApiTokenValidator internalApiTokenValidator;
 
     @PostMapping("/register")
@@ -32,6 +34,20 @@ public class UserController {
     public Result<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
         LoginResponse response = userService.login(request);
         return Result.success("登录成功", response);
+    }
+
+    /** 忘记密码：按用户名发重置邮件（防枚举，统一成功文案）。 */
+    @PostMapping("/forgot-password")
+    public Result<Void> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        passwordResetService.requestReset(request.getUsername());
+        return Result.success("如果该账号已绑定邮箱，重置链接已发送，请查收邮件", null);
+    }
+
+    /** 通过邮件链接中的 token 设置新密码。 */
+    @PostMapping("/reset-password")
+    public Result<Void> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        passwordResetService.resetPassword(request.getToken(), request.getNewPassword());
+        return Result.success("密码已重置，请使用新密码登录", null);
     }
 
     // X-User-Id 由网关解析JWT后注入；本地测试时手动传该请求头

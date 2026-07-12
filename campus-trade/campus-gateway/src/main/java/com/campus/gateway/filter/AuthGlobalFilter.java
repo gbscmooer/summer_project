@@ -50,10 +50,13 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
     /** 商品留言列表：GET /api/product/{纯数字id}/comments */
     private static final Pattern PRODUCT_COMMENT_PATTERN = Pattern.compile("^/api/product/\\d+/comments$");
 
-    /** 话题帖子列表/详情/按用户：GET /api/topic/posts/list、/api/topic/posts/{id}、/api/topic/posts/by-user/{id} */
+    /** 话题帖子公开读：列表/Feed/热榜/详情/按用户/评论列表 */
     private static final Pattern TOPIC_POST_LIST_PATTERN = Pattern.compile("^/api/topic/posts/list$");
+    private static final Pattern TOPIC_POST_FEED_PATTERN = Pattern.compile("^/api/topic/posts/feed$");
+    private static final Pattern TOPIC_POST_TRENDING_PATTERN = Pattern.compile("^/api/topic/posts/trending$");
     private static final Pattern TOPIC_POST_BY_USER_PATTERN = Pattern.compile("^/api/topic/posts/by-user/\\d+$");
     private static final Pattern TOPIC_POST_DETAIL_PATTERN = Pattern.compile("^/api/topic/posts/\\d+$");
+    private static final Pattern TOPIC_POST_COMMENTS_PATTERN = Pattern.compile("^/api/topic/posts/\\d+/comments$");
 
     /** 公开用户主页：GET /api/user/profile/{纯数字id} */
     private static final Pattern USER_PROFILE_PATTERN = Pattern.compile("^/api/user/profile/\\d+$");
@@ -120,7 +123,9 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
      */
     boolean isWhiteList(String path, HttpMethod method) {
         if (HttpMethod.POST.equals(method) && ("/api/user/register".equals(path)
-                || "/api/user/login".equals(path))) {
+                || "/api/user/login".equals(path)
+                || "/api/user/forgot-password".equals(path)
+                || "/api/user/reset-password".equals(path))) {
             return true;
         }
         if (HttpMethod.GET.equals(method) && ("/api/product/list".equals(path)
@@ -147,14 +152,16 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
         if (HttpMethod.GET.equals(method) && USER_FOLLOW_LIST_PATTERN.matcher(path).matches()) {
             return true;
         }
-        // 话题帖子：列表、按用户、详情
-        if (HttpMethod.GET.equals(method) && TOPIC_POST_LIST_PATTERN.matcher(path).matches()) {
+        // 话题帖子：列表、Feed、热榜、按用户、详情、评论列表
+        if (HttpMethod.GET.equals(method) && (TOPIC_POST_LIST_PATTERN.matcher(path).matches()
+                || TOPIC_POST_FEED_PATTERN.matcher(path).matches()
+                || TOPIC_POST_TRENDING_PATTERN.matcher(path).matches()
+                || TOPIC_POST_BY_USER_PATTERN.matcher(path).matches()
+                || TOPIC_POST_DETAIL_PATTERN.matcher(path).matches()
+                || TOPIC_POST_COMMENTS_PATTERN.matcher(path).matches())) {
             return true;
         }
-        if (HttpMethod.GET.equals(method) && TOPIC_POST_BY_USER_PATTERN.matcher(path).matches()) {
-            return true;
-        }
-        return HttpMethod.GET.equals(method) && TOPIC_POST_DETAIL_PATTERN.matcher(path).matches();
+        return false;
     }
 
     /**

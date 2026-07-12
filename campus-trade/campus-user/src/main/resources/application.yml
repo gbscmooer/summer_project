@@ -16,6 +16,10 @@ spring:
 
 campus:
   internal-api-token: ${INTERNAL_API_TOKEN:}
+  mail:
+    resend-api-key: ${RESEND_API_KEY:}
+    from: ${RESEND_FROM:Campus Market <onboarding@resend.dev>}
+    public-base-url: ${PUBLIC_BASE_URL:http://127.0.0.1:8080}
 
 mybatis-plus:
   configuration:

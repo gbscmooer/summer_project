@@ -1,0 +1,27 @@
+package com.campus.user.entity;
+
+import com.baomidou.mybatisplus.annotation.FieldFill;
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
+import lombok.Data;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+
+@Data
+@TableName("t_daily_like_quest")
+public class DailyLikeQuest {
+    @TableId(type = IdType.AUTO)
+    private Long id;
+    private Long userId;
+    private LocalDate questDate;
+    private Integer likeCount;
+    /** 0-未领奖 1-已领奖 */
+    private Integer rewarded;
+    @TableField(fill = FieldFill.INSERT)
+    private LocalDateTime createTime;
+    @TableField(fill = FieldFill.INSERT_UPDATE)
+    private LocalDateTime updateTime;
+}

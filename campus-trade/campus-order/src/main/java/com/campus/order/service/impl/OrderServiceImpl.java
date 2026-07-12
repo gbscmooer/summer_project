@@ -190,16 +190,79 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void pay(Long buyerId, Long orderId) {
         Order order = getOwnedOrder(buyerId, orderId);
+        int points = toPoints(order.getPrice());
+        if (points < 0) {
+            throw new BizException(ResultCode.BAD_REQUEST.getCode(), "订单积分无效");
+        }
+
+        // 0 积分订单：无需划转，仅推进状态（新手礼包等）
+        boolean needTransfer = points > 0;
+        com.campus.order.feign.dto.PointsTransferRequest transfer = null;
+        if (needTransfer) {
+            transfer = new com.campus.order.feign.dto.PointsTransferRequest();
+            transfer.setFromUserId(order.getBuyerId());
+            transfer.setToUserId(order.getSellerId());
+            transfer.setAmount(points);
+            transfer.setReason("ORDER_PAY");
+            transfer.setRefType("ORDER");
+            transfer.setRefId(String.valueOf(order.getId()));
+        }
+
+        // 已支付：幂等补齐积分划转后直接返回（崩溃自愈）
+        if (order.getStatus() != null && order.getStatus() == STATUS_PAID) {
+            if (needTransfer) {
+                unwrap(userFeign.transferPoints(transfer));
+            }
+            return;
+        }
+        if (order.getStatus() == null || order.getStatus() != STATUS_UNPAID) {
+            throw new BizException(ResultCode.ORDER_STATUS_INVALID);
+        }
+
+        // 先 CAS 占住 PAID，避免「先扣积分再更新」与取消订单竞态导致丢积分
         boolean updated = lambdaUpdate()
                 .eq(Order::getId, orderId)
                 .eq(Order::getStatus, STATUS_UNPAID)
                 .set(Order::getStatus, STATUS_PAID)
                 .update();
         if (!updated) {
+            Order latest = getById(orderId);
+            if (latest != null && latest.getStatus() != null && latest.getStatus() == STATUS_PAID
+                    && buyerId.equals(latest.getBuyerId())) {
+                if (needTransfer) {
+                    unwrap(userFeign.transferPoints(transfer));
+                }
+                return;
+            }
             throw new BizException(ResultCode.ORDER_STATUS_INVALID);
         }
+
+        if (!needTransfer) {
+            return;
+        }
+
+        try {
+            unwrap(userFeign.transferPoints(transfer));
+        } catch (RuntimeException ex) {
+            // 划转失败则回滚订单状态，避免「已付款但未扣积分」
+            lambdaUpdate()
+                    .eq(Order::getId, orderId)
+                    .eq(Order::getStatus, STATUS_PAID)
+                    .set(Order::getStatus, STATUS_UNPAID)
+                    .update();
+            throw ex;
+        }
+    }
+
+    /** 将订单成交积分（DECIMAL）转为整数积分。 */
+    private static int toPoints(BigDecimal price) {
+        if (price == null) {
+            return 0;
+        }
+        return price.setScale(0, java.math.RoundingMode.HALF_UP).intValue();
     }
 
     @Override

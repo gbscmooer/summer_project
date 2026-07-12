@@ -4,6 +4,14 @@
       <h1 class="page-title">Publish</h1>
     </div>
 
+    <el-alert
+      type="info"
+      :closable="false"
+      show-icon
+      class="quota-alert"
+      title="仅商家与管理员可发布商品。普通用户请先完成商家认证。"
+    />
+
     <p class="oa-section-desc">上传几张商品实拍图，让 AI 先生成标题、描述、成色和站内参考价；所有内容都可以修改后再发布。</p>
 
     <el-alert
@@ -75,9 +83,9 @@
 
       <div v-if="draftInfo" class="draft-result">
         <div>
-          <strong>建议售价 ¥{{ formatPrice(draftInfo.suggestedPrice) }}</strong>
+          <strong>建议售价 {{ formatPoints(draftInfo.suggestedPrice) }}</strong>
           <span v-if="draftInfo.marketPriceLow != null">
-            站内参考 ¥{{ formatPrice(draftInfo.marketPriceLow) }}–{{ formatPrice(draftInfo.marketPriceHigh) }}
+            站内参考 {{ formatPoints(draftInfo.marketPriceLow) }}–{{ formatPoints(draftInfo.marketPriceHigh) }}
           </span>
           <span>{{ draftInfo.pricingBasis }}</span>
         </div>
@@ -350,9 +358,10 @@ function splitImages(images) {
   return (images || '').split(',').map((value) => value.trim()).filter(Boolean)
 }
 
-function formatPrice(price) {
+function formatPoints(price) {
   const value = Number(price)
-  return Number.isFinite(value) ? value.toFixed(2) : '--'
+  const n = Number.isFinite(value) ? (Number.isInteger(value) ? String(value) : value.toFixed(0)) : '--'
+  return `${n} ${t('common.pointsUnit')}`
 }
 
 function onReset() {

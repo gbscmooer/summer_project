@@ -22,7 +22,7 @@ class AiEndpointValidatorTest {
     @Test
     void appendsV1WhenBaseUrlHasNoPath() {
         org.junit.jupiter.api.Assertions.assertEquals(
-                "https://api.example.com/v1",
-                AiEndpointValidator.normalizeOpenAiCompatibleBaseUrl("https://api.example.com"));
+                "https://api.deepseek.com/v1",
+                AiEndpointValidator.normalizeOpenAiCompatibleBaseUrl("https://api.deepseek.com"));
     }
 }

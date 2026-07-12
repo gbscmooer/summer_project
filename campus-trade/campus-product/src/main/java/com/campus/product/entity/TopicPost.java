@@ -22,6 +22,15 @@ public class TopicPost {
 
     private String content;
 
+    private Integer upvoteCount;
+
+    private Integer commentCount;
+
+    private Integer tipTotal;
+
+    /** 0-关闭打赏 1-开启打赏 */
+    private Integer tipEnabled;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
 

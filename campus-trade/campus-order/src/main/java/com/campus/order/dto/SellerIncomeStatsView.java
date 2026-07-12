@@ -6,7 +6,7 @@ import java.math.BigDecimal;
 
 @Data
 public class SellerIncomeStatsView {
-    /** 累计成交额（已付款 + 已完成） */
+    /** 累计成交积分（已付款 + 已完成） */
     private BigDecimal totalRevenue;
     private long completedOrders;
     private long pendingPaymentOrders;

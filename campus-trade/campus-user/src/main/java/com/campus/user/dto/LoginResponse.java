@@ -10,8 +10,10 @@ public class LoginResponse {
     private Long userId;
     private String nickname;
     private String avatar;
-    /** 0-普通用户 1-管理员 */
+    /** 0-个人账户 1-管理员 2-商家 */
     private Integer role;
     /** 1-已完成新手教程 */
     private Integer onboardingCompleted;
+    /** 积分余额 */
+    private Integer points;
 }

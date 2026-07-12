@@ -9,4 +9,6 @@ import lombok.Data;
 public class UserBriefDTO {
     private Long userId;
     private String nickname;
+    private String avatar;
+    private String bio;
 }

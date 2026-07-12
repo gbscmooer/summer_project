@@ -25,5 +25,17 @@ class AuthGlobalFilterSecurityTest {
         assertFalse(filter.isWhiteList("/api/user/login", HttpMethod.GET));
         assertTrue(filter.isWhiteList("/api/product/list", HttpMethod.GET));
         assertFalse(filter.isWhiteList("/api/product/list", HttpMethod.POST));
+        assertTrue(filter.isWhiteList("/api/topic/posts/feed", HttpMethod.GET));
+        assertFalse(filter.isWhiteList("/api/topic/posts/feed", HttpMethod.POST));
+        assertTrue(filter.isWhiteList("/api/topic/posts/trending", HttpMethod.GET));
+        assertTrue(filter.isWhiteList("/api/topic/posts/1/comments", HttpMethod.GET));
+        assertFalse(filter.isWhiteList("/api/topic/posts/1/comments", HttpMethod.POST));
+        assertTrue(filter.isWhiteList("/api/user/forgot-password", HttpMethod.POST));
+        assertFalse(filter.isWhiteList("/api/user/forgot-password", HttpMethod.GET));
+        assertTrue(filter.isWhiteList("/api/user/reset-password", HttpMethod.POST));
+        assertTrue(filter.isWhiteList("/api/user/profile/1", HttpMethod.GET));
+        assertFalse(filter.isWhiteList("/api/user/profile/1", HttpMethod.POST));
+        assertTrue(filter.isWhiteList("/api/topic/posts/by-user/1", HttpMethod.GET));
+        assertFalse(filter.isWhiteList("/api/user/follow/1", HttpMethod.POST));
     }
 }

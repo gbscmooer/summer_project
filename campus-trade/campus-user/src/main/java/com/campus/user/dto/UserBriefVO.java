@@ -10,4 +10,6 @@ import lombok.NoArgsConstructor;
 public class UserBriefVO {
     private Long userId;
     private String nickname;
+    private String avatar;
+    private String bio;
 }

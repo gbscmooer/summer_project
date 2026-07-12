@@ -5,7 +5,7 @@ package com.campus.common.constant;
  */
 public final class UserRole {
 
-    /** 个人账户（默认注册角色，发布数量有限额） */
+    /** 个人账户（默认注册角色，不可发布商品） */
     public static final int USER = 0;
     /** 管理员 */
     public static final int ADMIN = 1;
@@ -23,7 +23,13 @@ public final class UserRole {
         return role == ADMIN;
     }
 
-    public static boolean hasUnlimitedPublish(int role) {
+    /** 商家或管理员可发布商品。 */
+    public static boolean canPublish(int role) {
         return role == ADMIN || role == MERCHANT;
+    }
+
+    /** @deprecated 使用 {@link #canPublish(int)} */
+    public static boolean hasUnlimitedPublish(int role) {
+        return canPublish(role);
     }
 }

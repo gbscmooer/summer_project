@@ -69,7 +69,7 @@ class AiSettingsServiceImplTest {
 
         AiRuntimeSettings settings = service.resolve();
         assertEquals("admin", settings.getSource());
-        assertEquals("https://api.deepseek.com", settings.getBaseUrl());
+        assertEquals("https://api.deepseek.com/v1", settings.getBaseUrl());
         assertEquals("admin-key-123456", settings.getApiKey());
         assertFalse(settings.isSupportsVision());
     }

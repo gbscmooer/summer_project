@@ -5,6 +5,7 @@ import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.core.QueueBuilder;
 import org.springframework.amqp.core.TopicExchange;
+import org.springframework.amqp.support.converter.DefaultJackson2JavaTypeMapper;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.context.annotation.Bean;
@@ -103,9 +104,13 @@ public class RabbitMQConfig {
                 .with(SECKILL_DLQ_ROUTING_KEY);
     }
 
-    // 消息序列化器，使用 JSON 格式
+    // 消息序列化器：信任本服务 DTO 包，避免秒杀消息反序列化失败导致一直 queuing
     @Bean
     public MessageConverter messageConverter() {
-        return new Jackson2JsonMessageConverter();
+        Jackson2JsonMessageConverter converter = new Jackson2JsonMessageConverter();
+        DefaultJackson2JavaTypeMapper typeMapper = new DefaultJackson2JavaTypeMapper();
+        typeMapper.setTrustedPackages("com.campus.order.dto", "com.campus.order", "java.util", "java.lang");
+        converter.setJavaTypeMapper(typeMapper);
+        return converter;
     }
 }

@@ -29,7 +29,6 @@ import com.campus.product.mapper.StockRestoreLogMapper;
 import com.campus.product.service.ProductService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.elasticsearch.client.elc.ElasticsearchTemplate;
@@ -69,9 +68,6 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
     private final StockDeductionLogMapper stockDeductionLogMapper;
     private final StockRestoreLogMapper stockRestoreLogMapper;
 
-    @Value("${campus.product.personal-publish-limit:5}")
-    private int personalPublishLimit;
-
     private static final ZoneId ZONE = ZoneId.systemDefault();
 
     private final ConcurrentHashMap<Long, Object> localLocks = new ConcurrentHashMap<>();
@@ -99,7 +95,7 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
 
     @Override
     public Long publish(Long sellerId, ProductRequest request) {
-        enforcePublishQuota(sellerId);
+        requireMerchantOrAdmin(sellerId);
         Product product = new Product();
         product.setSellerId(sellerId);
         product.setTitle(request.getTitle());
@@ -799,14 +795,14 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
         PublishQuotaVO vo = new PublishQuotaVO();
         vo.setRole(role);
         vo.setUsed(used);
-        if (UserRole.hasUnlimitedPublish(role)) {
+        if (UserRole.canPublish(role)) {
             vo.setUnlimited(true);
             vo.setLimit(-1);
             vo.setRemaining(-1);
         } else {
             vo.setUnlimited(false);
-            vo.setLimit(personalPublishLimit);
-            vo.setRemaining(Math.max(0, personalPublishLimit - used));
+            vo.setLimit(0);
+            vo.setRemaining(0);
         }
         return vo;
     }
@@ -865,19 +861,15 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
         return dashboard;
     }
 
-    private void enforcePublishQuota(Long sellerId) {
+    private void requireMerchantOrAdmin(Long sellerId) {
         int role = resolveUserRole(sellerId);
-        if (UserRole.hasUnlimitedPublish(role)) {
-            return;
-        }
-        int used = countActiveListings(sellerId);
-        if (used >= personalPublishLimit) {
-            throw new BizException(ResultCode.PRODUCT_PUBLISH_LIMIT);
+        if (!UserRole.canPublish(role)) {
+            throw new BizException(ResultCode.PRODUCT_PUBLISH_MERCHANT_ONLY);
         }
     }
 
     private int countActiveListings(Long sellerId) {
-        // 仅统计在售（status=1）；已售/已下架不占用个人发布配额
+        // 统计在售（status=1）商品数，供发布配额展示
         return toIntCount(lambdaQuery()
                 .eq(Product::getSellerId, sellerId)
                 .eq(Product::getStatus, 1)

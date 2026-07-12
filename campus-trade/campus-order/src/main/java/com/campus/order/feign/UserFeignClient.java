@@ -1,9 +1,12 @@
 package com.campus.order.feign;
 
 import com.campus.common.result.Result;
+import com.campus.order.feign.dto.PointsTransferRequest;
 import com.campus.order.feign.dto.UserBriefDTO;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 
 import java.util.List;
@@ -30,4 +33,8 @@ public interface UserFeignClient {
 
     @GetMapping("/user/internal/resolve-usernames")
     Result<List<Long>> resolveUserIdsByUsernames(@RequestParam("usernames") String usernames);
+
+    /** 订单支付：扣买家积分、加卖家积分。 */
+    @PostMapping("/user/internal/points/transfer")
+    Result<Void> transferPoints(@RequestBody PointsTransferRequest request);
 }

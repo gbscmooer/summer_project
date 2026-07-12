@@ -13,7 +13,7 @@ import java.time.LocalDateTime;
 /**
  * 订单实体，对应 {@code t_order} 表。
  *
- * <p>下单时冗余商品标题、价格、卖家 ID，避免后续展示订单时还要回查商品服务，
+ * <p>下单时冗余商品标题、成交积分、卖家 ID，避免后续展示订单时还要回查商品服务，
  * 也保证商品被删改后订单仍能完整显示成交快照。
  */
 @Data
@@ -34,7 +34,7 @@ public class Order {
     /** 冗余：下单时的商品标题（成交快照）。 */
     private String productTitle;
 
-    /** 冗余：下单时的成交价。 */
+    /** 冗余：下单时的成交积分（非货币）。 */
     private BigDecimal price;
 
     private Long buyerId;

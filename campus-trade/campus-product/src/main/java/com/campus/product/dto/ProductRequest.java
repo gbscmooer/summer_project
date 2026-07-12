@@ -13,8 +13,8 @@ public class ProductRequest {
 
     private String description;
 
-    @NotNull(message = "价格不能为空")
-    @DecimalMin(value = "0.01", message = "价格必须大于0")
+    @NotNull(message = "积分不能为空")
+    @DecimalMin(value = "1", message = "积分必须大于等于1")
     private BigDecimal price;
 
     private String images;

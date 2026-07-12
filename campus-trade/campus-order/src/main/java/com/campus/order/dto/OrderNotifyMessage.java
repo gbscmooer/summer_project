@@ -23,7 +23,7 @@ public class OrderNotifyMessage implements Serializable {
     private Long productId;
     /** 商品标题。 */
     private String productTitle;
-    /** 成交价。 */
+    /** 成交积分。 */
     private BigDecimal price;
     /** 买家 ID。 */
     private Long buyerId;

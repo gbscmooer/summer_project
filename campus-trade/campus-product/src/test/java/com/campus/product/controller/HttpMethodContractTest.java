@@ -16,6 +16,7 @@ class HttpMethodContractTest {
         assertNoForbiddenMappings(ProductController.class);
         assertNoForbiddenMappings(ProductCommentController.class);
         assertNoForbiddenMappings(TopicPostController.class);
+        assertNoForbiddenMappings(TopicCommentController.class);
         assertNoForbiddenMappings(UserActivityController.class);
         assertNoForbiddenMappings(ProductImageController.class);
         assertNoForbiddenMappings(AiController.class);

@@ -166,18 +166,10 @@ router.beforeEach((to, from, next) => {
     return
   }
   if (to.meta && to.meta.requiresMerchant && !userStore.isMerchant && !userStore.isAdmin) {
-    // #region agent log
-    fetch('http://127.0.0.1:7501/ingest/f641b816-8cb3-4a71-8e01-1ebe67abf391',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b6299b'},body:JSON.stringify({sessionId:'b6299b',runId:'post-fix',hypothesisId:'H1',location:'router/index.js:beforeEach',message:'merchant guard blocked',data:{path:to.path,role:userStore.role},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     ElMessage.warning('需要商家认证后才能访问，请先申请成为商家')
     next({ path: '/events' })
     return
   }
-  // #region agent log
-  if (to.path === '/orders') {
-    fetch('http://127.0.0.1:7501/ingest/f641b816-8cb3-4a71-8e01-1ebe67abf391',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b6299b'},body:JSON.stringify({sessionId:'b6299b',runId:'post-fix',hypothesisId:'H1',location:'router/index.js:beforeEach',message:'orders route allowed',data:{path:to.path,role:userStore.role,isLogin:userStore.isLogin,requiresMerchant:!!to.meta?.requiresMerchant},timestamp:Date.now()})}).catch(()=>{});
-  }
-  // #endregion
   next()
 })
 

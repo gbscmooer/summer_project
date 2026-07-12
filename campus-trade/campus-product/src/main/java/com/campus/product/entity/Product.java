@@ -13,6 +13,7 @@ public class Product {
     private Long id;
     private String title;
     private String description;
+    /** 所需积分（非货币） */
     private BigDecimal price;
     private String images;
     private String category;

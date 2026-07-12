@@ -1,0 +1,9 @@
+# Campus Market — Let's Encrypt TLS reverse proxy
+summer.huangzixuan.asia {
+	encode gzip
+	reverse_proxy 127.0.0.1:8080 {
+		header_up X-Forwarded-Proto {scheme}
+		header_up X-Forwarded-Host {host}
+		header_up X-Real-IP {remote_host}
+	}
+}

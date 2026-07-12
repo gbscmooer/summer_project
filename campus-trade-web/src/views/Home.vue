@@ -1,14 +1,43 @@
 <template>
   <div class="home-page">
-    <!-- 页头 -->
     <div class="home-header">
-      <h1 class="home-title">Home</h1>
+      <h1 class="home-title">{{ t('home.title') }}</h1>
     </div>
 
+    <!-- 搜索区 -->
+    <section class="search-hero">
+      <el-input
+        v-model="keyword"
+        :placeholder="searchPlaceholder"
+        clearable
+        size="large"
+        class="hero-search"
+        @keyup.enter="runSearch"
+      >
+        <template #prefix>
+          <el-icon><Search /></el-icon>
+        </template>
+        <template #append>
+          <el-button :icon="Search" @click="runSearch">{{ t('home.search') }}</el-button>
+        </template>
+      </el-input>
+      <div class="mode-row">
+        <button
+          v-for="m in searchModes"
+          :key="m.id"
+          type="button"
+          class="mode-btn"
+          :class="{ active: searchMode === m.id }"
+          @click="setSearchMode(m.id)"
+        >
+          {{ t(m.labelKey) }}
+        </button>
+      </div>
+    </section>
+
     <div class="home-grid">
-      <!-- 左栏主内容 -->
       <div class="home-main">
-        <!-- 新手教程（仅新注册用户可见） -->
+        <!-- 新手教程 -->
         <section v-if="onboardingVisible" class="section onboarding-section">
           <div class="onboarding-head">
             <div>
@@ -49,12 +78,12 @@
             </div>
 
             <div class="promo-cards">
-              <div class="promo-card" @click="$router.push('/publish')">
+              <div class="promo-card" @click="goPublishOrEvents">
                 <div class="promo-card-bg promo-bg-1" />
                 <span class="promo-card-title">{{ t('onboarding.promoPublish') }}</span>
                 <el-icon class="promo-arrow"><ArrowRight /></el-icon>
               </div>
-              <div class="promo-card" @click="handleSearch">
+              <div class="promo-card" @click="setSearchMode('products'); keyword = ''; runSearch()">
                 <div class="promo-card-bg promo-bg-2" />
                 <span class="promo-card-title">{{ t('onboarding.promoBrowse') }}</span>
                 <el-icon class="promo-arrow"><ArrowRight /></el-icon>
@@ -66,101 +95,25 @@
               >
                 <div class="promo-card-bg promo-bg-3" />
                 <span class="promo-card-title">{{ t('onboarding.promoTutorial') }}</span>
-                <span class="promo-card-badge">¥0 · 限购2</span>
+                <span class="promo-card-badge">0 {{ t('common.pointsUnit') }}</span>
                 <el-icon class="promo-arrow"><ArrowRight /></el-icon>
               </div>
             </div>
           </div>
         </section>
 
-        <!-- 统计卡片行 -->
-        <section class="stats-row">
-          <div class="stat-card">
-            <div class="stat-head">
-              <span class="stat-label">Total listings</span>
-              <el-icon class="stat-info"><InfoFilled /></el-icon>
-            </div>
-            <div class="stat-value">{{ stats.totalListings }}</div>
+        <!-- 商品搜索结果 -->
+        <section v-if="resultMode === 'products'" class="section">
+          <div class="feed-head">
+            <h2 class="section-title">{{ t('home.productResults') }}</h2>
+            <button type="button" class="text-btn" @click="backToFeed">{{ t('home.backToFeed') }}</button>
           </div>
-        </section>
-
-        <!-- Safety insights 横幅 -->
-        <section v-if="showBanner" class="insights-banner">
-          <div class="banner-inner">
-            <div class="banner-header">
-              <h3 class="banner-title">Introducing safety insights</h3>
-              <button type="button" class="dismiss-btn" @click="showBanner = false">关闭</button>
-            </div>
-            <p class="banner-desc">校园集市现已支持交易安全提醒，保障每一笔闲置交易。</p>
-            <div class="banner-footer">
-              <button type="button" class="banner-btn">了解更多</button>
-            </div>
-          </div>
-        </section>
-
-        <!-- Recommended -->
-        <section class="section">
-          <h2 class="section-title">Recommended listings</h2>
-          <div v-loading="loading" class="recommended-grid">
+          <div v-loading="productLoading" class="product-grid">
             <div
-              v-for="item in recommendedList"
-              :key="item.productId"
-              class="model-card"
-              @click="goDetail(item.productId)"
-            >
-              <div class="model-cover">
-                <el-image :src="item.cover" fit="cover" class="model-img">
-                  <template #error>
-                    <div class="model-placeholder"><el-icon :size="28"><Picture /></el-icon></div>
-                  </template>
-                </el-image>
-              </div>
-              <div class="model-info">
-                <span class="model-name">{{ item.title }}</span>
-                <span class="model-price">¥{{ formatPrice(item.price) }}</span>
-              </div>
-            </div>
-            <div v-if="!loading && recommendedList.length === 0" class="empty-hint">
-              暂无推荐商品
-            </div>
-          </div>
-        </section>
-
-        <!-- 商品浏览区 -->
-        <section class="section browse-section">
-          <h2 class="section-title">Browse marketplace</h2>
-
-          <div class="search-bar">
-            <el-input
-              v-model="keyword"
-              placeholder="Search listings..."
-              clearable
-              class="oa-search"
-              @keyup.enter="handleSearch"
-            >
-              <template #prefix>
-                <el-icon><Search /></el-icon>
-              </template>
-            </el-input>
-            <div class="filter-pills">
-              <button
-                v-for="cat in ['', ...categories]"
-                :key="cat || 'all'"
-                class="filter-pill"
-                :class="{ active: activeCategory === cat }"
-                @click="setCategory(cat)"
-              >
-                {{ cat || 'All' }}
-              </button>
-            </div>
-          </div>
-
-          <div v-loading="loading" class="product-grid">
-            <div
-              v-for="item in list"
+              v-for="item in productList"
               :key="item.productId"
               class="product-card"
-              @click="goDetail(item.productId)"
+              @click="goProduct(item.productId)"
             >
               <div class="product-cover">
                 <el-image :src="item.cover" fit="cover" class="product-img">
@@ -172,37 +125,69 @@
               <div class="product-info">
                 <div class="product-title">{{ item.title }}</div>
                 <div class="product-meta">
-                  <span class="product-price">¥{{ formatPrice(item.price) }}</span>
+                  <span class="product-price">{{ formatPoints(item.price) }}</span>
                   <span class="product-cat">{{ item.category }}</span>
                 </div>
               </div>
             </div>
+            <div v-if="!productLoading && productList.length === 0" class="empty-hint">
+              {{ t('home.noProducts') }}
+            </div>
+          </div>
+        </section>
+
+        <!-- Feed -->
+        <section v-else class="section">
+          <div class="feed-head">
+            <h2 class="section-title">{{ t('home.feedTitle') }}</h2>
+            <el-button size="small" :loading="feedLoading" @click="refreshFeed">
+              <el-icon class="refresh-icon"><Refresh /></el-icon>
+              {{ t('home.refreshFeed') }}
+            </el-button>
           </div>
 
-          <div v-if="total > pageSize" class="pagination-row">
-            <el-pagination
-              v-model:current-page="pageNum"
-              v-model:page-size="pageSize"
-              :total="total"
-              :page-sizes="[8, 16, 24]"
-              layout="total, prev, pager, next"
-              background
-              @current-change="fetchList"
-              @size-change="onSizeChange"
-            />
+          <div v-loading="feedLoading" class="feed-list">
+            <article
+              v-for="post in feedPosts"
+              :key="post.postId"
+              class="feed-card"
+              @click="goTopic(post.postId)"
+            >
+              <h3 class="feed-card-title">{{ post.title }}</h3>
+              <p v-if="previewText(post.content)" class="feed-card-preview">{{ previewText(post.content) }}</p>
+              <div class="feed-card-meta">
+                <span>{{ authorName(post) }}</span>
+                <span class="meta-dot">·</span>
+                <span>{{ t('topics.upvoteCount').replace('{n}', post.upvoteCount || 0) }}</span>
+                <span class="meta-dot">·</span>
+                <span>{{ t('topics.commentCount').replace('{n}', post.commentCount || 0) }}</span>
+              </div>
+            </article>
+            <div v-if="!feedLoading && feedPosts.length === 0" class="empty-hint">
+              {{ t('home.feedEmpty') }}
+            </div>
           </div>
         </section>
       </div>
 
-      <!-- 右栏 Updates -->
+      <!-- 右侧栏 -->
       <aside class="home-aside">
-        <h2 class="aside-title">Updates</h2>
-        <div class="updates-list">
-          <div v-for="(u, i) in updates" :key="i" class="update-item">
-            <span class="update-date">{{ u.date }}</span>
-            <h4 class="update-headline">{{ u.title }}</h4>
-            <p class="update-desc">{{ u.desc }}</p>
+        <div class="aside-card">
+          <h2 class="aside-title">{{ t('home.announcements') }}</h2>
+          <div class="aside-list">
+            <div v-for="(u, i) in announcements" :key="i" class="aside-item">
+              <span class="aside-date">{{ u.date }}</span>
+              <h4 class="aside-headline">{{ u.title }}</h4>
+              <p class="aside-desc">{{ u.desc }}</p>
+            </div>
           </div>
+          <router-link class="aside-link" to="/notifications">{{ t('home.viewNotifications') }}</router-link>
+        </div>
+
+        <div class="aside-card">
+          <h2 class="aside-title">{{ t('home.eventsTitle') }}</h2>
+          <p class="aside-desc">{{ eventsSummary }}</p>
+          <router-link class="aside-cta" to="/events">{{ t('home.goEvents') }}</router-link>
         </div>
       </aside>
     </div>
@@ -212,12 +197,15 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { Check, ArrowRight, Search, Picture, InfoFilled } from '@element-plus/icons-vue'
-import { getProductList, searchProducts } from '@/api/product'
-import { CATEGORIES } from '@/constants/product'
+import { ElMessage } from 'element-plus'
+import { Check, ArrowRight, Search, Picture, Refresh } from '@element-plus/icons-vue'
+import { searchProducts, getProductList } from '@/api/product'
+import { getFeed, listTopicPosts } from '@/api/topic'
+import { getEventsStatus } from '@/api/points'
 import { useUserStore } from '@/store/user'
 import { useI18n } from '@/i18n'
 import { useOnboarding } from '@/composables/useOnboarding'
+import { htmlToPlainText } from '@/utils/sanitizeHtml'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -229,111 +217,220 @@ const onboardingProgressPercent = onboarding.progressPercent
 const onboardingCompletedCount = onboarding.completedCount
 const onboardingTotalCount = onboarding.totalCount
 const onboardingTutorialProductId = onboarding.tutorialProductId
-const categories = CATEGORIES
 
-const showBanner = ref(true)
-
-const loading = ref(false)
-const list = ref([])
-const total = ref(0)
-const pageNum = ref(1)
-const pageSize = ref(8)
-const activeCategory = ref('')
 const keyword = ref('')
+const searchMode = ref('posts')
+const resultMode = ref('feed')
 
-const stats = ref({
-  totalListings: 0
-})
+const feedLoading = ref(false)
+const feedPosts = ref([])
+const productLoading = ref(false)
+const productList = ref([])
 
-const recommendedList = computed(() => list.value.slice(0, 4))
+const eventsStatus = ref(null)
 
-const updates = [
-  {
-    date: '2 months ago',
-    title: 'Campus Market v2.0 — 全新交易体验',
-    desc: 'Campus Market v2.0 带来更流畅的发布流程与订单追踪，让校园闲置交易更简单。'
-  },
-  {
-    date: '3 months ago',
-    title: 'Introducing instant notifications',
-    desc: '实时消息推送，订单状态变更第一时间通知买卖双方。'
-  },
-  {
-    date: '5 months ago',
-    title: 'Multi-category search',
-    desc: '支持按分类和关键词搜索，快速找到心仪好物。'
-  }
+const searchModes = [
+  { id: 'posts', labelKey: 'home.modePosts' },
+  { id: 'products', labelKey: 'home.modeProducts' },
+  { id: 'ai', labelKey: 'home.modeAi' },
+  { id: 'create', labelKey: 'home.modeCreate' }
 ]
 
-function formatPrice(price) {
+const searchPlaceholder = computed(() => {
+  if (searchMode.value === 'products') return t('home.searchProductsPlaceholder')
+  if (searchMode.value === 'ai') return t('home.searchAiPlaceholder')
+  return t('home.searchPostsPlaceholder')
+})
+
+const announcements = computed(() => [
+  {
+    date: t('home.announce1Date'),
+    title: t('home.announce1Title'),
+    desc: t('home.announce1Desc')
+  },
+  {
+    date: t('home.announce2Date'),
+    title: t('home.announce2Title'),
+    desc: t('home.announce2Desc')
+  }
+])
+
+const eventsSummary = computed(() => {
+  if (!userStore.isLogin) return t('home.eventsGuest')
+  const s = eventsStatus.value
+  if (!s) return t('home.eventsLoading')
+  if (s.checkedInToday) return t('home.eventsCheckedIn').replace('{pts}', String(s.points ?? userStore.points))
+  return t('home.eventsNotCheckedIn').replace('{pts}', String(s.points ?? userStore.points))
+})
+
+function formatPoints(price) {
   const n = Number(price)
-  return Number.isFinite(n) ? n.toFixed(2) : price
+  const value = Number.isFinite(n) ? (Number.isInteger(n) ? String(n) : n.toFixed(0)) : String(price ?? 0)
+  return `${value} ${t('common.pointsUnit')}`
 }
 
-async function fetchList() {
-  loading.value = true
-  try {
-    const params = {
-      pageNum: pageNum.value,
-      pageSize: pageSize.value
-    }
-    if (activeCategory.value) params.category = activeCategory.value
+function authorName(post) {
+  return post.nickname || (post.userId ? `用户 #${post.userId}` : t('topics.anonymous'))
+}
 
+function previewText(content) {
+  const text = htmlToPlainText(content || '')
+  if (!text) return ''
+  return text.length > 140 ? `${text.slice(0, 140)}…` : text
+}
+
+function shuffle(arr) {
+  const a = [...arr]
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[a[i], a[j]] = [a[j], a[i]]
+  }
+  return a
+}
+
+function requireLogin(redirect) {
+  if (userStore.isLogin) return true
+  ElMessage.info(t('home.loginRequired'))
+  router.push({ path: '/login', query: { redirect } })
+  return false
+}
+
+function setSearchMode(id) {
+  searchMode.value = id
+  if (id === 'ai') {
+    if (!requireLogin('/ai-shopping')) return
+    router.push('/ai-shopping')
+    return
+  }
+  if (id === 'create') {
+    if (!requireLogin('/topics/create')) return
+    router.push('/topics/create')
+    return
+  }
+}
+
+function runSearch() {
+  if (searchMode.value === 'ai') {
+    setSearchMode('ai')
+    return
+  }
+  if (searchMode.value === 'create') {
+    setSearchMode('create')
+    return
+  }
+  if (searchMode.value === 'products') {
+    fetchProducts()
+    return
+  }
+  // 只搜帖子：有关键词跳话题页，否则过滤本地 feed
+  const q = keyword.value.trim()
+  if (q) {
+    router.push({ path: '/topics', query: { q } })
+    return
+  }
+  resultMode.value = 'feed'
+  refreshFeed()
+}
+
+async function fetchProducts() {
+  resultMode.value = 'products'
+  productLoading.value = true
+  try {
+    const params = { pageNum: 1, pageSize: 12 }
     let res
-    if (keyword.value) {
-      params.keyword = keyword.value
+    if (keyword.value.trim()) {
+      params.keyword = keyword.value.trim()
       res = await searchProducts(params)
     } else {
       res = await getProductList(params)
     }
-    list.value = res.data.list || []
-    total.value = res.data.total || 0
-    stats.value.totalListings = res.data.total || list.value.length
+    productList.value = res.data?.list || []
   } catch {
-    list.value = []
-    total.value = 0
+    productList.value = []
   } finally {
-    loading.value = false
+    productLoading.value = false
+  }
+  onboarding.trackStep('browse')
+}
+
+function backToFeed() {
+  resultMode.value = 'feed'
+  searchMode.value = 'posts'
+}
+
+async function refreshFeed() {
+  feedLoading.value = true
+  try {
+    let list = []
+    try {
+      const res = await getFeed({ size: 20 })
+      list = Array.isArray(res.data) ? res.data : (res.data?.list || [])
+    } catch {
+      const res = await listTopicPosts({ pageNum: 1, pageSize: 20 })
+      list = shuffle(res.data?.list || [])
+    }
+    // 若 feed 接口返回空数组但成功，仍展示空；若有关键词则前端过滤
+    const q = keyword.value.trim().toLowerCase()
+    if (q && searchMode.value === 'posts') {
+      list = list.filter((p) => {
+        const title = (p.title || '').toLowerCase()
+        const body = htmlToPlainText(p.content || '').toLowerCase()
+        return title.includes(q) || body.includes(q)
+      })
+    }
+    feedPosts.value = list
+  } catch {
+    feedPosts.value = []
+  } finally {
+    feedLoading.value = false
   }
 }
 
-function handleSearch() {
-  pageNum.value = 1
-  fetchList()
+function goTopic(id) {
+  router.push(`/topics/${id}`)
 }
 
-function setCategory(cat) {
-  activeCategory.value = cat
-  pageNum.value = 1
-  fetchList()
-}
-
-function onSizeChange() {
-  pageNum.value = 1
-  fetchList()
-}
-
-function goDetail(id) {
+function goProduct(id) {
   router.push(`/product/${id}`)
 }
 
+function goPublishOrEvents() {
+  if (userStore.isMerchant || userStore.isAdmin) {
+    router.push('/publish')
+  } else {
+    router.push('/events')
+  }
+}
+
+async function loadEventsSummary() {
+  if (!userStore.isLogin) {
+    eventsStatus.value = null
+    return
+  }
+  try {
+    const res = await getEventsStatus()
+    eventsStatus.value = res.data || null
+    if (res.data?.points != null) {
+      userStore.setUserInfo({ points: Number(res.data.points) })
+    }
+  } catch {
+    eventsStatus.value = null
+  }
+}
+
 onMounted(async () => {
-  await fetchList()
-  await onboarding.refresh()
+  await Promise.all([refreshFeed(), loadEventsSummary(), onboarding.refresh()])
   onboarding.trackStep('browse')
 })
 </script>
 
 <style scoped>
 .home-page {
-  max-width: 1200px;
+  max-width: 1100px;
 }
 
 .home-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 28px;
+  margin-bottom: 20px;
 }
 
 .home-title {
@@ -342,57 +439,147 @@ onMounted(async () => {
   letter-spacing: -0.02em;
 }
 
-.time-pills {
+.search-hero {
+  margin-bottom: 28px;
+}
+
+.hero-search {
+  width: 100%;
+}
+
+.mode-row {
   display: flex;
-  gap: 4px;
-  background: var(--oa-bg-elevated);
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.mode-btn {
+  padding: 6px 14px;
   border: 1px solid var(--oa-border-subtle);
   border-radius: 8px;
-  padding: 3px;
-}
-
-.time-pill {
-  padding: 5px 12px;
-  border: none;
-  background: transparent;
+  background: var(--oa-bg-sidebar);
   color: var(--oa-text-secondary);
   font-size: 13px;
-  border-radius: 6px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
 
-.time-pill:hover {
+.mode-btn:hover {
   color: var(--oa-text);
+  border-color: var(--oa-border);
 }
 
-.time-pill.active {
+.mode-btn.active {
   background: var(--oa-bg-hover);
   color: var(--oa-text);
+  border-color: var(--oa-border);
 }
 
 .home-grid {
   display: grid;
-  grid-template-columns: 1fr 280px;
-  gap: 40px;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 32px;
   align-items: start;
 }
 
 .section {
-  margin-bottom: 32px;
+  margin-bottom: 28px;
 }
 
 .section-title {
   font-size: 14px;
   font-weight: 500;
   color: var(--oa-text);
-  margin-bottom: 16px;
+  margin: 0;
 }
 
-/* Get started / 新手教程 */
+.feed-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.refresh-icon {
+  margin-right: 4px;
+}
+
+.text-btn {
+  border: none;
+  background: transparent;
+  color: var(--oa-text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.text-btn:hover {
+  color: var(--oa-text);
+}
+
+.feed-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 120px;
+}
+
+.feed-card {
+  padding: 16px 18px;
+  border: 1px solid var(--oa-border-subtle);
+  border-radius: var(--oa-radius);
+  background: var(--oa-bg-sidebar);
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.feed-card:hover {
+  border-color: var(--oa-border);
+}
+
+.feed-card-title {
+  font-size: 15px;
+  font-weight: 550;
+  margin: 0 0 6px;
+  line-height: 1.4;
+}
+
+.feed-card-preview {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: var(--oa-text-secondary);
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.feed-card-meta {
+  font-size: 12px;
+  color: var(--oa-text-muted);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.meta-dot {
+  opacity: 0.6;
+}
+
+.empty-hint {
+  text-align: center;
+  color: var(--oa-text-muted);
+  font-size: 13px;
+  padding: 32px 16px;
+}
+
+/* Onboarding — keep existing look */
 .onboarding-section {
   border: 1px solid var(--oa-border-subtle);
-  border-radius: var(--oa-radius-lg);
+  border-radius: var(--oa-radius-lg, var(--oa-radius));
   padding: 20px;
   background: var(--oa-bg-elevated);
 }
@@ -448,7 +635,7 @@ onMounted(async () => {
 
 .onboarding-progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #6366f1, #22c55e);
+  background: linear-gradient(90deg, #10a37f, #22c55e);
   border-radius: 999px;
   transition: width 0.3s ease;
 }
@@ -559,19 +746,19 @@ onMounted(async () => {
 .promo-card-bg {
   position: absolute;
   inset: 0;
-  opacity: 0.6;
+  opacity: 0.55;
 }
 
 .promo-bg-1 {
-  background: linear-gradient(135deg, #6366f1 0%, #ec4899 50%, #f97316 100%);
+  background: linear-gradient(135deg, #1a7f64 0%, #10a37f 50%, #34d399 100%);
 }
 
 .promo-bg-2 {
-  background: linear-gradient(135deg, #06b6d4 0%, #8b5cf6 50%, #f43f5e 100%);
+  background: linear-gradient(135deg, #374151 0%, #6b7280 50%, #9ca3af 100%);
 }
 
 .promo-bg-3 {
-  background: linear-gradient(135deg, #22c55e 0%, #14b8a6 50%, #0ea5e9 100%);
+  background: linear-gradient(135deg, #0f766e 0%, #14b8a6 50%, #5eead4 100%);
 }
 
 .promo-card-tutorial {
@@ -606,266 +793,12 @@ onMounted(async () => {
   z-index: 1;
 }
 
-/* Stats */
-.stats-row {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-  margin-bottom: 24px;
-}
-
-.stat-card {
-  background: var(--oa-bg-sidebar);
-  border: 1px solid var(--oa-border-subtle);
-  border-radius: var(--oa-radius);
-  padding: 16px;
-  min-height: 130px;
-  display: flex;
-  flex-direction: column;
-}
-
-.stat-card-yellow {
-  background: var(--oa-yellow-card);
-  border-color: #d4d0c8;
-}
-
-.stat-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-}
-
-.stat-label {
-  font-size: 13px;
-  color: var(--oa-text-secondary);
-}
-
-.stat-label.dark {
-  color: #666;
-}
-
-.stat-info {
-  font-size: 14px;
-  color: var(--oa-text-muted);
-}
-
-.stat-value {
-  font-size: 28px;
-  font-weight: 500;
-  color: var(--oa-text);
-  margin-bottom: 8px;
-}
-
-.stat-value.dark {
-  color: var(--oa-yellow-text);
-}
-
-.stat-chart {
-  width: 100%;
-  height: 36px;
-  margin-top: auto;
-}
-
-.yellow-btn {
-  margin-top: auto;
-  padding: 6px 14px;
-  background: #000;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  align-self: flex-start;
-}
-
-.yellow-btn:hover {
-  background: #333;
-}
-
-/* Banner */
-.insights-banner {
-  margin-bottom: 32px;
-}
-
-.banner-inner {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 18px 20px;
-  border-radius: var(--oa-radius);
-  background: linear-gradient(135deg, #fce7f3 0%, #fbcfe8 40%, #e9d5ff 100%);
-}
-
-.banner-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.banner-title {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-  color: #1a1a1a;
-  line-height: 1.4;
-}
-
-.dismiss-btn {
-  flex-shrink: 0;
-  margin-top: 1px;
-  padding: 2px 4px;
-  background: transparent;
-  border: none;
-  color: #666;
-  font-size: 13px;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: color 0.15s;
-}
-
-.dismiss-btn:hover {
-  color: #1a1a1a;
-}
-
-.banner-desc {
-  margin: 0;
-  font-size: 13px;
-  color: #444;
-  line-height: 1.5;
-  max-width: 52ch;
-}
-
-.banner-footer {
-  display: flex;
-  align-items: center;
-  margin-top: 4px;
-}
-
-.banner-btn {
-  padding: 8px 16px;
-  background: #000;
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background 0.15s;
-}
-
-.banner-btn:hover {
-  background: #333;
-}
-
-/* Recommended */
-.recommended-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-  min-height: 80px;
-}
-
-.model-card {
-  border: 1px solid var(--oa-border-subtle);
-  border-radius: var(--oa-radius);
-  overflow: hidden;
-  cursor: pointer;
-  transition: border-color 0.15s;
-}
-
-.model-card:hover {
-  border-color: var(--oa-border);
-}
-
-.model-cover {
-  aspect-ratio: 16/10;
-  background: var(--oa-bg-elevated);
-}
-
-.model-img {
-  width: 100%;
-  height: 100%;
-}
-
-.model-placeholder {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--oa-text-muted);
-}
-
-.model-info {
-  padding: 10px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.model-name {
-  font-size: 13px;
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.model-price {
-  font-size: 12px;
-  color: var(--oa-text-secondary);
-}
-
-.empty-hint {
-  grid-column: 1 / -1;
-  text-align: center;
-  color: var(--oa-text-muted);
-  font-size: 13px;
-  padding: 24px;
-}
-
-/* Browse */
-.search-bar {
-  margin-bottom: 16px;
-}
-
-.oa-search {
-  margin-bottom: 12px;
-}
-
-.filter-pills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.filter-pill {
-  padding: 5px 12px;
-  border: 1px solid var(--oa-border-subtle);
-  border-radius: 20px;
-  background: transparent;
-  color: var(--oa-text-secondary);
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.filter-pill:hover,
-.filter-pill.active {
-  background: var(--oa-bg-hover);
-  color: var(--oa-text);
-  border-color: var(--oa-border);
-}
-
+/* Products */
 .product-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 12px;
-  min-height: 120px;
+  min-height: 80px;
 }
 
 .product-card {
@@ -873,6 +806,7 @@ onMounted(async () => {
   border-radius: var(--oa-radius);
   overflow: hidden;
   cursor: pointer;
+  background: var(--oa-bg-sidebar);
   transition: border-color 0.15s;
 }
 
@@ -918,10 +852,11 @@ onMounted(async () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 8px;
 }
 
 .product-price {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
 }
 
@@ -930,58 +865,88 @@ onMounted(async () => {
   color: var(--oa-text-muted);
 }
 
-.pagination-row {
-  display: flex;
-  justify-content: center;
-  margin-top: 24px;
-}
-
-/* Aside Updates */
+/* Aside */
 .home-aside {
   position: sticky;
   top: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.aside-card {
+  padding: 16px;
+  border: 1px solid var(--oa-border-subtle);
+  border-radius: var(--oa-radius);
+  background: var(--oa-bg-sidebar);
 }
 
 .aside-title {
   font-size: 14px;
   font-weight: 500;
-  margin-bottom: 16px;
+  margin: 0 0 12px;
 }
 
-.updates-list {
+.aside-list {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 14px;
 }
 
-.update-item {
-  padding-bottom: 20px;
+.aside-item {
+  padding-bottom: 14px;
   border-bottom: 1px solid var(--oa-border-subtle);
 }
 
-.update-item:last-child {
+.aside-item:last-child {
   border-bottom: none;
+  padding-bottom: 0;
 }
 
-.update-date {
-  font-size: 12px;
+.aside-date {
+  font-size: 11px;
   color: var(--oa-text-muted);
 }
 
-.update-headline {
+.aside-headline {
   font-size: 13px;
   font-weight: 500;
-  margin: 6px 0 4px;
+  margin: 4px 0;
   line-height: 1.4;
 }
 
-.update-desc {
+.aside-desc {
   font-size: 12px;
   color: var(--oa-text-secondary);
   line-height: 1.5;
+  margin: 0 0 12px;
 }
 
-@media (max-width: 1100px) {
+.aside-link {
+  font-size: 13px;
+  color: var(--oa-text-secondary);
+}
+
+.aside-link:hover {
+  color: var(--oa-text);
+}
+
+.aside-cta {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 14px;
+  background: var(--oa-text);
+  color: var(--oa-on-primary);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.aside-cta:hover {
+  opacity: 0.9;
+}
+
+@media (max-width: 960px) {
   .home-grid {
     grid-template-columns: 1fr;
   }
@@ -990,8 +955,6 @@ onMounted(async () => {
     position: static;
   }
 
-  .stats-row,
-  .recommended-grid,
   .product-grid {
     grid-template-columns: repeat(2, 1fr);
   }

@@ -43,9 +43,9 @@
         <div class="intent-tags">
           <el-tag effect="plain">关键词：{{ result.intent?.keyword }}</el-tag>
           <el-tag v-if="result.intent?.category" effect="plain">{{ result.intent.category }}</el-tag>
-          <el-tag v-if="result.intent?.maxPrice" effect="plain">最高 ¥{{ result.intent.maxPrice }}</el-tag>
+          <el-tag v-if="result.intent?.maxPrice" effect="plain">最高 {{ formatPoints(result.intent.maxPrice) }}</el-tag>
           <el-tag v-if="result.priceLow != null" effect="plain">
-            结果价格 ¥{{ formatPrice(result.priceLow) }}–{{ formatPrice(result.priceHigh) }}
+            结果价格 {{ formatPoints(result.priceLow) }}–{{ formatPoints(result.priceHigh) }}
           </el-tag>
         </div>
       </section>
@@ -76,7 +76,7 @@
             <h3>{{ item.title }}</h3>
             <p v-if="item.description">{{ item.description }}</p>
             <div class="product-footer">
-              <strong>¥{{ formatPrice(item.price) }}</strong>
+              <strong>{{ formatPoints(item.price) }}</strong>
               <span>{{ item.category }}</span>
             </div>
           </div>
@@ -101,9 +101,11 @@ import { useRouter } from 'vue-router'
 import { MagicStick, Picture, Search } from '@element-plus/icons-vue'
 import { searchProductsByAi } from '@/api/ai'
 import { useOnboarding } from '@/composables/useOnboarding'
+import { useI18n } from '@/i18n'
 
 const router = useRouter()
 const onboarding = useOnboarding()
+const { t } = useI18n()
 const query = ref('')
 const loading = ref(false)
 const result = ref(null)
@@ -138,9 +140,10 @@ async function runSearch() {
   }
 }
 
-function formatPrice(price) {
+function formatPoints(price) {
   const value = Number(price)
-  return Number.isFinite(value) ? value.toFixed(2) : '--'
+  const n = Number.isFinite(value) ? (Number.isInteger(value) ? String(value) : value.toFixed(0)) : '--'
+  return `${n} ${t('common.pointsUnit')}`
 }
 </script>
 

@@ -55,7 +55,7 @@
                   </span>
                 </div>
                 <div class="order-meta">
-                  <span class="oa-price">¥{{ formatPrice(order.price) }}</span>
+                  <span class="oa-price">{{ formatPoints(order.price) }}</span>
                   <span class="oa-meta">
                     {{ activeTab === 'buyer' ? 'Seller' : 'Buyer' }}:
                     {{ order.counterpartNickname || '—' }}
@@ -120,7 +120,7 @@
         <el-descriptions v-else-if="orderDetail" :column="1" border>
           <el-descriptions-item label="Order No">{{ orderDetail.orderNo }}</el-descriptions-item>
           <el-descriptions-item label="Product">{{ orderDetail.productTitle }}</el-descriptions-item>
-          <el-descriptions-item label="Price">¥{{ formatPrice(orderDetail.price) }}</el-descriptions-item>
+          <el-descriptions-item label="Price">{{ formatPoints(orderDetail.price) }}</el-descriptions-item>
           <el-descriptions-item label="Status">{{ orderDetail.statusText }}</el-descriptions-item>
           <el-descriptions-item label="Buyer">{{ orderDetail.buyerNickname || '—' }}</el-descriptions-item>
           <el-descriptions-item label="Seller">{{ orderDetail.sellerNickname || '—' }}</el-descriptions-item>
@@ -143,8 +143,10 @@ import {
   cancelOrder
 } from '@/api/order'
 import { useOnboarding } from '@/composables/useOnboarding'
+import { useI18n } from '@/i18n'
 
 const onboarding = useOnboarding()
+const { t } = useI18n()
 
 const statusOptions = [
   { label: 'All', value: 'all' },
@@ -171,9 +173,10 @@ function statusClass(status) {
   return map[status] || 'oa-status-info'
 }
 
-function formatPrice(price) {
+function formatPoints(price) {
   const n = Number(price)
-  return Number.isFinite(n) ? n.toFixed(2) : price
+  const value = Number.isFinite(n) ? (Number.isInteger(n) ? String(n) : n.toFixed(0)) : String(price ?? 0)
+  return `${value} ${t('common.pointsUnit')}`
 }
 
 function formatTime(t) {

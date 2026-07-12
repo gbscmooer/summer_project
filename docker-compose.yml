@@ -159,6 +159,9 @@ services:
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required and must be at least 32 bytes}
       - JWT_EXPIRATION_MINUTES=${JWT_EXPIRATION_MINUTES:-120}
       - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN:?INTERNAL_API_TOKEN is required and must be at least 32 bytes}
+      - RESEND_API_KEY=${RESEND_API_KEY:-}
+      - RESEND_FROM=${RESEND_FROM:-onboarding@resend.dev}
+      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://127.0.0.1:8080}
       - JAVA_OPTS=-Xms256m -Xmx256m
     depends_on:
       nacos:
@@ -168,6 +171,7 @@ services:
     networks:
       - service-net
       - data-net
+      - egress-net
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "nc -z localhost 8081 || exit 1"]
