@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/store/user'
 
 const routes = [
@@ -21,10 +22,28 @@ const routes = [
     meta: { title: '注册' }
   },
   {
+    path: '/forgot-password',
+    name: 'ForgotPassword',
+    component: () => import('@/views/ForgotPassword.vue'),
+    meta: { title: '忘记密码' }
+  },
+  {
+    path: '/reset-password',
+    name: 'ResetPassword',
+    component: () => import('@/views/ResetPassword.vue'),
+    meta: { title: '重置密码' }
+  },
+  {
     path: '/product/:id',
     name: 'ProductDetail',
     component: () => import('@/views/ProductDetail.vue'),
     meta: { title: '商品详情' }
+  },
+  {
+    path: '/marketplace',
+    name: 'Marketplace',
+    component: () => import('@/views/Marketplace.vue'),
+    meta: { title: '积分商城' }
   },
   {
     path: '/topics',
@@ -33,17 +52,34 @@ const routes = [
     meta: { title: '话题' }
   },
   {
+    path: '/topics/create',
+    name: 'TopicCreate',
+    component: () => import('@/views/TopicCreate.vue'),
+    meta: { title: '发帖', requiresAuth: true }
+  },
+  {
     path: '/topics/:id',
     name: 'TopicDetail',
     component: () => import('@/views/TopicDetail.vue'),
     meta: { title: '帖子详情' }
   },
   {
+    path: '/users/:id',
+    name: 'UserProfile',
+    component: () => import('@/views/UserProfile.vue'),
+    meta: { title: '用户主页', fullBleed: true }
+  },
+  {
     path: '/publish',
     name: 'Publish',
     component: () => import('@/views/Publish.vue'),
-    // 需要登录
-    meta: { title: '发布商品', requiresAuth: true }
+    meta: { title: '发布商品', requiresAuth: true, requiresMerchant: true }
+  },
+  {
+    path: '/merchant',
+    name: 'Merchant',
+    component: () => import('@/views/Merchant.vue'),
+    meta: { title: '商家中心', requiresAuth: true, requiresMerchant: true }
   },
   {
     path: '/ai-shopping',
@@ -55,8 +91,7 @@ const routes = [
     path: '/my',
     name: 'My',
     component: () => import('@/views/My.vue'),
-    // 需要登录
-    meta: { title: '我的', requiresAuth: true }
+    meta: { title: '个人主页', requiresAuth: true, fullBleed: true }
   },
   {
     path: '/activity',
@@ -65,10 +100,15 @@ const routes = [
     meta: { title: '我的动态', requiresAuth: true }
   },
   {
+    path: '/events',
+    name: 'Events',
+    component: () => import('@/views/Events.vue'),
+    meta: { title: '活动', requiresAuth: true }
+  },
+  {
     path: '/orders',
     name: 'Orders',
     component: () => import('@/views/Orders.vue'),
-    // 需要登录
     meta: { title: '我的订单', requiresAuth: true }
   },
   {
@@ -76,6 +116,12 @@ const routes = [
     name: 'Notifications',
     component: () => import('@/views/Notifications.vue'),
     meta: { title: '消息通知', requiresAuth: true }
+  },
+  {
+    path: '/messages',
+    name: 'Messages',
+    component: () => import('@/views/Messages.vue'),
+    meta: { title: '私信', requiresAuth: true }
   },
   {
     path: '/settings',
@@ -113,11 +159,26 @@ router.beforeEach((to, from, next) => {
   const userStore = useUserStore()
   if (to.meta && to.meta.requiresAuth && !userStore.isLogin) {
     next({ path: '/login', query: { redirect: to.fullPath } })
-  } else if (to.meta && to.meta.requiresAdmin && !userStore.isAdmin) {
-    next({ path: '/' })
-  } else {
-    next()
+    return
   }
+  if (to.meta && to.meta.requiresAdmin && !userStore.isAdmin) {
+    next({ path: '/' })
+    return
+  }
+  if (to.meta && to.meta.requiresMerchant && !userStore.isMerchant && !userStore.isAdmin) {
+    // #region agent log
+    fetch('http://127.0.0.1:7501/ingest/f641b816-8cb3-4a71-8e01-1ebe67abf391',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b6299b'},body:JSON.stringify({sessionId:'b6299b',runId:'post-fix',hypothesisId:'H1',location:'router/index.js:beforeEach',message:'merchant guard blocked',data:{path:to.path,role:userStore.role},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    ElMessage.warning('需要商家认证后才能访问，请先申请成为商家')
+    next({ path: '/events' })
+    return
+  }
+  // #region agent log
+  if (to.path === '/orders') {
+    fetch('http://127.0.0.1:7501/ingest/f641b816-8cb3-4a71-8e01-1ebe67abf391',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b6299b'},body:JSON.stringify({sessionId:'b6299b',runId:'post-fix',hypothesisId:'H1',location:'router/index.js:beforeEach',message:'orders route allowed',data:{path:to.path,role:userStore.role,isLogin:userStore.isLogin,requiresMerchant:!!to.meta?.requiresMerchant},timestamp:Date.now()})}).catch(()=>{});
+  }
+  // #endregion
+  next()
 })
 
 export default router

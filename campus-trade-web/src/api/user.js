@@ -28,7 +28,7 @@ export function getUserInfo() {
   })
 }
 
-// 更新用户信息（需登录）：body { nickname, avatar, phone } -> data null
+// 更新用户信息（需登录）：body { nickname, avatar, phone, bio, coverImage, ipLocation } -> data null
 export function updateUserInfo(data) {
   return request({
     url: '/user/info',
@@ -76,5 +76,23 @@ export function getMyMerchantApplication() {
   return request({
     url: '/user/merchant/application',
     method: 'get'
+  })
+}
+
+// 忘记密码：按用户名发重置邮件
+export function forgotPassword(data) {
+  return request({
+    url: '/user/forgot-password',
+    method: 'post',
+    data
+  })
+}
+
+// 重置密码：body { token, newPassword }
+export function resetPassword(data) {
+  return request({
+    url: '/user/reset-password',
+    method: 'post',
+    data
   })
 }

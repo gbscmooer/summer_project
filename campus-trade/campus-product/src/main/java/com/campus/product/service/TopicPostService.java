@@ -8,6 +8,8 @@ public interface TopicPostService {
 
     PageResult<TopicPostVO> listPosts(Integer pageNum, Integer pageSize);
 
+    PageResult<TopicPostVO> listPostsByUser(Long userId, Integer pageNum, Integer pageSize);
+
     TopicPostVO getDetail(Long postId);
 
     Long createPost(Long userId, TopicPostRequest request);

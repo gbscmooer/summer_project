@@ -1,6 +1,5 @@
 import request from './request'
 
-// 话题帖子列表（无需登录）
 export function listTopicPosts(params) {
   return request({
     url: '/topic/posts/list',
@@ -9,7 +8,6 @@ export function listTopicPosts(params) {
   })
 }
 
-// 话题帖子详情（无需登录）
 export function getTopicPost(id) {
   return request({
     url: `/topic/posts/${id}`,
@@ -17,7 +15,6 @@ export function getTopicPost(id) {
   })
 }
 
-// 发布帖子（需登录）
 export function createTopicPost(data) {
   return request({
     url: '/topic/posts',
@@ -26,10 +23,17 @@ export function createTopicPost(data) {
   })
 }
 
-// 删除自己的帖子（需登录）
 export function deleteTopicPost(id) {
   return request({
     url: `/topic/posts/${id}/delete`,
     method: 'post'
+  })
+}
+
+export function listPostsByUser(userId, params) {
+  return request({
+    url: `/topic/posts/by-user/${userId}`,
+    method: 'get',
+    params
   })
 }

@@ -32,6 +32,14 @@ public class TopicPostController {
         return Result.success(topicPostService.listPosts(pageNum, pageSize));
     }
 
+    @GetMapping("/posts/by-user/{userId}")
+    public Result<PageResult<TopicPostVO>> listPostsByUser(
+            @PathVariable Long userId,
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(defaultValue = "10") Integer pageSize) {
+        return Result.success(topicPostService.listPostsByUser(userId, pageNum, pageSize));
+    }
+
     @GetMapping("/posts/{id}")
     public Result<TopicPostVO> getPost(@PathVariable Long id) {
         return Result.success(topicPostService.getDetail(id));

@@ -33,6 +33,12 @@
             :max="99"
             class="nav-badge"
           />
+          <el-badge
+            v-else-if="item.path === '/messages' && messageUnreadCount > 0"
+            :value="messageUnreadCount"
+            :max="99"
+            class="nav-badge"
+          />
         </router-link>
       </nav>
 
@@ -45,6 +51,10 @@
       <!-- 底部用户 -->
       <div class="sidebar-footer">
         <template v-if="userStore.isLogin">
+          <div class="points-row" @click="$router.push('/events')">
+            <span class="points-label">{{ t('common.points') }}</span>
+            <span class="points-value">{{ userStore.points }}</span>
+          </div>
           <el-dropdown trigger="click" placement="top-start" @command="handleCommand">
             <div class="user-block">
               <div class="user-avatar">{{ avatarLetter }}</div>
@@ -57,6 +67,7 @@
               <el-dropdown-menu>
                 <div class="dropdown-email">{{ userStore.displayName }}</div>
                 <el-dropdown-item command="my">{{ t('common.profile') }}</el-dropdown-item>
+                <el-dropdown-item command="events">{{ t('nav.events') }}</el-dropdown-item>
                 <el-dropdown-item v-if="userStore.isAdmin" command="admin">{{ t('nav.admin') }}</el-dropdown-item>
                 <el-dropdown-item command="logout" divided>{{ t('common.logout') }}</el-dropdown-item>
               </el-dropdown-menu>
@@ -75,7 +86,7 @@
       </div>
     </aside>
 
-    <main class="main-content">
+    <main class="main-content" :class="{ 'main-content--bleed': route.meta.fullBleed }">
       <router-view />
     </main>
   </div>
@@ -87,19 +98,23 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import {
   ChatDotRound,
+  Message,
   House,
-  MagicStick,
   DataLine,
   EditPen,
+  Shop,
   ShoppingCart,
+  ShoppingBag,
   Bell,
   User,
   Setting,
   ArrowDown,
-  Tools
+  Tools,
+  Trophy
 } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/user'
 import { getUnreadCount } from '@/api/notification'
+import { getMessageUnreadCount } from '@/api/social'
 import { useI18n } from '@/i18n'
 
 const route = useRoute()
@@ -107,22 +122,36 @@ const router = useRouter()
 const userStore = useUserStore()
 const { t } = useI18n()
 const unreadCount = ref(0)
+const messageUnreadCount = ref(0)
 let unreadTimer = null
 const unreadRefreshEvent = 'campus:unread-count-refresh'
+const messageUnreadRefreshEvent = 'campus:message-unread-refresh'
 
-const isAuthPage = computed(() => ['/login', '/register'].includes(route.path))
+const isAuthPage = computed(() => ['/login', '/register', '/forgot-password', '/reset-password'].includes(route.path))
 
 const navItems = computed(() => {
   const items = [
     { path: '/', labelKey: 'nav.home', icon: House },
     { path: '/topics', labelKey: 'nav.topics', icon: ChatDotRound },
-    { path: '/ai-shopping', labelKey: 'nav.aiShopping', icon: MagicStick },
-    { path: '/publish', labelKey: 'nav.publish', icon: EditPen },
-    { path: '/orders', labelKey: 'nav.orders', icon: ShoppingCart },
+    { path: '/marketplace', labelKey: 'nav.marketplace', icon: ShoppingBag }
+  ]
+  // 订单对所有登录用户可见（买家购买 / 卖家销售）；发布仅商家或管理员
+  if (userStore.isLogin) {
+    items.push({ path: '/orders', labelKey: 'nav.orders', icon: ShoppingCart })
+  }
+  if (userStore.isMerchant || userStore.isAdmin) {
+    items.push({ path: '/merchant', labelKey: 'nav.merchant', icon: Shop })
+    items.push({ path: '/publish', labelKey: 'nav.publish', icon: EditPen })
+  }
+  if (userStore.isLogin) {
+    items.push({ path: '/messages', labelKey: 'nav.messages', icon: Message })
+  }
+  items.push(
     { path: '/notifications', labelKey: 'nav.notifications', icon: Bell },
     { path: '/activity', labelKey: 'nav.activity', icon: DataLine },
+    { path: '/events', labelKey: 'nav.events', icon: Trophy },
     { path: '/my', labelKey: 'nav.profile', icon: User }
-  ]
+  )
   if (userStore.isAdmin) {
     items.push({ path: '/admin', labelKey: 'nav.admin', icon: Tools })
   }
@@ -153,10 +182,29 @@ async function refreshUnreadCount() {
   }
 }
 
+async function refreshMessageUnreadCount() {
+  if (!userStore.isLogin) {
+    messageUnreadCount.value = 0
+    return
+  }
+  try {
+    const res = await getMessageUnreadCount()
+    const data = res.data
+    messageUnreadCount.value = Number(data?.unreadCount ?? data) || 0
+  } catch {
+    messageUnreadCount.value = 0
+  }
+}
+
+function refreshAllUnreadBadges() {
+  refreshUnreadCount()
+  refreshMessageUnreadCount()
+}
+
 function startUnreadPolling() {
   stopUnreadPolling()
-  refreshUnreadCount()
-  unreadTimer = setInterval(refreshUnreadCount, 30000)
+  refreshAllUnreadBadges()
+  unreadTimer = setInterval(refreshAllUnreadBadges, 30000)
 }
 
 function stopUnreadPolling() {
@@ -169,10 +217,13 @@ function stopUnreadPolling() {
 watch(
   () => userStore.isLogin,
   (loggedIn) => {
-    if (loggedIn) startUnreadPolling()
-    else {
+    if (loggedIn) {
+      startUnreadPolling()
+      userStore.refreshPoints()
+    } else {
       stopUnreadPolling()
       unreadCount.value = 0
+      messageUnreadCount.value = 0
     }
   },
   { immediate: true }
@@ -182,21 +233,25 @@ watch(
   () => route.path,
   (path) => {
     if (path === '/notifications' || path === '/orders') refreshUnreadCount()
+    if (path === '/messages') refreshMessageUnreadCount()
   }
 )
 
 onMounted(() => {
   window.addEventListener(unreadRefreshEvent, refreshUnreadCount)
+  window.addEventListener(messageUnreadRefreshEvent, refreshMessageUnreadCount)
   if (userStore.isLogin) startUnreadPolling()
 })
 
 onUnmounted(() => {
   window.removeEventListener(unreadRefreshEvent, refreshUnreadCount)
+  window.removeEventListener(messageUnreadRefreshEvent, refreshMessageUnreadCount)
   stopUnreadPolling()
 })
 
 function handleCommand(command) {
   if (command === 'my') router.push('/my')
+  else if (command === 'events') router.push('/events')
   else if (command === 'admin') router.push('/admin')
   else if (command === 'logout') {
     ElMessageBox.confirm(t('settings.logoutConfirm'), t('settings.tip'), {
@@ -364,6 +419,33 @@ function handleCommand(command) {
   border-top: 1px solid var(--oa-border-subtle);
 }
 
+.points-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  margin-bottom: 4px;
+  border-radius: var(--oa-radius-sm);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.points-row:hover {
+  background: var(--oa-bg-hover);
+}
+
+.points-label {
+  font-size: 12px;
+  color: var(--oa-text-muted);
+}
+
+.points-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--oa-text);
+  font-variant-numeric: tabular-nums;
+}
+
 .user-block {
   display: flex;
   align-items: center;
@@ -431,6 +513,11 @@ function handleCommand(command) {
   margin-left: var(--oa-sidebar-width);
   min-height: 100vh;
   padding: 32px 40px 48px;
+}
+
+.main-content--bleed {
+  padding-top: 0;
+  background: var(--oa-bg-sidebar);
 }
 
 .auth-layout {

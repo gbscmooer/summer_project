@@ -10,6 +10,7 @@ import com.campus.user.dto.*;
 import com.campus.user.entity.User;
 import com.campus.user.mapper.UserMapper;
 import com.campus.user.service.OnboardingFlagCodec;
+import com.campus.user.service.PointsConstants;
 import com.campus.user.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -37,19 +38,38 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             throw new BizException(ResultCode.USERNAME_EXISTS);
         }
 
+        String email = request.getEmail() == null ? null : request.getEmail().trim();
+        if (!StringUtils.hasText(email)) {
+            throw new BizException(ResultCode.EMAIL_REQUIRED);
+        }
+        if (!email.matches("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$")) {
+            throw new BizException(ResultCode.EMAIL_INVALID);
+        }
+        boolean emailTaken = lambdaQuery().eq(User::getEmail, email).exists();
+        if (emailTaken) {
+            throw new BizException(ResultCode.EMAIL_EXISTS);
+        }
+
         User user = new User();
         user.setUsername(request.getUsername());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
-        user.setNickname(request.getNickname() != null ? request.getNickname() : request.getUsername());
-        user.setPhone(request.getPhone());
+        user.setNickname(StringUtils.hasText(request.getNickname()) ? request.getNickname().trim() : request.getUsername());
+        user.setPhone(StringUtils.hasText(request.getPhone()) ? request.getPhone().trim() : null);
+        user.setEmail(email);
+        user.setEmailVerified(0);
         user.setRole(0);
         user.setStatus(UserStatus.ACTIVE);
         user.setOnboardingCompleted(0);
         user.setOnboardingFlags("{}");
+        user.setPoints(PointsConstants.NEW_USER_BONUS);
 
         try {
             save(user);
         } catch (DataIntegrityViolationException e) {
+            String msg = e.getMostSpecificCause() != null ? e.getMostSpecificCause().getMessage() : "";
+            if (msg != null && msg.toLowerCase().contains("email")) {
+                throw new BizException(ResultCode.EMAIL_EXISTS);
+            }
             throw new BizException(ResultCode.USERNAME_EXISTS);
         }
         return user.getId();
@@ -82,7 +102,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         String token = JwtUtil.generateToken(user.getId());
         int role = user.getRole() == null ? 0 : user.getRole();
         int onboardingCompleted = user.getOnboardingCompleted() == null ? 0 : user.getOnboardingCompleted();
-        return new LoginResponse(token, user.getId(), user.getNickname(), user.getAvatar(), role, onboardingCompleted);
+        int points = user.getPoints() == null ? 0 : user.getPoints();
+        return new LoginResponse(token, user.getId(), user.getNickname(), user.getAvatar(), role, onboardingCompleted, points);
     }
 
     @Override
@@ -114,6 +135,18 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             user.setPhone(request.getPhone());
             hasUpdates = true;
         }
+        if (request.getBio() != null) {
+            user.setBio(request.getBio().trim());
+            hasUpdates = true;
+        }
+        if (request.getCoverImage() != null) {
+            user.setCoverImage(request.getCoverImage().trim());
+            hasUpdates = true;
+        }
+        if (request.getIpLocation() != null) {
+            user.setIpLocation(request.getIpLocation().trim());
+            hasUpdates = true;
+        }
         if (hasUpdates) {
             updateById(user);
         }
@@ -123,7 +156,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     public List<UserBriefVO> batchGetUsers(List<Long> ids) {
         if (ids == null || ids.isEmpty()) return List.of();
         return listByIds(ids).stream()
-                .map(u -> new UserBriefVO(u.getId(), u.getNickname()))
+                .map(u -> new UserBriefVO(u.getId(), u.getNickname(), u.getAvatar(), u.getBio()))
                 .collect(Collectors.toList());
     }
 

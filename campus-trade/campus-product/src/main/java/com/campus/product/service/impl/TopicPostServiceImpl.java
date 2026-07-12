@@ -69,6 +69,31 @@ public class TopicPostServiceImpl extends ServiceImpl<TopicPostMapper, TopicPost
     }
 
     @Override
+    public PageResult<TopicPostVO> listPostsByUser(Long userId, Integer pageNum, Integer pageSize) {
+        if (userId == null || userId <= 0) {
+            throw new BizException(ResultCode.BAD_REQUEST);
+        }
+        int pageNo = PageParamUtil.normalizePageNum(pageNum);
+        int size = PageParamUtil.normalizePageSize(pageSize);
+        Page<TopicPost> page = new Page<>(pageNo, size);
+        lambdaQuery()
+                .eq(TopicPost::getUserId, userId)
+                .orderByDesc(TopicPost::getCreateTime)
+                .page(page);
+
+        List<TopicPostVO> list = page.getRecords().stream()
+                .map(post -> {
+                    TopicPostVO vo = TopicPostVO.from(post);
+                    vo.setContent(previewContent(post.getContent()));
+                    return vo;
+                })
+                .collect(Collectors.toList());
+        enrichAuthors(list);
+        enrichProductCounts(list);
+        return PageResult.of(page.getTotal(), pageNo, size, list);
+    }
+
+    @Override
     public TopicPostVO getDetail(Long postId) {
         TopicPost post = requirePost(postId);
         TopicPostVO vo = TopicPostVO.from(post);

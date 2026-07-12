@@ -50,9 +50,17 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
     /** 商品留言列表：GET /api/product/{纯数字id}/comments */
     private static final Pattern PRODUCT_COMMENT_PATTERN = Pattern.compile("^/api/product/\\d+/comments$");
 
-    /** 话题帖子列表/详情：GET /api/topic/posts/list、/api/topic/posts/{id} */
+    /** 话题帖子列表/详情/按用户：GET /api/topic/posts/list、/api/topic/posts/{id}、/api/topic/posts/by-user/{id} */
     private static final Pattern TOPIC_POST_LIST_PATTERN = Pattern.compile("^/api/topic/posts/list$");
+    private static final Pattern TOPIC_POST_BY_USER_PATTERN = Pattern.compile("^/api/topic/posts/by-user/\\d+$");
     private static final Pattern TOPIC_POST_DETAIL_PATTERN = Pattern.compile("^/api/topic/posts/\\d+$");
+
+    /** 公开用户主页：GET /api/user/profile/{纯数字id} */
+    private static final Pattern USER_PROFILE_PATTERN = Pattern.compile("^/api/user/profile/\\d+$");
+
+    /** 公开关注统计：GET /api/user/follow/followers|following */
+    private static final Pattern USER_FOLLOW_LIST_PATTERN =
+            Pattern.compile("^/api/user/follow/(followers|following)$");
 
     /** 商品图片公开读取：GET /api/product/image/{安全文件名}。 */
     private static final Pattern PRODUCT_IMAGE_PATTERN = Pattern.compile("^/api/product/image/[a-zA-Z0-9._-]+$");
@@ -84,9 +92,9 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
             return chain.filter(sanitizedExchange);
         }
 
-        // 4. 白名单放行（已剥离 X-User-Id，即便携带 token 也无需注入下游）。
+        // 4. 白名单放行；若携带有效 token 则可选注入 X-User-Id（用于关注态等）。
         if (isWhiteList(path, method)) {
-            return chain.filter(sanitizedExchange);
+            return injectOptionalUser(sanitizedExchange, sanitizedRequest, chain);
         }
 
         // 5. 非白名单：校验 Authorization 头中的 Bearer token（JWT 解析放到 boundedElastic，避免阻塞 Netty event loop）。
@@ -131,11 +139,45 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
         if (HttpMethod.GET.equals(method) && PRODUCT_COMMENT_PATTERN.matcher(path).matches()) {
             return true;
         }
-        // 话题帖子：列表与详情
+        // 公开用户主页（可选注入 X-User-Id 以返回 following）
+        if (HttpMethod.GET.equals(method) && USER_PROFILE_PATTERN.matcher(path).matches()) {
+            return true;
+        }
+        // 公开关注统计
+        if (HttpMethod.GET.equals(method) && USER_FOLLOW_LIST_PATTERN.matcher(path).matches()) {
+            return true;
+        }
+        // 话题帖子：列表、按用户、详情
         if (HttpMethod.GET.equals(method) && TOPIC_POST_LIST_PATTERN.matcher(path).matches()) {
             return true;
         }
+        if (HttpMethod.GET.equals(method) && TOPIC_POST_BY_USER_PATTERN.matcher(path).matches()) {
+            return true;
+        }
         return HttpMethod.GET.equals(method) && TOPIC_POST_DETAIL_PATTERN.matcher(path).matches();
+    }
+
+    /**
+     * 白名单请求：无 token 直接放行；有 token 则尽力解析并注入 X-User-Id，解析失败仍放行。
+     */
+    private Mono<Void> injectOptionalUser(
+            ServerWebExchange exchange,
+            ServerHttpRequest sanitizedRequest,
+            GatewayFilterChain chain) {
+        String authorization = sanitizedRequest.getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
+        String token = extractToken(authorization);
+        if (token == null) {
+            return chain.filter(exchange);
+        }
+        return Mono.fromCallable(() -> JwtUtil.parseUserId(token))
+                .subscribeOn(Schedulers.boundedElastic())
+                .flatMap(userId -> {
+                    ServerHttpRequest authedRequest = sanitizedRequest.mutate()
+                            .header(HEADER_USER_ID, String.valueOf(userId))
+                            .build();
+                    return chain.filter(exchange.mutate().request(authedRequest).build());
+                })
+                .onErrorResume(e -> chain.filter(exchange));
     }
 
     /**
