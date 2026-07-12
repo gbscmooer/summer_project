@@ -15,6 +15,7 @@ class HttpMethodContractTest {
     void orderControllersUseOnlyGetAndPostMappings() {
         assertNoForbiddenMappings(OrderController.class);
         assertNoForbiddenMappings(NotificationController.class);
+        assertNoForbiddenMappings(AdminNotificationController.class);
     }
 
     private void assertNoForbiddenMappings(Class<?> controllerClass) {

@@ -1,5 +1,6 @@
 package com.campus.product.service;
 
+import com.campus.common.constant.UserRole;
 import com.campus.common.exception.BizException;
 import com.campus.common.result.Result;
 import com.campus.common.result.ResultCode;
@@ -11,7 +12,7 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class AdminAuthService {
 
-    private static final int ROLE_ADMIN = 1;
+    private static final int ROLE_ADMIN = UserRole.ADMIN;
 
     private final UserFeignClient userFeignClient;
 

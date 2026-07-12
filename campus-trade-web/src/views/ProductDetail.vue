@@ -95,6 +95,49 @@
         <h3 class="oa-section-title">Description</h3>
         <p class="description">{{ detail.description || 'No description provided.' }}</p>
       </div>
+
+      <!-- 留言 -->
+      <div class="oa-panel comments-panel">
+        <h3 class="oa-section-title">Comments ({{ commentTotal }})</h3>
+
+        <div v-if="userStore.isLogin" class="comment-form">
+          <el-input
+            v-model="commentText"
+            type="textarea"
+            :rows="3"
+            maxlength="500"
+            show-word-limit
+            placeholder="Ask a question or leave a message for the seller..."
+          />
+          <el-button
+            type="primary"
+            :loading="commentSubmitting"
+            :disabled="!commentText.trim()"
+            @click="onPostComment"
+          >
+            Post comment
+          </el-button>
+        </div>
+        <p v-else class="comment-login-hint">
+          <router-link :to="{ path: '/login', query: { redirect: route.fullPath } }">Sign in</router-link>
+          to leave a comment.
+        </p>
+
+        <div v-loading="commentsLoading" class="comment-list">
+          <el-empty v-if="!commentsLoading && comments.length === 0" description="No comments yet" />
+          <div v-for="item in comments" :key="item.commentId" class="comment-item">
+            <div class="comment-meta">
+              <span class="comment-author">{{ commentAuthor(item) }}</span>
+              <span class="comment-time">{{ formatCommentTime(item.createTime) }}</span>
+            </div>
+            <p class="comment-content">{{ item.content }}</p>
+          </div>
+        </div>
+
+        <div v-if="commentTotal > comments.length" class="oa-pagination">
+          <el-button :loading="commentsLoading" @click="loadMoreComments">Load more</el-button>
+        </div>
+      </div>
     </template>
   </div>
 </template>
@@ -104,18 +147,27 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Picture, ShoppingCart, ArrowLeft } from '@element-plus/icons-vue'
-import { getProductDetail } from '@/api/product'
+import { getProductDetail, listProductComments, postProductComment } from '@/api/product'
 import { createOrder, seckillOrder, getSeckillResult } from '@/api/order'
 import { useUserStore } from '@/store/user'
 import { getStatusText } from '@/constants/product'
+import { useOnboarding } from '@/composables/useOnboarding'
 
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
+const onboarding = useOnboarding()
 const loading = ref(false)
 const detail = ref(null)
 const buying = ref(false)
 const seckilling = ref(false)
+const comments = ref([])
+const commentTotal = ref(0)
+const commentPageNum = ref(1)
+const commentPageSize = ref(10)
+const commentsLoading = ref(false)
+const commentSubmitting = ref(false)
+const commentText = ref('')
 
 const images = computed(() => {
   if (!detail.value || !Array.isArray(detail.value.images)) return []
@@ -144,10 +196,81 @@ async function fetchDetail() {
   try {
     const res = await getProductDetail(id)
     detail.value = res.data
+    commentPageNum.value = 1
+    comments.value = []
+    await fetchComments(true)
   } catch {
     detail.value = null
   } finally {
     loading.value = false
+  }
+}
+
+async function fetchComments(reset = false) {
+  const productId = detail.value?.productId || route.params.id
+  if (!productId) return
+  if (reset) {
+    commentPageNum.value = 1
+    comments.value = []
+  }
+  commentsLoading.value = true
+  try {
+    const res = await listProductComments(productId, {
+      pageNum: commentPageNum.value,
+      pageSize: commentPageSize.value
+    })
+    const page = res.data || {}
+    commentTotal.value = page.total || 0
+    const list = page.list || []
+    if (reset) {
+      comments.value = list
+    } else {
+      comments.value = [...comments.value, ...list]
+    }
+  } catch {
+    if (reset) {
+      comments.value = []
+      commentTotal.value = 0
+    }
+  } finally {
+    commentsLoading.value = false
+  }
+}
+
+function loadMoreComments() {
+  if (commentsLoading.value || comments.value.length >= commentTotal.value) return
+  commentPageNum.value += 1
+  fetchComments(false)
+}
+
+function commentAuthor(item) {
+  if (item.nickname) return item.nickname
+  if (item.userId) return `User #${item.userId}`
+  return 'Anonymous'
+}
+
+function formatCommentTime(value) {
+  if (!value) return ''
+  return String(value).replace('T', ' ')
+}
+
+async function onPostComment() {
+  if (!userStore.isLogin) {
+    router.push({ path: '/login', query: { redirect: route.fullPath } })
+    return
+  }
+  const content = commentText.value.trim()
+  if (!content) return
+  const productId = detail.value?.productId
+  if (!productId) return
+  commentSubmitting.value = true
+  try {
+    await postProductComment(productId, { content })
+    ElMessage.success('Comment posted')
+    commentText.value = ''
+    await fetchComments(true)
+  } finally {
+    commentSubmitting.value = false
   }
 }
 
@@ -163,6 +286,7 @@ async function onBuy() {
   try {
     const res = await createOrder({ productId })
     ElMessage.success(res.message || 'Order placed')
+    await onboarding.refresh()
     router.push('/orders')
   } finally {
     buying.value = false
@@ -331,6 +455,78 @@ onMounted(fetchDetail)
   line-height: 1.7;
   color: var(--oa-text-secondary);
   font-size: 14px;
+}
+
+.comments-panel {
+  margin-top: 20px;
+}
+
+.comment-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.comment-form .el-button {
+  align-self: flex-end;
+}
+
+.comment-login-hint {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: var(--oa-text-secondary);
+}
+
+.comment-login-hint a {
+  color: var(--el-color-primary);
+  text-decoration: none;
+}
+
+.comment-list {
+  min-height: 80px;
+}
+
+.comment-item {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--oa-border-subtle);
+}
+
+.comment-item:last-child {
+  border-bottom: none;
+}
+
+.comment-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.comment-author {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--oa-text);
+}
+
+.comment-time {
+  font-size: 12px;
+  color: var(--oa-text-muted);
+}
+
+.comment-content {
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.6;
+  font-size: 14px;
+  color: var(--oa-text-secondary);
+}
+
+.comments-panel .oa-pagination {
+  margin-top: 12px;
+  display: flex;
+  justify-content: center;
 }
 
 @media (max-width: 900px) {

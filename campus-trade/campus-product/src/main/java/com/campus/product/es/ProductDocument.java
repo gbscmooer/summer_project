@@ -49,6 +49,10 @@ public class ProductDocument {
     @Field(type = FieldType.Integer)
     private Integer stock;
 
+    /** 1-新手教程专用商品，公开搜索应排除 */
+    @Field(type = FieldType.Integer)
+    private Integer isTutorial;
+
     /** 创建时间，epoch 毫秒 */
     @Field(type = FieldType.Long)
     private Long createTime;
@@ -67,6 +71,7 @@ public class ProductDocument {
         doc.setSellerId(p.getSellerId());
         doc.setStatus(p.getStatus());
         doc.setStock(p.getStock());
+        doc.setIsTutorial(p.getIsTutorial() == null ? 0 : p.getIsTutorial());
         if (p.getCreateTime() != null) {
             doc.setCreateTime(p.getCreateTime().atZone(ZONE).toInstant().toEpochMilli());
         }

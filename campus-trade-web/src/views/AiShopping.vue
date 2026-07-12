@@ -100,8 +100,10 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { MagicStick, Picture, Search } from '@element-plus/icons-vue'
 import { searchProductsByAi } from '@/api/ai'
+import { useOnboarding } from '@/composables/useOnboarding'
 
 const router = useRouter()
+const onboarding = useOnboarding()
 const query = ref('')
 const loading = ref(false)
 const result = ref(null)
@@ -130,6 +132,7 @@ async function runSearch() {
   try {
     const res = await searchProductsByAi({ query: value, pageSize: 12 })
     result.value = res.data
+    onboarding.trackStep('ai')
   } finally {
     loading.value = false
   }

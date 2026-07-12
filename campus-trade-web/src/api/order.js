@@ -83,3 +83,19 @@ export function getSeckillResult(productId) {
     method: 'get'
   })
 }
+
+// 商家收入统计（需商家角色）
+export function getSellerIncomeStats() {
+  return request({
+    url: '/order/seller/stats',
+    method: 'get'
+  })
+}
+
+// 商家收入仪表盘（需商家角色）
+export function getSellerDashboard() {
+  return request({
+    url: '/order/seller/dashboard',
+    method: 'get'
+  })
+}

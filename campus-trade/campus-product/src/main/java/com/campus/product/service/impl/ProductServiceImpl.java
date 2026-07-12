@@ -2,12 +2,17 @@ package com.campus.product.service.impl;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
+import com.campus.common.constant.UserRole;
 import com.campus.common.exception.BizException;
 import com.campus.common.result.PageResult;
+import com.campus.common.result.Result;
 import com.campus.common.result.ResultCode;
 import com.campus.common.util.PageParamUtil;
 import com.campus.product.constant.ProductCacheConstants;
 import com.campus.product.dto.NullValueMarker;
+import com.campus.product.dto.PublishQuotaVO;
+import com.campus.product.dto.SellerProductStatsView;
+import com.campus.product.dto.SellerProductDashboardView;
 import com.campus.product.dto.ProductDetailVO;
 import com.campus.product.dto.ProductListVO;
 import com.campus.product.dto.ProductRequest;
@@ -24,6 +29,7 @@ import com.campus.product.mapper.StockRestoreLogMapper;
 import com.campus.product.service.ProductService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.elasticsearch.client.elc.ElasticsearchTemplate;
@@ -45,6 +51,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
@@ -61,6 +68,9 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
     private final UserFeignClient userFeignClient;
     private final StockDeductionLogMapper stockDeductionLogMapper;
     private final StockRestoreLogMapper stockRestoreLogMapper;
+
+    @Value("${campus.product.personal-publish-limit:5}")
+    private int personalPublishLimit;
 
     private static final ZoneId ZONE = ZoneId.systemDefault();
 
@@ -89,6 +99,7 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
 
     @Override
     public Long publish(Long sellerId, ProductRequest request) {
+        enforcePublishQuota(sellerId);
         Product product = new Product();
         product.setSellerId(sellerId);
         product.setTitle(request.getTitle());
@@ -263,12 +274,14 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
         int page = PageParamUtil.normalizePageNum(pageNum);
         int size = PageParamUtil.normalizePageSize(pageSize);
 
+        ensureTutorialNotInEs();
         try {
             NativeQuery query = NativeQuery.builder()
                     .withQuery(q -> q.bool(b -> {
-                        // 仅在售且有库存（与首页市场一致）
+                        // 仅在售且有库存（与首页市场一致）；排除新手教程商品
                         b.filter(f -> f.term(t -> t.field("status").value(1)));
                         b.filter(f -> f.range(r -> r.number(n -> n.field("stock").gt(0.0))));
+                        b.mustNot(mn -> mn.term(t -> t.field("isTutorial").value(1)));
                         if (StringUtils.hasText(keyword)) {
                             // AND：中文 standard 分词下要求字都命中，避免“高数”扫到全站
                             b.must(m -> m.multiMatch(mm -> mm
@@ -377,10 +390,11 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
                 // ignore
             }
         }
-        // 存量刷入：在售且有库存的商品
+        // 存量刷入：在售且有库存的普通商品（排除新手教程）
         List<Product> products = lambdaQuery()
                 .eq(Product::getStatus, 1)
                 .gt(Product::getStock, 0)
+                .ne(Product::getIsTutorial, 1)
                 .list();
         if (products.isEmpty()) {
             return 0;
@@ -426,10 +440,12 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
     public PageResult<ProductListVO> listProducts(String category, Integer pageNum, Integer pageSize) {
         int pageNo = PageParamUtil.normalizePageNum(pageNum);
         int size = PageParamUtil.normalizePageSize(pageSize);
+        ensureTutorialNotInEs();
         Page<Product> page = new Page<>(pageNo, size);
         lambdaQuery()
                 .eq(Product::getStatus, 1)
                 .gt(Product::getStock, 0)
+                .ne(Product::getIsTutorial, 1)
                 .eq(StringUtils.hasText(category), Product::getCategory, category)
                 .orderByDesc(Product::getCreateTime)
                 .page(page);
@@ -457,6 +473,20 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
         Product product = getById(productId);
         if (product == null) throw new BizException(ResultCode.PRODUCT_NOT_FOUND);
         return product;
+    }
+
+    @Override
+    public ProductDetailVO getTutorialProduct() {
+        Product product = lambdaQuery()
+                .eq(Product::getIsTutorial, 1)
+                .eq(Product::getStatus, 1)
+                .orderByAsc(Product::getId)
+                .last("LIMIT 1")
+                .one();
+        if (product == null) {
+            throw new BizException(ResultCode.NOT_FOUND.getCode(), "新手教程商品未配置");
+        }
+        return getDetail(product.getId());
     }
 
     @Override
@@ -706,13 +736,42 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
         if (product == null || product.getId() == null) {
             return;
         }
-        // 非在售或已售罄：从搜索索引移除，避免 AI/搜索命中市场看不到的商品
-        if (product.getStatus() == null || product.getStatus() != 1
+        // 教程商品、非在售或已售罄：从搜索索引移除
+        if ((product.getIsTutorial() != null && product.getIsTutorial() == 1)
+                || product.getStatus() == null || product.getStatus() != 1
                 || product.getStock() == null || product.getStock() <= 0) {
             deleteFromEs(product.getId());
             return;
         }
         saveToEs(product);
+    }
+
+    private volatile boolean tutorialEsCleaned = false;
+
+    /** 将已存在于 ES 的教程商品剔除（旧索引可能无 isTutorial 字段） */
+    private void ensureTutorialNotInEs() {
+        if (tutorialEsCleaned) {
+            return;
+        }
+        synchronized (this) {
+            if (tutorialEsCleaned) {
+                return;
+            }
+            try {
+                List<Product> tutorials = lambdaQuery()
+                        .eq(Product::getIsTutorial, 1)
+                        .select(Product::getId)
+                        .list();
+                for (Product p : tutorials) {
+                    if (p.getId() != null) {
+                        deleteFromEs(p.getId());
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("清理教程商品 ES 索引失败，已忽略", e);
+            }
+            tutorialEsCleaned = true;
+        }
     }
 
     private void saveToEs(Product product) {
@@ -728,6 +787,119 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
             productRepository.deleteById(productId);
         } catch (Exception e) {
             log.warn("ES 删除失败，已忽略（以 MySQL 为准），productId={}", productId, e);
+        }
+    }
+
+    // ==================== 发布配额与商家统计 ====================
+
+    @Override
+    public PublishQuotaVO getPublishQuota(Long sellerId) {
+        int role = resolveUserRole(sellerId);
+        int used = countActiveListings(sellerId);
+        PublishQuotaVO vo = new PublishQuotaVO();
+        vo.setRole(role);
+        vo.setUsed(used);
+        if (UserRole.hasUnlimitedPublish(role)) {
+            vo.setUnlimited(true);
+            vo.setLimit(-1);
+            vo.setRemaining(-1);
+        } else {
+            vo.setUnlimited(false);
+            vo.setLimit(personalPublishLimit);
+            vo.setRemaining(Math.max(0, personalPublishLimit - used));
+        }
+        return vo;
+    }
+
+    @Override
+    public SellerProductStatsView getSellerProductStats(Long sellerId) {
+        requireMerchant(sellerId);
+        SellerProductStatsView stats = new SellerProductStatsView();
+        stats.setActiveListings(toIntCount(lambdaQuery()
+                .eq(Product::getSellerId, sellerId)
+                .eq(Product::getStatus, 1)
+                .count()));
+        stats.setSoldListings(toIntCount(lambdaQuery()
+                .eq(Product::getSellerId, sellerId)
+                .eq(Product::getStatus, 2)
+                .count()));
+        List<Product> products = lambdaQuery()
+                .eq(Product::getSellerId, sellerId)
+                .select(Product::getViewCount)
+                .list();
+        long views = 0;
+        for (Product p : products) {
+            if (p.getViewCount() != null) {
+                views += p.getViewCount();
+            }
+        }
+        stats.setTotalViews(views);
+        return stats;
+    }
+
+    @Override
+    public SellerProductDashboardView getSellerProductDashboard(Long sellerId) {
+        requireMerchant(sellerId);
+        SellerProductDashboardView dashboard = new SellerProductDashboardView();
+        dashboard.setSummary(getSellerProductStats(sellerId));
+        List<Product> products = lambdaQuery()
+                .eq(Product::getSellerId, sellerId)
+                .select(Product::getCategory)
+                .list();
+        Map<String, Integer> categoryCounts = new java.util.LinkedHashMap<>();
+        for (Product product : products) {
+            String category = product.getCategory();
+            if (category == null || category.isBlank()) {
+                category = "未分类";
+            }
+            categoryCounts.merge(category, 1, Integer::sum);
+        }
+        List<com.campus.product.dto.CategoryCountPoint> breakdown = new java.util.ArrayList<>();
+        for (Map.Entry<String, Integer> entry : categoryCounts.entrySet()) {
+            com.campus.product.dto.CategoryCountPoint point = new com.campus.product.dto.CategoryCountPoint();
+            point.setCategory(entry.getKey());
+            point.setCount(entry.getValue());
+            breakdown.add(point);
+        }
+        dashboard.setCategoryBreakdown(breakdown);
+        return dashboard;
+    }
+
+    private void enforcePublishQuota(Long sellerId) {
+        int role = resolveUserRole(sellerId);
+        if (UserRole.hasUnlimitedPublish(role)) {
+            return;
+        }
+        int used = countActiveListings(sellerId);
+        if (used >= personalPublishLimit) {
+            throw new BizException(ResultCode.PRODUCT_PUBLISH_LIMIT);
+        }
+    }
+
+    private int countActiveListings(Long sellerId) {
+        // 仅统计在售（status=1）；已售/已下架不占用个人发布配额
+        return toIntCount(lambdaQuery()
+                .eq(Product::getSellerId, sellerId)
+                .eq(Product::getStatus, 1)
+                .count());
+    }
+
+    private static int toIntCount(long count) {
+        return count > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) count;
+    }
+
+    private int resolveUserRole(Long userId) {
+        Result<Integer> result = userFeignClient.getUserRole(userId);
+        if (result == null || result.getCode() != ResultCode.SUCCESS.getCode() || result.getData() == null) {
+            return UserRole.USER;
+        }
+        return result.getData();
+    }
+
+    private void requireMerchant(Long userId) {
+        int role = resolveUserRole(userId);
+        if (!UserRole.isMerchant(role)) {
+            throw new BizException(ResultCode.FORBIDDEN);
         }
     }
 }

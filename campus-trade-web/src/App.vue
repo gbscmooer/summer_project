@@ -12,7 +12,7 @@
         <div class="project-icon">
           <img src="/logo.png" alt="" class="project-logo" />
         </div>
-        <span class="project-name">校园淘</span>
+        <span class="project-name">校园集市</span>
         <el-icon class="project-chevron"><ArrowDown /></el-icon>
       </div>
 
@@ -50,13 +50,14 @@
               <div class="user-avatar">{{ avatarLetter }}</div>
               <div class="user-info">
                 <span class="user-name">{{ userStore.displayName || '用户' }}</span>
-                <span class="user-org">Personal · Organization</span>
+                <span class="user-org">{{ userStore.roleLabel }}</span>
               </div>
             </div>
             <template #dropdown>
               <el-dropdown-menu>
                 <div class="dropdown-email">{{ userStore.displayName }}</div>
                 <el-dropdown-item command="my">{{ t('common.profile') }}</el-dropdown-item>
+                <el-dropdown-item v-if="userStore.isAdmin" command="admin">{{ t('nav.admin') }}</el-dropdown-item>
                 <el-dropdown-item command="logout" divided>{{ t('common.logout') }}</el-dropdown-item>
               </el-dropdown-menu>
             </template>
@@ -85,14 +86,17 @@ import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import {
+  ChatDotRound,
   House,
   MagicStick,
+  DataLine,
   EditPen,
   ShoppingCart,
   Bell,
   User,
   Setting,
-  ArrowDown
+  ArrowDown,
+  Tools
 } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/user'
 import { getUnreadCount } from '@/api/notification'
@@ -108,15 +112,23 @@ const unreadRefreshEvent = 'campus:unread-count-refresh'
 
 const isAuthPage = computed(() => ['/login', '/register'].includes(route.path))
 
-const navItems = [
-  { path: '/', labelKey: 'nav.home', icon: House },
-  { path: '/ai-shopping', labelKey: 'nav.aiShopping', icon: MagicStick },
-  { path: '/publish', labelKey: 'nav.publish', icon: EditPen },
-  { path: '/orders', labelKey: 'nav.orders', icon: ShoppingCart },
-  { path: '/notifications', labelKey: 'nav.notifications', icon: Bell },
-  { path: '/my', labelKey: 'nav.profile', icon: User },
-  { path: '/settings', labelKey: 'nav.settings', icon: Setting }
-]
+const navItems = computed(() => {
+  const items = [
+    { path: '/', labelKey: 'nav.home', icon: House },
+    { path: '/topics', labelKey: 'nav.topics', icon: ChatDotRound },
+    { path: '/ai-shopping', labelKey: 'nav.aiShopping', icon: MagicStick },
+    { path: '/publish', labelKey: 'nav.publish', icon: EditPen },
+    { path: '/orders', labelKey: 'nav.orders', icon: ShoppingCart },
+    { path: '/notifications', labelKey: 'nav.notifications', icon: Bell },
+    { path: '/activity', labelKey: 'nav.activity', icon: DataLine },
+    { path: '/my', labelKey: 'nav.profile', icon: User }
+  ]
+  if (userStore.isAdmin) {
+    items.push({ path: '/admin', labelKey: 'nav.admin', icon: Tools })
+  }
+  items.push({ path: '/settings', labelKey: 'nav.settings', icon: Setting })
+  return items
+})
 
 const avatarLetter = computed(() => {
   const name = userStore.displayName || 'U'
@@ -185,6 +197,7 @@ onUnmounted(() => {
 
 function handleCommand(command) {
   if (command === 'my') router.push('/my')
+  else if (command === 'admin') router.push('/admin')
   else if (command === 'logout') {
     ElMessageBox.confirm(t('settings.logoutConfirm'), t('settings.tip'), {
       confirmButtonText: t('settings.confirm'),

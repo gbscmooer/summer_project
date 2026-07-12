@@ -8,35 +8,65 @@
     <div class="home-grid">
       <!-- 左栏主内容 -->
       <div class="home-main">
-        <!-- Get started -->
-        <section class="section">
-          <h2 class="section-title">Get started</h2>
+        <!-- 新手教程（仅新注册用户可见） -->
+        <section v-if="onboardingVisible" class="section onboarding-section">
+          <div class="onboarding-head">
+            <div>
+              <h2 class="section-title">{{ t('onboarding.title') }}</h2>
+              <p class="onboarding-subtitle">{{ t('onboarding.subtitle') }}</p>
+            </div>
+            <button type="button" class="onboarding-dismiss" @click="onboarding.dismiss">
+              {{ t('onboarding.dismiss') }}
+            </button>
+          </div>
+
+          <div class="onboarding-progress">
+            <div class="onboarding-progress-bar">
+              <div class="onboarding-progress-fill" :style="{ width: onboardingProgressPercent + '%' }" />
+            </div>
+            <span class="onboarding-progress-text">
+              {{ t('onboarding.progress').replace('{done}', onboardingCompletedCount).replace('{total}', onboardingTotalCount) }}
+            </span>
+          </div>
+
           <div class="get-started-row">
             <div class="checklist">
-              <div
-                v-for="(step, i) in getStartedSteps"
-                :key="i"
-                class="check-item"
-                :class="{ done: step.done }"
+              <button
+                v-for="(step, i) in onboardingSteps"
+                :key="step.key"
+                type="button"
+                class="check-item check-item-btn"
+                :class="{ done: step.done, active: !step.done }"
+                @click="onboarding.goToStep(step)"
               >
                 <span class="check-num">{{ i + 1 }}.</span>
                 <span class="check-icon" :class="{ done: step.done }">
                   <el-icon v-if="step.done"><Check /></el-icon>
                 </span>
-                <span class="check-label">{{ step.label }}</span>
-              </div>
+                <span class="check-label">{{ t(`onboarding.steps.${step.key}`) }}</span>
+                <el-icon v-if="!step.done" class="check-go"><ArrowRight /></el-icon>
+              </button>
             </div>
 
-            <!-- 右侧两张 promo 卡 -->
             <div class="promo-cards">
               <div class="promo-card" @click="$router.push('/publish')">
                 <div class="promo-card-bg promo-bg-1" />
-                <span class="promo-card-title">快速发布指南</span>
+                <span class="promo-card-title">{{ t('onboarding.promoPublish') }}</span>
                 <el-icon class="promo-arrow"><ArrowRight /></el-icon>
               </div>
               <div class="promo-card" @click="handleSearch">
                 <div class="promo-card-bg promo-bg-2" />
-                <span class="promo-card-title">浏览热门商品</span>
+                <span class="promo-card-title">{{ t('onboarding.promoBrowse') }}</span>
+                <el-icon class="promo-arrow"><ArrowRight /></el-icon>
+              </div>
+              <div
+                v-if="onboardingTutorialProductId"
+                class="promo-card promo-card-tutorial"
+                @click="$router.push(`/product/${onboardingTutorialProductId}`)"
+              >
+                <div class="promo-card-bg promo-bg-3" />
+                <span class="promo-card-title">{{ t('onboarding.promoTutorial') }}</span>
+                <span class="promo-card-badge">¥0 · 限购2</span>
                 <el-icon class="promo-arrow"><ArrowRight /></el-icon>
               </div>
             </div>
@@ -57,12 +87,14 @@
         <!-- Safety insights 横幅 -->
         <section v-if="showBanner" class="insights-banner">
           <div class="banner-inner">
-            <button class="dismiss-btn" @click="showBanner = false">Dismiss</button>
-            <div class="banner-text">
-              <h3>Introducing safety insights</h3>
-              <p>校园淘现已支持交易安全提醒，保障每一笔闲置交易。</p>
+            <div class="banner-header">
+              <h3 class="banner-title">Introducing safety insights</h3>
+              <button type="button" class="dismiss-btn" @click="showBanner = false">关闭</button>
             </div>
-            <button class="banner-btn">Learn more</button>
+            <p class="banner-desc">校园集市现已支持交易安全提醒，保障每一笔闲置交易。</p>
+            <div class="banner-footer">
+              <button type="button" class="banner-btn">了解更多</button>
+            </div>
           </div>
         </section>
 
@@ -184,9 +216,19 @@ import { Check, ArrowRight, Search, Picture, InfoFilled } from '@element-plus/ic
 import { getProductList, searchProducts } from '@/api/product'
 import { CATEGORIES } from '@/constants/product'
 import { useUserStore } from '@/store/user'
+import { useI18n } from '@/i18n'
+import { useOnboarding } from '@/composables/useOnboarding'
 
 const router = useRouter()
 const userStore = useUserStore()
+const { t } = useI18n()
+const onboarding = useOnboarding()
+const onboardingVisible = onboarding.visible
+const onboardingSteps = onboarding.steps
+const onboardingProgressPercent = onboarding.progressPercent
+const onboardingCompletedCount = onboarding.completedCount
+const onboardingTotalCount = onboarding.totalCount
+const onboardingTutorialProductId = onboarding.tutorialProductId
 const categories = CATEGORIES
 
 const showBanner = ref(true)
@@ -205,17 +247,11 @@ const stats = ref({
 
 const recommendedList = computed(() => list.value.slice(0, 4))
 
-const getStartedSteps = computed(() => [
-  { label: userStore.isLogin ? 'Create an account' : 'Create an account', done: userStore.isLogin },
-  { label: 'Publish first listing', done: false },
-  { label: 'Complete first trade', done: false }
-])
-
 const updates = [
   {
     date: '2 months ago',
-    title: 'Campus Trade v2.0 — 全新交易体验',
-    desc: 'Campus Trade v2.0 带来更流畅的发布流程与订单追踪，让校园闲置交易更简单。'
+    title: 'Campus Market v2.0 — 全新交易体验',
+    desc: 'Campus Market v2.0 带来更流畅的发布流程与订单追踪，让校园闲置交易更简单。'
   },
   {
     date: '3 months ago',
@@ -281,7 +317,11 @@ function goDetail(id) {
   router.push(`/product/${id}`)
 }
 
-onMounted(fetchList)
+onMounted(async () => {
+  await fetchList()
+  await onboarding.refresh()
+  onboarding.trackStep('browse')
+})
 </script>
 
 <style scoped>
@@ -349,7 +389,76 @@ onMounted(fetchList)
   margin-bottom: 16px;
 }
 
-/* Get started */
+/* Get started / 新手教程 */
+.onboarding-section {
+  border: 1px solid var(--oa-border-subtle);
+  border-radius: var(--oa-radius-lg);
+  padding: 20px;
+  background: var(--oa-bg-elevated);
+}
+
+.onboarding-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.onboarding-head .section-title {
+  margin-bottom: 4px;
+}
+
+.onboarding-subtitle {
+  font-size: 13px;
+  color: var(--oa-text-secondary);
+  margin: 0;
+}
+
+.onboarding-dismiss {
+  border: none;
+  background: transparent;
+  color: var(--oa-text-muted);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--oa-radius);
+  flex-shrink: 0;
+}
+
+.onboarding-dismiss:hover {
+  color: var(--oa-text);
+  background: var(--oa-bg-hover);
+}
+
+.onboarding-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.onboarding-progress-bar {
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--oa-bg-hover);
+  overflow: hidden;
+}
+
+.onboarding-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #6366f1, #22c55e);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+.onboarding-progress-text {
+  font-size: 12px;
+  color: var(--oa-text-muted);
+  white-space: nowrap;
+}
+
 .get-started-row {
   display: flex;
   gap: 16px;
@@ -372,6 +481,32 @@ onMounted(fetchList)
 
 .check-item.done {
   color: var(--oa-text);
+}
+
+.check-item-btn {
+  width: 100%;
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 6px 8px;
+  margin: -6px -8px;
+  border-radius: var(--oa-radius);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.check-item-btn:hover {
+  background: var(--oa-bg-hover);
+}
+
+.check-item-btn.active .check-label {
+  color: var(--oa-text);
+}
+
+.check-go {
+  margin-left: auto;
+  color: var(--oa-text-muted);
+  font-size: 14px;
 }
 
 .check-num {
@@ -400,7 +535,7 @@ onMounted(fetchList)
   display: flex;
   flex-direction: column;
   gap: 8px;
-  width: 200px;
+  width: 220px;
   flex-shrink: 0;
 }
 
@@ -433,6 +568,26 @@ onMounted(fetchList)
 
 .promo-bg-2 {
   background: linear-gradient(135deg, #06b6d4 0%, #8b5cf6 50%, #f43f5e 100%);
+}
+
+.promo-bg-3 {
+  background: linear-gradient(135deg, #22c55e 0%, #14b8a6 50%, #0ea5e9 100%);
+}
+
+.promo-card-tutorial {
+  height: 80px;
+}
+
+.promo-card-badge {
+  position: relative;
+  z-index: 1;
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(0, 0, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 999px;
 }
 
 .promo-card-title {
@@ -532,42 +687,61 @@ onMounted(fetchList)
 /* Banner */
 .insights-banner {
   margin-bottom: 32px;
-  position: relative;
-}
-
-.dismiss-btn {
-  position: absolute;
-  top: 12px;
-  right: 16px;
-  background: transparent;
-  border: none;
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 13px;
-  cursor: pointer;
-  z-index: 2;
 }
 
 .banner-inner {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20px 24px;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px 20px;
   border-radius: var(--oa-radius);
   background: linear-gradient(135deg, #fce7f3 0%, #fbcfe8 40%, #e9d5ff 100%);
+}
+
+.banner-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
   gap: 16px;
 }
 
-.banner-text h3 {
+.banner-title {
+  margin: 0;
   font-size: 15px;
   font-weight: 600;
   color: #1a1a1a;
-  margin-bottom: 4px;
+  line-height: 1.4;
 }
 
-.banner-text p {
+.dismiss-btn {
+  flex-shrink: 0;
+  margin-top: 1px;
+  padding: 2px 4px;
+  background: transparent;
+  border: none;
+  color: #666;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s;
+}
+
+.dismiss-btn:hover {
+  color: #1a1a1a;
+}
+
+.banner-desc {
+  margin: 0;
   font-size: 13px;
   color: #444;
-  line-height: 1.4;
+  line-height: 1.5;
+  max-width: 52ch;
+}
+
+.banner-footer {
+  display: flex;
+  align-items: center;
+  margin-top: 4px;
 }
 
 .banner-btn {
@@ -580,7 +754,11 @@ onMounted(fetchList)
   font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
-  flex-shrink: 0;
+  transition: background 0.15s;
+}
+
+.banner-btn:hover {
+  background: #333;
 }
 
 /* Recommended */

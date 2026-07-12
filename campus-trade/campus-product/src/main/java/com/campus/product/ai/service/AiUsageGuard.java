@@ -1,6 +1,7 @@
 package com.campus.product.ai.service;
 
 import com.campus.common.exception.BizException;
+import com.campus.product.ai.dto.AiUsageStatsView;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
@@ -20,6 +21,8 @@ public class AiUsageGuard {
     private final long dailyLimit;
     private final long globalConcurrency;
     private static final String GLOBAL_KEY = "ai:global:inflight";
+    private static final String DAILY_TOTAL_PREFIX = "ai:daily:total:";
+    private static final String DAILY_USERS_PREFIX = "ai:daily:users:";
     private static final DefaultRedisScript<Long> ACQUIRE_SCRIPT = new DefaultRedisScript<>("""
             local current = tonumber(redis.call('get', KEYS[1]) or '0')
             if current >= tonumber(ARGV[1]) then return 0 end
@@ -71,11 +74,20 @@ public class AiUsageGuard {
         if (userId == null) {
             throw new BizException(401, "未登录或Token已失效");
         }
-        String key = "ai:daily:" + LocalDate.now(ZoneOffset.UTC) + ":" + userId;
+        String date = LocalDate.now(ZoneOffset.UTC).toString();
+        String key = "ai:daily:" + date + ":" + userId;
         try {
             Long used = redisTemplate.opsForValue().increment(key);
             if (used != null && used == 1L) {
                 redisTemplate.expire(key, Duration.ofDays(2));
+            }
+            String usersSetKey = DAILY_USERS_PREFIX + date;
+            redisTemplate.opsForSet().add(usersSetKey, String.valueOf(userId));
+            redisTemplate.expire(usersSetKey, Duration.ofDays(2));
+            String totalKey = DAILY_TOTAL_PREFIX + date;
+            Long total = redisTemplate.opsForValue().increment(totalKey);
+            if (total != null && total == 1L) {
+                redisTemplate.expire(totalKey, Duration.ofDays(2));
             }
             if (used == null || used > dailyLimit) {
                 throw new BizException(429, "今日 AI 使用额度已用完");
@@ -86,5 +98,36 @@ public class AiUsageGuard {
             // Fail closed: losing Redis must not turn into unmetered paid API traffic.
             throw new BizException(500, "AI 配额服务暂不可用");
         }
+    }
+
+    public AiUsageStatsView getUsageStats() {
+        String date = LocalDate.now(ZoneOffset.UTC).toString();
+        long inflight = 0L;
+        long totalRequests = 0L;
+        long activeUsers = 0L;
+        try {
+            String inflightValue = redisTemplate.opsForValue().get(GLOBAL_KEY);
+            if (inflightValue != null) {
+                inflight = Long.parseLong(inflightValue);
+            }
+            String totalValue = redisTemplate.opsForValue().get(DAILY_TOTAL_PREFIX + date);
+            if (totalValue != null) {
+                totalRequests = Long.parseLong(totalValue);
+            }
+            Long userCount = redisTemplate.opsForSet().size(DAILY_USERS_PREFIX + date);
+            if (userCount != null) {
+                activeUsers = userCount;
+            }
+        } catch (Exception e) {
+            // Admin dashboard should degrade gracefully when Redis is unavailable.
+        }
+        return AiUsageStatsView.builder()
+                .dailyUserLimit(dailyLimit)
+                .globalConcurrencyLimit(globalConcurrency)
+                .globalInflight(inflight)
+                .todayTotalRequests(totalRequests)
+                .todayActiveUsers(activeUsers)
+                .usageDate(date)
+                .build();
     }
 }

@@ -20,6 +20,10 @@ public class Product {
     private Integer status;   // 0-下架 1-在售 2-已售
     private Integer stock;
     private Integer viewCount;
+    /** 1-新手教程专用商品 */
+    private Integer isTutorial;
+    /** 每用户限购数量 */
+    private Integer purchaseLimit;
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
     @TableField(fill = FieldFill.INSERT_UPDATE)

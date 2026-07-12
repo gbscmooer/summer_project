@@ -27,6 +27,18 @@ const routes = [
     meta: { title: '商品详情' }
   },
   {
+    path: '/topics',
+    name: 'Topics',
+    component: () => import('@/views/Topics.vue'),
+    meta: { title: '话题' }
+  },
+  {
+    path: '/topics/:id',
+    name: 'TopicDetail',
+    component: () => import('@/views/TopicDetail.vue'),
+    meta: { title: '帖子详情' }
+  },
+  {
     path: '/publish',
     name: 'Publish',
     component: () => import('@/views/Publish.vue'),
@@ -47,6 +59,12 @@ const routes = [
     meta: { title: '我的', requiresAuth: true }
   },
   {
+    path: '/activity',
+    name: 'Activity',
+    component: () => import('@/views/Activity.vue'),
+    meta: { title: '我的动态', requiresAuth: true }
+  },
+  {
     path: '/orders',
     name: 'Orders',
     component: () => import('@/views/Orders.vue'),
@@ -64,6 +82,12 @@ const routes = [
     name: 'Settings',
     component: () => import('@/views/Settings.vue'),
     meta: { title: '设置', requiresAuth: true }
+  },
+  {
+    path: '/admin',
+    name: 'Admin',
+    component: () => import('@/views/Admin.vue'),
+    meta: { title: '管理后台', requiresAuth: true, requiresAdmin: true }
   },
   // 兜底：未匹配路由回首页
   {
@@ -83,12 +107,14 @@ const router = createRouter({
 router.beforeEach((to, from, next) => {
   // 设置页面标题
   if (to.meta && to.meta.title) {
-    document.title = `校园淘 · ${to.meta.title}`
+    document.title = `校园集市 · ${to.meta.title}`
   }
 
   const userStore = useUserStore()
   if (to.meta && to.meta.requiresAuth && !userStore.isLogin) {
     next({ path: '/login', query: { redirect: to.fullPath } })
+  } else if (to.meta && to.meta.requiresAdmin && !userStore.isAdmin) {
+    next({ path: '/' })
   } else {
     next()
   }

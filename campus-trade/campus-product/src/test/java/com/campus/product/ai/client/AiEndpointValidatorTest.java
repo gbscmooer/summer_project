@@ -18,4 +18,11 @@ class AiEndpointValidatorTest {
         assertThrows(BizException.class,
                 () -> AiEndpointValidator.requireSafePublicHttpsUrl("https://169.254.169.254/latest/meta-data"));
     }
+
+    @Test
+    void appendsV1WhenBaseUrlHasNoPath() {
+        org.junit.jupiter.api.Assertions.assertEquals(
+                "https://api.example.com/v1",
+                AiEndpointValidator.normalizeOpenAiCompatibleBaseUrl("https://api.example.com"));
+    }
 }

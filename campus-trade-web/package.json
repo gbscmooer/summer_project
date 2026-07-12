@@ -1,7 +1,7 @@
 {
   "name": "campus-trade-web",
   "version": "1.0.0",
-  "description": "校园二手交易平台 CampusTrade 前端 SPA",
+  "description": "校园集市 Campus Market 前端 SPA",
   "private": true,
   "type": "module",
   "scripts": {
@@ -13,9 +13,11 @@
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.0",
     "axios": "^1.7.0",
+    "echarts": "^5.6.0",
     "element-plus": "^2.7.0",
     "pinia": "^2.1.0",
     "vue": "^3.4.0",
+    "vue-echarts": "^7.0.3",
     "vue-router": "^4.3.0"
   },
   "devDependencies": {

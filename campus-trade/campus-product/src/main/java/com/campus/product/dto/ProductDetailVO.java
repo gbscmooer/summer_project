@@ -23,6 +23,10 @@ public class ProductDetailVO {
     private Integer stock;
     private Integer viewCount;
     private LocalDateTime createTime;
+    /** 1-新手教程商品 */
+    private Integer isTutorial;
+    /** 每用户限购，null 表示不限 */
+    private Integer purchaseLimit;
 
     public static ProductDetailVO from(Product p) {
         ProductDetailVO vo = new ProductDetailVO();
@@ -42,6 +46,8 @@ public class ProductDetailVO {
         vo.setStock(p.getStock());
         vo.setViewCount(p.getViewCount());
         vo.setCreateTime(p.getCreateTime());
+        vo.setIsTutorial(p.getIsTutorial() == null ? 0 : p.getIsTutorial());
+        vo.setPurchaseLimit(p.getPurchaseLimit());
         return vo;
     }
 }

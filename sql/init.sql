@@ -1,4 +1,4 @@
--- 校园二手交易平台数据库初始化脚本
+-- 校园集市数据库初始化脚本
 -- 数据库 campus_trade 已由 Docker 环境变量自动创建
 
 USE campus_trade;
@@ -13,7 +13,14 @@ CREATE TABLE IF NOT EXISTS t_user (
     nickname    VARCHAR(50)  COMMENT '昵称',
     avatar      VARCHAR(255) COMMENT '头像URL',
     phone       VARCHAR(20)  COMMENT '联系方式',
-    role        TINYINT      NOT NULL DEFAULT 0 COMMENT '0-普通用户 1-管理员',
+    role        TINYINT      NOT NULL DEFAULT 0 COMMENT '0-个人账户 1-管理员 2-商家',
+    status      TINYINT      NOT NULL DEFAULT 0 COMMENT '0-正常 1-已封禁',
+    ban_reason  VARCHAR(500) COMMENT '封禁原因',
+    ban_until   DATETIME     COMMENT '封禁截止时间，NULL 表示永久',
+    banned_by   BIGINT       COMMENT '执行封禁的管理员ID',
+    banned_at   DATETIME     COMMENT '封禁时间',
+    onboarding_completed TINYINT NOT NULL DEFAULT 0 COMMENT '1-已完成新手教程',
+    onboarding_flags     VARCHAR(512) NOT NULL DEFAULT '{}' COMMENT '新手教程步骤标记 JSON',
     create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '注册时间',
     update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户表';
@@ -32,6 +39,8 @@ CREATE TABLE IF NOT EXISTS t_product (
     status      TINYINT         DEFAULT 1 COMMENT '0-下架 1-在售 2-已售',
     stock       INT             DEFAULT 1 COMMENT '库存（二手商品一般为1）',
     view_count  INT             DEFAULT 0 COMMENT '浏览量',
+    is_tutorial TINYINT         NOT NULL DEFAULT 0 COMMENT '1-新手教程专用商品',
+    purchase_limit INT          NULL COMMENT '每用户限购数量，NULL 表示不限',
     create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
     update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_seller_id  (seller_id),
@@ -39,6 +48,44 @@ CREATE TABLE IF NOT EXISTS t_product (
     INDEX idx_category   (category),
     INDEX idx_create_time (create_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='商品表';
+
+-- ============================================================
+-- 商品留言表（campus-product 服务使用）
+-- ============================================================
+CREATE TABLE IF NOT EXISTS t_product_comment (
+    id          BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '留言ID',
+    product_id  BIGINT       NOT NULL COMMENT '商品ID',
+    user_id     BIGINT       NOT NULL COMMENT '留言用户ID',
+    content     VARCHAR(500) NOT NULL COMMENT '留言内容',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '留言时间',
+    INDEX idx_product_id (product_id),
+    INDEX idx_user_id (user_id),
+    INDEX idx_create_time (create_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='商品留言表';
+
+-- ============================================================
+-- 话题帖子（campus-product 服务使用）
+-- ============================================================
+CREATE TABLE IF NOT EXISTS t_topic_post (
+    id          BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '帖子ID',
+    user_id     BIGINT       NOT NULL COMMENT '作者用户ID',
+    title       VARCHAR(100) NOT NULL COMMENT '标题',
+    content     TEXT         NOT NULL COMMENT '正文',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '发布时间',
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_user_id (user_id),
+    INDEX idx_create_time (create_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='话题帖子表';
+
+CREATE TABLE IF NOT EXISTS t_topic_post_product (
+    id          BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '关联ID',
+    post_id     BIGINT NOT NULL COMMENT '帖子ID',
+    product_id  BIGINT NOT NULL COMMENT '商品ID',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_post_product (post_id, product_id),
+    INDEX idx_post_id (post_id),
+    INDEX idx_product_id (product_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='帖子附带商品关联表';
 
 -- ============================================================
 -- 订单表（campus-order 服务使用）
@@ -134,3 +181,21 @@ CREATE TABLE IF NOT EXISTS t_stock_compensation_task (
     UNIQUE KEY uk_compensation_order_no (order_no),
     INDEX idx_compensation_due (status, next_retry_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='订单库存补偿任务';
+
+-- ============================================================
+-- 商家入驻申请表（campus-user 服务使用）
+-- ============================================================
+CREATE TABLE IF NOT EXISTS t_merchant_application (
+    id            BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '申请ID',
+    user_id       BIGINT       NOT NULL COMMENT '申请人用户ID',
+    shop_name     VARCHAR(100) NOT NULL COMMENT '店铺名称',
+    reason        VARCHAR(500) NOT NULL COMMENT '申请说明',
+    contact_phone VARCHAR(20)  NOT NULL COMMENT '联系电话',
+    status        TINYINT      NOT NULL DEFAULT 0 COMMENT '0-待审核 1-已通过 2-已拒绝',
+    admin_id      BIGINT       NULL COMMENT '审核管理员ID',
+    admin_note    VARCHAR(255) NULL COMMENT '审核备注',
+    create_time   DATETIME DEFAULT CURRENT_TIMESTAMP,
+    update_time   DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_user_id (user_id),
+    INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='商家入驻申请表';

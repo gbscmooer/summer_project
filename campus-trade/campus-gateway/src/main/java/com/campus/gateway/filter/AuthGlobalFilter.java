@@ -47,6 +47,13 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
     /** 商品详情白名单：GET /api/product/{纯数字id}。 */
     private static final Pattern PRODUCT_DETAIL_PATTERN = Pattern.compile("^/api/product/\\d+$");
 
+    /** 商品留言列表：GET /api/product/{纯数字id}/comments */
+    private static final Pattern PRODUCT_COMMENT_PATTERN = Pattern.compile("^/api/product/\\d+/comments$");
+
+    /** 话题帖子列表/详情：GET /api/topic/posts/list、/api/topic/posts/{id} */
+    private static final Pattern TOPIC_POST_LIST_PATTERN = Pattern.compile("^/api/topic/posts/list$");
+    private static final Pattern TOPIC_POST_DETAIL_PATTERN = Pattern.compile("^/api/topic/posts/\\d+$");
+
     /** 商品图片公开读取：GET /api/product/image/{安全文件名}。 */
     private static final Pattern PRODUCT_IMAGE_PATTERN = Pattern.compile("^/api/product/image/[a-zA-Z0-9._-]+$");
 
@@ -109,14 +116,26 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
             return true;
         }
         if (HttpMethod.GET.equals(method) && ("/api/product/list".equals(path)
-                || "/api/product/search".equals(path))) {
+                || "/api/product/search".equals(path)
+                || "/api/product/tutorial".equals(path))) {
             return true;
         }
         if (HttpMethod.GET.equals(method) && PRODUCT_IMAGE_PATTERN.matcher(path).matches()) {
             return true;
         }
         // 商品详情：GET /api/product/{纯数字id}
-        return HttpMethod.GET.equals(method) && PRODUCT_DETAIL_PATTERN.matcher(path).matches();
+        if (HttpMethod.GET.equals(method) && PRODUCT_DETAIL_PATTERN.matcher(path).matches()) {
+            return true;
+        }
+        // 商品留言列表：GET /api/product/{纯数字id}/comments
+        if (HttpMethod.GET.equals(method) && PRODUCT_COMMENT_PATTERN.matcher(path).matches()) {
+            return true;
+        }
+        // 话题帖子：列表与详情
+        if (HttpMethod.GET.equals(method) && TOPIC_POST_LIST_PATTERN.matcher(path).matches()) {
+            return true;
+        }
+        return HttpMethod.GET.equals(method) && TOPIC_POST_DETAIL_PATTERN.matcher(path).matches();
     }
 
     /**

@@ -24,6 +24,12 @@ spring:
             - Path=/api/product/**
           filters:
             - StripPrefix=1
+        - id: topic-service
+          uri: lb://campus-product
+          predicates:
+            - Path=/api/topic/**
+          filters:
+            - StripPrefix=1
         - id: ai-service
           uri: lb://campus-product
           predicates:

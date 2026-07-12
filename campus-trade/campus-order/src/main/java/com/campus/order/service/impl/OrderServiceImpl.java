@@ -2,6 +2,7 @@ package com.campus.order.service.impl;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
+import com.campus.common.constant.UserRole;
 import com.campus.common.exception.BizException;
 import com.campus.common.result.PageResult;
 import com.campus.common.result.Result;
@@ -10,6 +11,7 @@ import com.campus.common.util.PageParamUtil;
 import com.campus.order.dto.CreateOrderVO;
 import com.campus.order.dto.OrderDetailVO;
 import com.campus.order.dto.OrderListVO;
+import com.campus.order.dto.SellerIncomeStatsView;
 import com.campus.order.entity.Order;
 import com.campus.order.feign.ProductFeignClient;
 import com.campus.order.feign.UserFeignClient;
@@ -34,6 +36,7 @@ import com.campus.order.dto.SeckillResultVO;
 
 import java.time.Duration;
 
+import java.math.BigDecimal;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -84,6 +87,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         if (buyerId.equals(product.getSellerId())) {
             throw new BizException(ResultCode.ORDER_CANNOT_BUY_OWN);
         }
+        enforcePurchaseLimit(buyerId, productId, product);
 
         // 生成唯一订单号，用于幂等库存回滚
         String orderNo = OrderNoGenerator.generate();
@@ -338,6 +342,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         if (buyerId.equals(product.getSellerId())) {
             throw new BizException(ResultCode.ORDER_CANNOT_BUY_OWN);
         }
+        enforcePurchaseLimit(buyerId, productId, product);
 
         // 3. 重复秒杀检验 & 占位原子操作
         Boolean acquired = stringRedisTemplate.opsForValue().setIfAbsent(resultKey, "queuing", java.time.Duration.ofMinutes(15));
@@ -507,6 +512,135 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             return new com.campus.order.dto.SeckillResultVO(-1, null);
         } else {
             return new com.campus.order.dto.SeckillResultVO(1, statusStr);
+        }
+    }
+
+    private void enforcePurchaseLimit(Long buyerId, Long productId, ProductDTO product) {
+        if (product.getIsTutorial() == null || product.getIsTutorial() != 1) {
+            return;
+        }
+        Integer limit = product.getPurchaseLimit();
+        if (limit == null || limit <= 0) {
+            return;
+        }
+        long purchased = lambdaQuery()
+                .eq(Order::getBuyerId, buyerId)
+                .eq(Order::getProductId, productId)
+                .ne(Order::getStatus, STATUS_CANCELLED)
+                .count();
+        if (purchased >= limit) {
+            throw new BizException(ResultCode.ORDER_PURCHASE_LIMIT);
+        }
+    }
+
+    @Override
+    public SellerIncomeStatsView getSellerIncomeStats(Long sellerId) {
+        requireMerchant(sellerId);
+        List<Order> orders = lambdaQuery()
+                .eq(Order::getSellerId, sellerId)
+                .list();
+        SellerIncomeStatsView stats = new SellerIncomeStatsView();
+        stats.setTotalOrders(orders.size());
+        BigDecimal revenue = BigDecimal.ZERO;
+        long completed = 0;
+        long pendingPayment = 0;
+        long pendingShipment = 0;
+        long cancelled = 0;
+        for (Order order : orders) {
+            Integer status = order.getStatus();
+            if (status == null) {
+                continue;
+            }
+            switch (status) {
+                case STATUS_UNPAID -> pendingPayment++;
+                case STATUS_PAID -> {
+                    pendingShipment++;
+                    if (order.getPrice() != null) {
+                        revenue = revenue.add(order.getPrice());
+                    }
+                }
+                case STATUS_DONE -> {
+                    completed++;
+                    if (order.getPrice() != null) {
+                        revenue = revenue.add(order.getPrice());
+                    }
+                }
+                case STATUS_CANCELLED -> cancelled++;
+                default -> { }
+            }
+        }
+        stats.setTotalRevenue(revenue);
+        stats.setCompletedOrders(completed);
+        stats.setPendingPaymentOrders(pendingPayment);
+        stats.setPendingShipmentOrders(pendingShipment);
+        stats.setCancelledOrders(cancelled);
+        return stats;
+    }
+
+    @Override
+    public com.campus.order.dto.SellerDashboardView getSellerDashboard(Long sellerId) {
+        requireMerchant(sellerId);
+        com.campus.order.dto.SellerDashboardView dashboard = new com.campus.order.dto.SellerDashboardView();
+        SellerIncomeStatsView summary = getSellerIncomeStats(sellerId);
+        dashboard.setSummary(summary);
+
+        List<com.campus.order.dto.StatusCountPoint> breakdown = new java.util.ArrayList<>();
+        breakdown.add(statusPoint(STATUS_UNPAID, "待付款", summary.getPendingPaymentOrders()));
+        breakdown.add(statusPoint(STATUS_PAID, "待发货", summary.getPendingShipmentOrders()));
+        breakdown.add(statusPoint(STATUS_DONE, "已完成", summary.getCompletedOrders()));
+        breakdown.add(statusPoint(STATUS_CANCELLED, "已取消", summary.getCancelledOrders()));
+        dashboard.setOrderStatusBreakdown(breakdown);
+
+        java.time.LocalDate end = java.time.LocalDate.now();
+        java.time.LocalDate start = end.minusDays(89);
+        java.time.LocalDateTime startDt = start.atStartOfDay();
+        List<Order> recentOrders = lambdaQuery()
+                .eq(Order::getSellerId, sellerId)
+                .ge(Order::getCreateTime, startDt)
+                .in(Order::getStatus, STATUS_PAID, STATUS_DONE)
+                .list();
+
+        java.util.Map<java.time.LocalDate, com.campus.order.dto.DailyRevenuePoint> dailyMap = new java.util.TreeMap<>();
+        for (java.time.LocalDate d = start; !d.isAfter(end); d = d.plusDays(1)) {
+            com.campus.order.dto.DailyRevenuePoint point = new com.campus.order.dto.DailyRevenuePoint();
+            point.setDate(d.toString());
+            point.setRevenue(BigDecimal.ZERO);
+            point.setOrderCount(0);
+            dailyMap.put(d, point);
+        }
+        for (Order order : recentOrders) {
+            if (order.getCreateTime() == null) {
+                continue;
+            }
+            java.time.LocalDate day = order.getCreateTime().toLocalDate();
+            com.campus.order.dto.DailyRevenuePoint point = dailyMap.get(day);
+            if (point == null) {
+                continue;
+            }
+            point.setOrderCount(point.getOrderCount() + 1);
+            if (order.getPrice() != null) {
+                point.setRevenue(point.getRevenue().add(order.getPrice()));
+            }
+        }
+        dashboard.setDailyRevenue(new java.util.ArrayList<>(dailyMap.values()));
+        return dashboard;
+    }
+
+    private com.campus.order.dto.StatusCountPoint statusPoint(int status, String text, long count) {
+        com.campus.order.dto.StatusCountPoint point = new com.campus.order.dto.StatusCountPoint();
+        point.setStatus(status);
+        point.setStatusText(text);
+        point.setCount(count);
+        return point;
+    }
+
+    private void requireMerchant(Long userId) {
+        Result<Integer> result = userFeign.getUserRole(userId);
+        if (result == null || result.getCode() != ResultCode.SUCCESS.getCode() || result.getData() == null) {
+            throw new BizException(ResultCode.FORBIDDEN);
+        }
+        if (!UserRole.isMerchant(result.getData())) {
+            throw new BizException(ResultCode.FORBIDDEN);
         }
     }
 }

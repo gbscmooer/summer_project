@@ -3,6 +3,8 @@ package com.campus.product.controller;
 import com.campus.common.result.PageResult;
 import com.campus.common.result.Result;
 import com.campus.common.security.InternalApiTokenValidator;
+import com.campus.product.dto.PublishQuotaVO;
+import com.campus.product.dto.SellerProductStatsView;
 import com.campus.product.dto.ProductDetailVO;
 import com.campus.product.dto.ProductListVO;
 import com.campus.product.dto.ProductRequest;
@@ -51,6 +53,11 @@ public class ProductController {
         return Result.success("已下架", null);
     }
 
+    @GetMapping("/tutorial")
+    public Result<ProductDetailVO> getTutorialProduct() {
+        return Result.success(productService.getTutorialProduct());
+    }
+
     @GetMapping("/{id}")
     public Result<ProductDetailVO> getDetail(@PathVariable Long id) {
         return Result.success(productService.getDetail(id));
@@ -89,6 +96,22 @@ public class ProductController {
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "10") Integer pageSize) {
         return Result.success(productService.myProducts(sellerId, pageNum, pageSize));
+    }
+
+    @GetMapping("/publish-quota")
+    public Result<PublishQuotaVO> publishQuota(@RequestHeader("X-User-Id") Long sellerId) {
+        return Result.success(productService.getPublishQuota(sellerId));
+    }
+
+    @GetMapping("/seller/stats")
+    public Result<SellerProductStatsView> sellerProductStats(@RequestHeader("X-User-Id") Long sellerId) {
+        return Result.success(productService.getSellerProductStats(sellerId));
+    }
+
+    @GetMapping("/seller/dashboard")
+    public Result<com.campus.product.dto.SellerProductDashboardView> sellerProductDashboard(
+            @RequestHeader("X-User-Id") Long sellerId) {
+        return Result.success(productService.getSellerProductDashboard(sellerId));
     }
 
     // ==================== 内部接口（供 OpenFeign，不经网关） ====================

@@ -1,6 +1,6 @@
 <template>
   <el-card class="auth-card">
-    <h2 class="auth-title">登录校园淘</h2>
+    <h2 class="auth-title">登录校园集市</h2>
     <p class="auth-subtitle">Sign in to your account</p>
     <el-form
       ref="formRef"

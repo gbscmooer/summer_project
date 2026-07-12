@@ -74,6 +74,20 @@ public class OrderController {
         return Result.success(orderService.sellerOrders(sellerId, status, pageNum, pageSize));
     }
 
+    /** 商家收入统计（仅商家可用）。 */
+    @GetMapping("/seller/stats")
+    public Result<com.campus.order.dto.SellerIncomeStatsView> sellerIncomeStats(
+            @RequestHeader("X-User-Id") Long sellerId) {
+        return Result.success(orderService.getSellerIncomeStats(sellerId));
+    }
+
+    /** 商家收入仪表盘（趋势与分布，仅商家可用）。 */
+    @GetMapping("/seller/dashboard")
+    public Result<com.campus.order.dto.SellerDashboardView> sellerDashboard(
+            @RequestHeader("X-User-Id") Long sellerId) {
+        return Result.success(orderService.getSellerDashboard(sellerId));
+    }
+
     /** 支付（仅买家本人，0→1）。 */
     @PostMapping("/{id}/pay")
     public Result<Void> pay(

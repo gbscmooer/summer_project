@@ -3,6 +3,7 @@ package com.campus.product.ai.service;
 import com.campus.product.ai.dto.AiAdminConfigRequest;
 import com.campus.product.ai.dto.AiAdminConfigResponse;
 import com.campus.product.ai.dto.AiRuntimeSettings;
+import com.campus.product.ai.dto.AiUsageStatsView;
 import com.campus.product.ai.service.impl.AiSettingsServiceImpl;
 import com.campus.product.config.AiProperties;
 import com.campus.product.entity.AiConfigEntity;
@@ -36,7 +37,13 @@ class AiSettingsServiceImplTest {
         env.setSupportsVision(true);
         mapper = mock(AiConfigMapper.class);
         crypto = new AiSecretCrypto("test-master-secret-at-least-32-bytes-long");
-        service = new AiSettingsServiceImpl(env, mapper, crypto);
+        AiUsageGuard usageGuard = mock(AiUsageGuard.class);
+        AiHealthProbeService healthProbe = mock(AiHealthProbeService.class);
+        when(usageGuard.getUsageStats()).thenReturn(AiUsageStatsView.builder()
+                .dailyUserLimit(100)
+                .globalConcurrencyLimit(8)
+                .build());
+        service = new AiSettingsServiceImpl(env, mapper, crypto, usageGuard, healthProbe);
     }
 
     @Test
@@ -68,11 +75,43 @@ class AiSettingsServiceImplTest {
     }
 
     @Test
-    void masksApiKeyInAdminView() {
-        when(mapper.selectById(1L)).thenReturn(null);
+    void masksStoredKeyEvenWhenOverrideDisabled() {
+        AiConfigEntity row = new AiConfigEntity();
+        row.setId(1L);
+        row.setEnabled(0);
+        row.setBaseUrl("https://api.deepseek.com");
+        row.setApiKey(crypto.encrypt("admin-key-123456"));
+        row.setApiKeyBaseUrl("https://api.deepseek.com");
+        row.setModel("deepseek-v4-flash");
+        when(mapper.selectById(1L)).thenReturn(row);
+
         AiAdminConfigResponse view = service.getAdminView();
         assertTrue(view.getApiKeyMasked().contains("****"));
-        assertFalse(view.getApiKeyMasked().contains("env-secret-key"));
+        assertTrue(view.isSavedButDisabled());
+        assertEquals("env", view.getActiveSource());
+        assertEquals("https://api.deepseek.com", view.getBaseUrl());
+    }
+
+    @Test
+    void savingCustomEndpointWithStoredKeyAutoEnables() {
+        AiConfigEntity row = new AiConfigEntity();
+        row.setId(1L);
+        row.setEnabled(0);
+        row.setBaseUrl("https://api.deepseek.com");
+        row.setApiKey(crypto.encrypt("admin-key-123456"));
+        row.setApiKeyBaseUrl("https://api.deepseek.com");
+        row.setModel("deepseek-v4-flash");
+        when(mapper.selectById(1L)).thenReturn(row);
+
+        AiAdminConfigRequest request = new AiAdminConfigRequest();
+        request.setEnabled(false);
+        request.setBaseUrl("https://api.deepseek.com");
+        request.setModel("deepseek-v4-flash");
+        request.setApiKey("");
+
+        AiAdminConfigResponse saved = service.saveAdminConfig(99L, request);
+        assertTrue(saved.isEnabled());
+        assertEquals("admin", saved.getActiveSource());
     }
 
     @Test

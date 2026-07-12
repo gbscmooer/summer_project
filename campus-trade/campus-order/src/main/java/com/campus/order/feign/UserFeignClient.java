@@ -21,4 +21,13 @@ public interface UserFeignClient {
      */
     @GetMapping("/user/batch")
     Result<List<UserBriefDTO>> batchGetUsers(@RequestParam("ids") String ids);
+
+    @GetMapping("/user/internal/role")
+    Result<Integer> getUserRole(@RequestParam("userId") Long userId);
+
+    @GetMapping("/user/internal/all-ids")
+    Result<List<Long>> listAllUserIds();
+
+    @GetMapping("/user/internal/resolve-usernames")
+    Result<List<Long>> resolveUserIdsByUsernames(@RequestParam("usernames") String usernames);
 }

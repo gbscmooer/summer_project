@@ -142,6 +142,9 @@ import {
   confirmOrder,
   cancelOrder
 } from '@/api/order'
+import { useOnboarding } from '@/composables/useOnboarding'
+
+const onboarding = useOnboarding()
 
 const statusOptions = [
   { label: 'All', value: 'all' },
@@ -246,6 +249,7 @@ function onPay(order) {
         await payOrder(order.orderId)
         ElMessage.success('Payment successful')
         await fetchOrders()
+        await onboarding.refresh()
       } finally {
         actingId.value = null
       }
@@ -265,6 +269,7 @@ function onConfirm(order) {
         await confirmOrder(order.orderId)
         ElMessage.success('Receipt confirmed')
         await fetchOrders()
+        await onboarding.refresh()
       } finally {
         actingId.value = null
       }

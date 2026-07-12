@@ -39,6 +39,17 @@ public final class AiEndpointValidator {
         }
     }
 
+    /** OpenAI-compatible 服务通常挂在 /v1；根路径会返回网页导致误判为可用。 */
+    public static String normalizeOpenAiCompatibleBaseUrl(String value) {
+        String safe = requireSafePublicHttpsUrl(value);
+        URI uri = URI.create(safe);
+        String path = uri.getPath();
+        if (path == null || path.isBlank() || "/".equals(path)) {
+            return safe + "/v1";
+        }
+        return safe;
+    }
+
     private static boolean isNonPublic(InetAddress address) {
         if (address.isAnyLocalAddress() || address.isLoopbackAddress() || address.isLinkLocalAddress()
                 || address.isSiteLocalAddress() || address.isMulticastAddress()) {

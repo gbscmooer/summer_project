@@ -12,4 +12,6 @@ public class LoginResponse {
     private String avatar;
     /** 0-普通用户 1-管理员 */
     private Integer role;
+    /** 1-已完成新手教程 */
+    private Integer onboardingCompleted;
 }

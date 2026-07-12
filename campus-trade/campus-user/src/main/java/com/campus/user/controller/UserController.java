@@ -86,4 +86,59 @@ public class UserController {
         }
         return Result.success(userService.batchGetUsers(idList));
     }
+
+    @GetMapping("/internal/all-ids")
+    public Result<List<Long>> listAllUserIds(
+            @RequestHeader(value = InternalApiTokenValidator.HEADER_NAME, required = false) String internalToken) {
+        internalApiTokenValidator.requireValid(internalToken);
+        return Result.success(userService.listAllUserIds());
+    }
+
+    @GetMapping("/internal/resolve-usernames")
+    public Result<List<Long>> resolveUserIdsByUsernames(
+            @RequestHeader(value = InternalApiTokenValidator.HEADER_NAME, required = false) String internalToken,
+            @RequestParam String usernames) {
+        internalApiTokenValidator.requireValid(internalToken);
+        List<String> names = new ArrayList<>();
+        for (String part : usernames.split(",")) {
+            String trimmed = part.trim();
+            if (!trimmed.isEmpty()) {
+                names.add(trimmed);
+            }
+        }
+        if (names.size() > 200) {
+            throw new BizException(ResultCode.BAD_REQUEST.getCode(), "单次最多指定200个用户名");
+        }
+        return Result.success(userService.resolveUserIdsByUsernames(names));
+    }
+
+    @GetMapping("/onboarding")
+    public Result<OnboardingStatusResponse> getOnboardingStatus(
+            @RequestHeader(value = "X-User-Id", required = false) Long userId) {
+        if (userId == null) {
+            throw new BizException(ResultCode.UNAUTHORIZED);
+        }
+        return Result.success(userService.getOnboardingStatus(userId));
+    }
+
+    @PostMapping("/onboarding/step")
+    public Result<Void> markOnboardingStep(
+            @RequestHeader(value = "X-User-Id", required = false) Long userId,
+            @Valid @RequestBody MarkOnboardingStepRequest request) {
+        if (userId == null) {
+            throw new BizException(ResultCode.UNAUTHORIZED);
+        }
+        userService.markOnboardingStep(userId, request.getStep());
+        return Result.success("已记录", null);
+    }
+
+    @PostMapping("/onboarding/complete")
+    public Result<Void> completeOnboarding(
+            @RequestHeader(value = "X-User-Id", required = false) Long userId) {
+        if (userId == null) {
+            throw new BizException(ResultCode.UNAUTHORIZED);
+        }
+        userService.completeOnboarding(userId);
+        return Result.success("新手教程已完成", null);
+    }
 }

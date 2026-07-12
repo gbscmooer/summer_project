@@ -97,10 +97,110 @@
         <el-tag effect="plain">{{ aiForm.activeSource === 'admin' ? t('settings.aiSourceAdmin') : t('settings.aiSourceEnv') }}</el-tag>
       </div>
 
+      <el-alert
+        v-if="aiForm.savedButDisabled"
+        type="warning"
+        :closable="false"
+        show-icon
+        class="ai-saved-warning"
+        :title="t('settings.aiSavedButDisabled')"
+      />
+
+      <div class="runtime-section">
+        <div class="runtime-section-head">
+          <span class="runtime-section-title">{{ t('settings.aiStatusTitle') }}</span>
+          <el-button size="small" :loading="aiProbing" @click="probeAiHealth">
+            {{ t('settings.aiStatusProbe') }}
+          </el-button>
+        </div>
+        <div class="runtime-grid">
+          <div class="runtime-item">
+            <span class="field-label">{{ t('settings.aiStatusTitle') }}</span>
+            <el-tag :type="aiHealthTagType" size="small">{{ aiHealthLabel }}</el-tag>
+          </div>
+          <div v-if="aiHealth.probeLatencyMs != null" class="runtime-item">
+            <span class="field-label">{{ t('settings.aiStatusLatency') }}</span>
+            <span class="field-value">{{ aiHealth.probeLatencyMs }} ms</span>
+          </div>
+          <div v-if="aiHealth.message" class="runtime-item runtime-item-wide">
+            <span class="field-label">Message</span>
+            <span class="field-value muted">{{ aiHealth.message }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="runtime-section">
+        <div class="runtime-section-head">
+          <span class="runtime-section-title">{{ t('settings.aiRuntimeTitle') }}</span>
+        </div>
+        <p class="setting-hint section-hint">{{ t('settings.aiRuntimeDesc') }}</p>
+        <div class="runtime-grid">
+          <div class="runtime-item">
+            <span class="field-label">{{ t('settings.aiBaseUrl') }}</span>
+            <span class="field-value">{{ aiForm.runtimeBaseUrl || '—' }}</span>
+          </div>
+          <div class="runtime-item">
+            <span class="field-label">{{ t('settings.aiModel') }}</span>
+            <span class="field-value">{{ aiForm.runtimeModel || '—' }}</span>
+          </div>
+          <div class="runtime-item">
+            <span class="field-label">{{ t('settings.aiTimeout') }}</span>
+            <span class="field-value">{{ aiForm.runtimeTimeoutSeconds }}s</span>
+          </div>
+          <div class="runtime-item">
+            <span class="field-label">{{ t('settings.aiVision') }}</span>
+            <span class="field-value">{{ aiForm.runtimeSupportsVision ? t('settings.aiVisionOn') : t('settings.aiVisionOff') }}</span>
+          </div>
+          <div class="runtime-item">
+            <span class="field-label">{{ t('settings.aiRuntimeKey') }}</span>
+            <span class="field-value">{{ aiForm.apiKeyMasked || t('settings.aiRuntimeKeyMissing') }}</span>
+          </div>
+          <div v-if="aiForm.configUpdatedAt" class="runtime-item">
+            <span class="field-label">{{ t('settings.aiRuntimeUpdatedAt') }}</span>
+            <span class="field-value muted">{{ formatDateTime(aiForm.configUpdatedAt) }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="aiUsage" class="runtime-section">
+        <div class="runtime-section-head">
+          <span class="runtime-section-title">{{ t('settings.aiUsageTitle') }}</span>
+        </div>
+        <div class="runtime-grid">
+          <div class="runtime-item">
+            <span class="field-label">{{ t('settings.aiUsageDate') }}</span>
+            <span class="field-value">{{ aiUsage.usageDate || '—' }}</span>
+          </div>
+          <div class="runtime-item">
+            <span class="field-label">{{ t('settings.aiUsageTotal') }}</span>
+            <span class="field-value">{{ aiUsage.todayTotalRequests ?? 0 }}</span>
+          </div>
+          <div class="runtime-item">
+            <span class="field-label">{{ t('settings.aiUsageActiveUsers') }}</span>
+            <span class="field-value">{{ aiUsage.todayActiveUsers ?? 0 }}</span>
+          </div>
+          <div class="runtime-item">
+            <span class="field-label">{{ t('settings.aiUsageInflight') }}</span>
+            <span class="field-value">{{ aiUsage.globalInflight ?? 0 }}</span>
+          </div>
+          <div class="runtime-item">
+            <span class="field-label">{{ t('settings.aiUsageDailyLimit') }}</span>
+            <span class="field-value">{{ aiUsage.dailyUserLimit ?? '—' }}</span>
+          </div>
+          <div class="runtime-item">
+            <span class="field-label">{{ t('settings.aiUsageConcurrency') }}</span>
+            <span class="field-value">{{ aiUsage.globalConcurrencyLimit ?? '—' }}</span>
+          </div>
+        </div>
+      </div>
+
+      <el-divider />
+
       <el-form label-position="top" class="ai-admin-form" @submit.prevent>
         <el-form-item :label="t('settings.aiEnabled')">
           <el-switch v-model="aiForm.enabled" />
           <span class="setting-hint inline-hint">{{ t('settings.aiEnabledHint') }}</span>
+          <p v-if="!aiForm.enabled" class="setting-hint">{{ t('settings.aiEnabledWarn') }}</p>
         </el-form-item>
         <el-form-item :label="t('settings.aiBaseUrl')">
           <el-input v-model="aiForm.baseUrl" placeholder="https://api.openai.com/v1" />
@@ -131,6 +231,9 @@
         </div>
         <p v-if="aiForm.envModel" class="setting-hint">
           {{ t('settings.aiEnvFallback') }}：{{ aiForm.envBaseUrl }} / {{ aiForm.envModel }}
+          · {{ aiForm.envTimeoutSeconds }}s ·
+          {{ aiForm.envSupportsVision ? t('settings.aiVisionOn') : t('settings.aiVisionOff') }}
+          <template v-if="aiForm.envApiKeyMasked"> · {{ aiForm.envApiKeyMasked }}</template>
         </p>
       </el-form>
     </div>
@@ -185,14 +288,14 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { useI18n } from '@/i18n'
 import { useSettingsStore } from '@/store/settings'
 import { useUserStore } from '@/store/user'
 import { getUserInfo } from '@/api/user'
-import { getAiAdminConfig, saveAiAdminConfig } from '@/api/admin'
+import { getAiAdminConfig, probeAiAdminConfig, saveAiAdminConfig } from '@/api/admin'
 
 const { t } = useI18n()
 const settings = useSettingsStore()
@@ -201,6 +304,13 @@ const router = useRouter()
 
 const aiLoading = ref(false)
 const aiSaving = ref(false)
+const aiProbing = ref(false)
+const aiUsage = ref(null)
+const aiHealth = reactive({
+  status: '',
+  message: '',
+  probeLatencyMs: null
+})
 const aiForm = reactive({
   enabled: false,
   baseUrl: '',
@@ -211,7 +321,33 @@ const aiForm = reactive({
   supportsVision: true,
   activeSource: 'env',
   envBaseUrl: '',
-  envModel: ''
+  envModel: '',
+  envTimeoutSeconds: 60,
+  envSupportsVision: true,
+  envApiKeyMasked: '',
+  runtimeBaseUrl: '',
+  runtimeModel: '',
+  runtimeTimeoutSeconds: 60,
+  runtimeSupportsVision: true,
+  configUpdatedAt: '',
+  savedButDisabled: false
+})
+
+const aiHealthLabel = computed(() => {
+  const status = (aiHealth.status || '').toUpperCase()
+  if (status === 'OK') return t('settings.aiStatusOk')
+  if (status === 'UNCONFIGURED') return t('settings.aiStatusUnconfigured')
+  if (status === 'MISCONFIGURED') return t('settings.aiStatusMisconfigured')
+  if (status === 'UNREACHABLE' || status === 'ERROR') return t('settings.aiStatusUnreachable')
+  return '—'
+})
+
+const aiHealthTagType = computed(() => {
+  const status = (aiHealth.status || '').toUpperCase()
+  if (status === 'OK') return 'success'
+  if (status === 'UNCONFIGURED') return 'info'
+  if (status === 'MISCONFIGURED') return 'warning'
+  return 'danger'
 })
 
 onMounted(async () => {
@@ -231,23 +367,58 @@ async function loadAiConfig() {
   aiLoading.value = true
   try {
     const res = await getAiAdminConfig()
-    const data = res.data || {}
-    aiForm.enabled = !!data.enabled
-    aiForm.baseUrl = data.baseUrl || ''
-    aiForm.model = data.model || ''
-    aiForm.apiKey = ''
-    aiForm.apiKeyMasked = data.apiKeyMasked || ''
-    aiForm.timeoutSeconds = data.timeoutSeconds || 60
-    aiForm.supportsVision = data.supportsVision !== false
-    aiForm.activeSource = data.activeSource || 'env'
-    aiForm.envBaseUrl = data.envBaseUrl || ''
-    aiForm.envModel = data.envModel || ''
+    applyAiConfig(res.data || {})
   } finally {
     aiLoading.value = false
   }
 }
 
+function applyAiConfig(data) {
+  aiForm.enabled = !!data.enabled
+  aiForm.baseUrl = data.baseUrl || ''
+  aiForm.model = data.model || ''
+  aiForm.apiKey = ''
+  aiForm.apiKeyMasked = data.apiKeyMasked || ''
+  aiForm.timeoutSeconds = data.timeoutSeconds || 60
+  aiForm.supportsVision = data.supportsVision !== false
+  aiForm.activeSource = data.activeSource || 'env'
+  aiForm.envBaseUrl = data.envBaseUrl || ''
+  aiForm.envModel = data.envModel || ''
+  aiForm.envTimeoutSeconds = data.envTimeoutSeconds || 60
+  aiForm.envSupportsVision = data.envSupportsVision !== false
+  aiForm.envApiKeyMasked = data.envApiKeyMasked || ''
+  aiForm.runtimeBaseUrl = data.runtimeBaseUrl || data.baseUrl || ''
+  aiForm.runtimeModel = data.runtimeModel || data.model || ''
+  aiForm.runtimeTimeoutSeconds = data.runtimeTimeoutSeconds || data.timeoutSeconds || 60
+  aiForm.runtimeSupportsVision = data.runtimeSupportsVision !== false
+  aiForm.configUpdatedAt = data.configUpdatedAt || ''
+  aiForm.savedButDisabled = !!data.savedButDisabled
+  aiUsage.value = data.usage || null
+  if (data.health) {
+    aiHealth.status = data.health.status || ''
+    aiHealth.message = data.health.message || ''
+    aiHealth.probeLatencyMs = data.health.probeLatencyMs ?? null
+  }
+}
+
+async function probeAiHealth() {
+  aiProbing.value = true
+  try {
+    const res = await probeAiAdminConfig()
+    const health = res.data || {}
+    aiHealth.status = health.status || ''
+    aiHealth.message = health.message || ''
+    aiHealth.probeLatencyMs = health.probeLatencyMs ?? null
+  } finally {
+    aiProbing.value = false
+  }
+}
+
 async function saveAiConfig() {
+  const apiKey = aiForm.apiKey.trim()
+  if (apiKey || aiForm.apiKeyMasked) {
+    aiForm.enabled = true
+  }
   aiSaving.value = true
   try {
     const res = await saveAiAdminConfig({
@@ -258,19 +429,18 @@ async function saveAiConfig() {
       timeoutSeconds: aiForm.timeoutSeconds,
       supportsVision: aiForm.supportsVision
     })
-    const data = res.data || {}
-    aiForm.enabled = !!data.enabled
-    aiForm.baseUrl = data.baseUrl || aiForm.baseUrl
-    aiForm.model = data.model || aiForm.model
-    aiForm.apiKey = ''
-    aiForm.apiKeyMasked = data.apiKeyMasked || ''
-    aiForm.timeoutSeconds = data.timeoutSeconds || aiForm.timeoutSeconds
-    aiForm.supportsVision = data.supportsVision !== false
-    aiForm.activeSource = data.activeSource || aiForm.activeSource
+    applyAiConfig(res.data || {})
     ElMessage.success(t('settings.aiSaveDone'))
   } finally {
     aiSaving.value = false
   }
+}
+
+function formatDateTime(value) {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value)
+  return date.toLocaleString()
 }
 
 function onLocaleChange(locale) {
@@ -378,8 +548,51 @@ function onResetPrefs() {
   gap: 24px;
 }
 
+.ai-saved-warning {
+  margin-bottom: 16px;
+}
+
 .inline-hint {
   margin-left: 12px;
+}
+
+.runtime-section {
+  margin-bottom: 18px;
+}
+
+.runtime-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.runtime-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--oa-text);
+}
+
+.section-hint {
+  margin: 0 0 10px;
+}
+
+.runtime-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 20px;
+}
+
+.runtime-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.runtime-item-wide {
+  grid-column: 1 / -1;
 }
 
 .about-grid {
@@ -413,6 +626,10 @@ function onResetPrefs() {
   .setting-row {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .runtime-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

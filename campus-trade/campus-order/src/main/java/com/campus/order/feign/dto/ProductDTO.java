@@ -16,4 +16,8 @@ public class ProductDTO {
     private Long sellerId;
     private Integer status;
     private Integer stock;
+    /** 1-新手教程商品 */
+    private Integer isTutorial;
+    /** 每用户限购 */
+    private Integer purchaseLimit;
 }

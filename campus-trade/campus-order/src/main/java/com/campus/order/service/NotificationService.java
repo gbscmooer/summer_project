@@ -1,6 +1,8 @@
 package com.campus.order.service;
 
 import com.campus.common.result.PageResult;
+import com.campus.order.dto.AdminBroadcastRequest;
+import com.campus.order.dto.AdminBroadcastResult;
 import com.campus.order.dto.NotificationVO;
 
 public interface NotificationService {
@@ -16,4 +18,7 @@ public interface NotificationService {
 
     /** 将当前用户所有通知一键标记已读。 */
     void markAllRead(Long userId);
+
+    /** 管理员向全员或指定用户发送系统通知。 */
+    AdminBroadcastResult broadcast(Long adminId, AdminBroadcastRequest request);
 }

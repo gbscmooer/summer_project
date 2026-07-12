@@ -4,6 +4,8 @@ import com.campus.common.result.PageResult;
 import com.campus.order.dto.CreateOrderVO;
 import com.campus.order.dto.OrderDetailVO;
 import com.campus.order.dto.OrderListVO;
+import com.campus.order.dto.SellerDashboardView;
+import com.campus.order.dto.SellerIncomeStatsView;
 
 /**
  * 订单业务接口：下单、查询、状态流转。
@@ -39,4 +41,10 @@ public interface OrderService {
 
     /** 查询秒杀排队与下单结果。 */
     com.campus.order.dto.SeckillResultVO getSeckillResult(Long buyerId, Long productId);
+
+    /** 商家收入统计（仅商家可用） */
+    SellerIncomeStatsView getSellerIncomeStats(Long sellerId);
+
+    /** 商家收入仪表盘（趋势图、订单分布，仅商家可用） */
+    SellerDashboardView getSellerDashboard(Long sellerId);
 }

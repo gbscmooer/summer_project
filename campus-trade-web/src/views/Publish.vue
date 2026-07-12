@@ -6,6 +6,23 @@
 
     <p class="oa-section-desc">上传几张商品实拍图，让 AI 先生成标题、描述、成色和站内参考价；所有内容都可以修改后再发布。</p>
 
+    <el-alert
+      v-if="quota && !quota.unlimited && quota.remaining <= 0"
+      title="个人账户发布数量已达上限，请前往个人中心申请成为商家"
+      type="warning"
+      :closable="false"
+      show-icon
+      class="quota-alert"
+    />
+    <el-alert
+      v-else-if="quota && !quota.unlimited"
+      :title="quotaHint"
+      type="info"
+      :closable="false"
+      show-icon
+      class="quota-alert"
+    />
+
     <div class="oa-panel ai-draft-panel">
       <div class="ai-panel-heading">
         <div class="ai-icon"><el-icon><MagicStick /></el-icon></div>
@@ -169,15 +186,19 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Close, MagicStick, UploadFilled } from '@element-plus/icons-vue'
-import { createProduct, uploadProductImages, deleteProductImage } from '@/api/product'
+import { createProduct, uploadProductImages, deleteProductImage, getPublishQuota } from '@/api/product'
 import { createAiListingDraft } from '@/api/ai'
 import { CATEGORIES } from '@/constants/product'
+import { useOnboarding } from '@/composables/useOnboarding'
+import { useI18n } from '@/i18n'
 
+const { t } = useI18n()
 const router = useRouter()
+const onboarding = useOnboarding()
 const categories = CATEGORIES
 
 const formRef = ref(null)
@@ -187,6 +208,21 @@ const aiLoading = ref(false)
 const aiNotes = ref('')
 const uploadedUrls = ref([])
 const draftInfo = ref(null)
+const quota = ref(null)
+
+const quotaHint = computed(() => {
+  if (!quota.value || quota.value.unlimited) return ''
+  return t('merchant.quotaHint')
+    .replace('{limit}', String(quota.value.limit))
+    .replace('{used}', String(quota.value.used))
+    .replace('{remaining}', String(quota.value.remaining))
+})
+
+onMounted(() => {
+  getPublishQuota()
+    .then((res) => { quota.value = res.data })
+    .catch(() => { quota.value = null })
+})
 
 const form = reactive({
   title: '',
@@ -222,6 +258,10 @@ async function onSubmit() {
   } catch {
     return
   }
+  if (quota.value && !quota.value.unlimited && quota.value.remaining <= 0) {
+    ElMessage.warning('个人账户发布数量已达上限，请前往个人中心申请成为商家')
+    return
+  }
   loading.value = true
   try {
     const cleanImages = form.images
@@ -239,7 +279,8 @@ async function onSubmit() {
       stock: form.stock
     })
     ElMessage.success('发布成功')
-    router.push('/my')
+    await onboarding.refresh()
+    router.push('/activity')
   } finally {
     loading.value = false
   }
@@ -330,6 +371,11 @@ function onReset() {
 }
 
 .ai-draft-panel {
+  max-width: 920px;
+  margin-bottom: 16px;
+}
+
+.quota-alert {
   max-width: 920px;
   margin-bottom: 16px;
 }

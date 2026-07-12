@@ -87,3 +87,54 @@ export function searchProducts(params) {
     params
   })
 }
+
+// 新手教程专用 0 元体验商品（无需登录）
+export function getTutorialProduct() {
+  return request({
+    url: '/product/tutorial',
+    method: 'get'
+  })
+}
+
+// 发布配额（需登录）
+export function getPublishQuota() {
+  return request({
+    url: '/product/publish-quota',
+    method: 'get'
+  })
+}
+
+// 用户活动热力图（需登录）
+export function getActivityHeatmap(params) {
+  return request({
+    url: '/product/activity/heatmap',
+    method: 'get',
+    params
+  })
+}
+
+// 商家商品仪表盘（需商家角色）
+export function getSellerProductDashboard() {
+  return request({
+    url: '/product/seller/dashboard',
+    method: 'get'
+  })
+}
+
+// 商品留言列表（无需登录）
+export function listProductComments(productId, params) {
+  return request({
+    url: `/product/${productId}/comments`,
+    method: 'get',
+    params
+  })
+}
+
+// 发表商品留言（需登录）
+export function postProductComment(productId, data) {
+  return request({
+    url: `/product/${productId}/comments`,
+    method: 'post',
+    data
+  })
+}

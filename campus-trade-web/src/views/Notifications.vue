@@ -64,6 +64,9 @@ import {
   markNotificationRead,
   markAllNotificationsRead
 } from '@/api/notification'
+import { useOnboarding } from '@/composables/useOnboarding'
+
+const onboarding = useOnboarding()
 
 const list = ref([])
 const total = ref(0)
@@ -131,7 +134,10 @@ async function onMarkAllRead() {
   }
 }
 
-onMounted(fetchList)
+onMounted(async () => {
+  await fetchList()
+  onboarding.trackStep('notify')
+})
 </script>
 
 <style scoped>

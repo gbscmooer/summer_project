@@ -12,8 +12,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 class HttpMethodContractTest {
 
     @Test
-    void userControllerUsesOnlyGetAndPostMappings() {
+    void userControllersUseOnlyGetAndPostMappings() {
         assertNoForbiddenMappings(UserController.class);
+        assertNoForbiddenMappings(MerchantController.class);
+        assertNoForbiddenMappings(AdminMerchantController.class);
     }
 
     private void assertNoForbiddenMappings(Class<?> controllerClass) {

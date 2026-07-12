@@ -3,6 +3,7 @@ package com.campus.product.controller;
 import com.campus.common.result.Result;
 import com.campus.product.ai.dto.AiAdminConfigRequest;
 import com.campus.product.ai.dto.AiAdminConfigResponse;
+import com.campus.product.ai.dto.AiHealthStatusView;
 import com.campus.product.ai.service.AiSettingsService;
 import com.campus.product.service.AdminAuthService;
 import jakarta.validation.Valid;
@@ -34,5 +35,12 @@ public class AdminAiConfigController {
             @Valid @RequestBody AiAdminConfigRequest request) {
         adminAuthService.requireAdmin(userId);
         return Result.success("AI 配置已保存", aiSettingsService.saveAdminConfig(userId, request));
+    }
+
+    @PostMapping("/probe")
+    public Result<AiHealthStatusView> probe(
+            @RequestHeader("X-User-Id") Long userId) {
+        adminAuthService.requireAdmin(userId);
+        return Result.success(aiSettingsService.probeHealth());
     }
 }

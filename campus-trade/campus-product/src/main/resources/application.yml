@@ -47,6 +47,8 @@ campus:
     max-file-size: 8388608
     max-images-per-user: ${PRODUCT_IMAGE_MAX_PER_USER:50}
     min-free-space-bytes: ${PRODUCT_IMAGE_MIN_FREE_BYTES:1073741824}
+  product:
+    personal-publish-limit: ${PERSONAL_PUBLISH_LIMIT:5}
 
 mybatis-plus:
   configuration:

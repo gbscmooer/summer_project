@@ -76,6 +76,10 @@ public class OpenAiCompatibleClient implements AiModelClient {
             return stripCodeFence(content.asText());
         } catch (BizException e) {
             throw e;
+        } catch (org.springframework.web.client.UnknownContentTypeException e) {
+            log.error("调用 AI 模型失败（非 JSON 响应）: model={}, baseUrl={}",
+                    settings.getModel(), settings.getBaseUrl(), e);
+            throw new BizException(502, "API 返回了非 JSON 响应，请检查 Base URL 是否以 /v1 结尾");
         } catch (Exception e) {
             log.error("调用 AI 模型失败: model={}", settings.getModel(), e);
             throw new BizException(500, "AI 模型调用失败，请稍后重试");
@@ -91,7 +95,7 @@ public class OpenAiCompatibleClient implements AiModelClient {
         JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient);
         factory.setReadTimeout(timeout);
         return RestClient.builder()
-                .baseUrl(AiEndpointValidator.requireSafePublicHttpsUrl(settings.getBaseUrl()))
+                .baseUrl(AiEndpointValidator.normalizeOpenAiCompatibleBaseUrl(settings.getBaseUrl()))
                 .requestFactory(factory)
                 .build();
     }

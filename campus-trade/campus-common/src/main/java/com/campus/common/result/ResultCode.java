@@ -14,11 +14,19 @@ public enum ResultCode {
     // 用户业务码
     USERNAME_EXISTS(1001, "用户名已存在"),
     USERNAME_OR_PASSWORD_ERROR(1002, "用户名或密码错误"),
+    MERCHANT_ALREADY(1003, "您已是商家账号"),
+    MERCHANT_APPLICATION_PENDING(1004, "已有待审核的商家申请"),
+    MERCHANT_APPLICATION_NOT_FOUND(1005, "商家申请不存在"),
+    MERCHANT_APPLICATION_REVIEWED(1006, "该申请已处理"),
+    USER_BANNED(1007, "账号已被封禁，请联系管理员"),
+    CANNOT_BAN_ADMIN(1008, "不能封禁管理员账号"),
 
     // 商品业务码
     PRODUCT_NOT_FOUND(2001, "商品不存在"),
     PRODUCT_OFF_SHELF(2002, "商品已下架或已售"),
     PRODUCT_STOCK_INSUFFICIENT(2003, "库存不足"),
+    PRODUCT_PUBLISH_LIMIT(2004, "个人账户发布数量已达上限，请申请成为商家"),
+    TOPIC_POST_NOT_FOUND(2005, "帖子不存在"),
 
     // AI 业务码
     AI_NOT_CONFIGURED(4001, "AI 服务未配置，请设置 AI_API_KEY"),
@@ -29,7 +37,8 @@ public enum ResultCode {
     // 订单业务码
     ORDER_NOT_FOUND(3001, "订单不存在"),
     ORDER_CANNOT_BUY_OWN(3002, "不能购买自己发布的商品"),
-    ORDER_STATUS_INVALID(3003, "当前订单状态不允许此操作");
+    ORDER_STATUS_INVALID(3003, "当前订单状态不允许此操作"),
+    ORDER_PURCHASE_LIMIT(3004, "已达该商品购买上限");
 
     private final int code;
     private final String message;
