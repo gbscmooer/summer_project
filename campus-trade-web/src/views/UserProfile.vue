@@ -31,14 +31,27 @@
       </ProfileHeader>
 
       <nav class="profile-tabs">
-        <button type="button" class="tab-btn active">
+        <button
+          type="button"
+          class="tab-btn"
+          :class="{ active: activeTab === 'posts' }"
+          @click="activeTab = 'posts'"
+        >
           {{ t('profilePage.postsTab') }}
+        </button>
+        <button
+          type="button"
+          class="tab-btn"
+          :class="{ active: activeTab === 'reviews' }"
+          @click="switchToReviews"
+        >
+          {{ t('profilePage.reviewsTab') }}
         </button>
       </nav>
 
       <div class="profile-body">
         <section class="main-column">
-          <div v-loading="postsLoading">
+          <div v-if="activeTab === 'posts'" v-loading="postsLoading">
             <el-empty v-if="!postsLoading && posts.length === 0" :description="t('profilePage.postsEmpty')" />
             <div v-else class="post-list">
               <article
@@ -57,6 +70,38 @@
             </div>
             <div v-if="postsTotal > posts.length" class="load-more-wrap">
               <el-button :loading="postsLoading" @click="loadMorePosts">{{ t('profile.loadMore') }}</el-button>
+            </div>
+          </div>
+
+          <div v-else v-loading="reviewsLoading">
+            <el-empty
+              v-if="!reviewsLoading && reviews.length === 0"
+              :description="t('profilePage.reviewsEmpty')"
+            />
+            <div v-else class="review-list">
+              <article v-for="item in reviews" :key="item.reviewId" class="review-card">
+                <div class="review-head">
+                  <span class="review-buyer">
+                    {{ item.buyerNickname || `${t('orders.reviewBuyer')} #${item.buyerId}` }}
+                  </span>
+                  <el-rate :model-value="item.rating || 0" disabled />
+                  <span class="review-time">{{ formatTime(item.createTime) }}</span>
+                </div>
+                <p class="review-body">{{ item.content || '—' }}</p>
+                <button
+                  v-if="item.productId"
+                  type="button"
+                  class="review-product-link"
+                  @click="$router.push(`/product/${item.productId}`)"
+                >
+                  #{{ item.productId }}
+                </button>
+              </article>
+            </div>
+            <div v-if="reviewsTotal > reviews.length" class="load-more-wrap">
+              <el-button :loading="reviewsLoading" @click="loadMoreReviews">
+                {{ t('orders.loadMoreReviews') }}
+              </el-button>
             </div>
           </div>
         </section>
@@ -85,6 +130,7 @@ import { ElMessage } from 'element-plus'
 import ProfileHeader from '@/components/ProfileHeader.vue'
 import { getPublicProfile, followUser, unfollowUser } from '@/api/profile'
 import { listPostsByUser } from '@/api/topic'
+import { listSellerReviews } from '@/api/order'
 import { useUserStore } from '@/store/user'
 import { useI18n } from '@/i18n'
 
@@ -99,11 +145,18 @@ const isSelf = computed(() => userStore.userInfo?.userId === userId.value)
 const profile = ref(null)
 const loading = ref(false)
 const followLoading = ref(false)
+const activeTab = ref('posts')
 
 const posts = ref([])
 const postsLoading = ref(false)
 const postsPage = ref(1)
 const postsTotal = ref(0)
+
+const reviews = ref([])
+const reviewsLoading = ref(false)
+const reviewsPage = ref(1)
+const reviewsTotal = ref(0)
+const reviewsLoaded = ref(false)
 
 function formatTime(value) {
   if (!value) return ''
@@ -147,6 +200,41 @@ function loadMorePosts() {
   fetchPosts(false)
 }
 
+async function fetchReviews(reset = false) {
+  if (!userId.value) return
+  if (reset) {
+    reviewsPage.value = 1
+    reviews.value = []
+  }
+  reviewsLoading.value = true
+  try {
+    const res = await listSellerReviews(userId.value, {
+      pageNum: reviewsPage.value,
+      pageSize: 10
+    })
+    const list = res.data?.list || []
+    reviewsTotal.value = Number(res.data?.total) || 0
+    reviews.value = reset ? list : [...reviews.value, ...list]
+    reviewsLoaded.value = true
+  } catch {
+    if (reset) reviews.value = []
+  } finally {
+    reviewsLoading.value = false
+  }
+}
+
+function loadMoreReviews() {
+  reviewsPage.value += 1
+  fetchReviews(false)
+}
+
+function switchToReviews() {
+  activeTab.value = 'reviews'
+  if (!reviewsLoaded.value) {
+    fetchReviews(true)
+  }
+}
+
 async function onFollow() {
   followLoading.value = true
   try {
@@ -178,6 +266,9 @@ function onMessage() {
 }
 
 watch(userId, async () => {
+  activeTab.value = 'posts'
+  reviewsLoaded.value = false
+  reviews.value = []
   await fetchProfile()
   await fetchPosts(true)
 })
@@ -275,6 +366,52 @@ onMounted(async () => {
   gap: 16px;
   font-size: 13px;
   color: var(--oa-text-muted);
+}
+
+.review-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.review-card {
+  padding: 18px 0;
+  border-bottom: 1px solid var(--oa-border-subtle);
+}
+
+.review-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.review-buyer {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.review-time {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--oa-text-secondary);
+}
+
+.review-body {
+  margin: 0 0 8px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--oa-text-secondary);
+  white-space: pre-wrap;
+}
+
+.review-product-link {
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-size: 12px;
+  color: var(--el-color-primary);
+  cursor: pointer;
 }
 
 .load-more-wrap {

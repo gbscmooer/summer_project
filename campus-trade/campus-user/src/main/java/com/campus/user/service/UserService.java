@@ -19,4 +19,7 @@ public interface UserService {
     OnboardingStatusResponse getOnboardingStatus(Long userId);
     void markOnboardingStep(Long userId, String step);
     void completeOnboarding(Long userId);
+
+    /** 订单评价后增量更新卖家信誉：review_count+1 并重算 avg_rating。 */
+    void applyRating(Long sellerId, int rating);
 }

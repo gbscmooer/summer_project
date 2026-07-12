@@ -28,6 +28,11 @@ public final class UserRole {
         return role == ADMIN || role == MERCHANT;
     }
 
+    /** 商家中心（看板/配额/收入统计）对商家与管理员开放。 */
+    public static boolean canAccessMerchantHub(int role) {
+        return canPublish(role);
+    }
+
     /** @deprecated 使用 {@link #canPublish(int)} */
     public static boolean hasUnlimitedPublish(int role) {
         return canPublish(role);

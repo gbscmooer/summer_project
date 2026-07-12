@@ -45,6 +45,9 @@ public class Order {
     /** 订单状态：0 待付款 / 1 已付款 / 2 已完成 / 3 已取消。 */
     private Integer status;
 
+    /** 确认收货完成时间；评价窗口以此为准，避免被 update_time 刷新拉长。 */
+    private LocalDateTime completedAt;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
 

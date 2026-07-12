@@ -8,7 +8,7 @@ import { getBuyerOrders } from '@/api/order'
 const STEP_DEFS = [
   { key: 'register', route: '/register', action: 'register' },
   { key: 'browse', route: '/', action: 'browse' },
-  { key: 'ai', route: '/ai-shopping', action: 'ai' },
+  { key: 'ai', route: '/?mode=ai', action: 'ai' },
   { key: 'publish', route: '/publish', action: 'publish' },
   { key: 'buy', route: null, action: 'buy' },
   { key: 'pay', route: '/orders', action: 'pay' },
@@ -150,6 +150,10 @@ export function useOnboarding() {
   function goToStep(step) {
     if (step.key === 'register' && !userStore.isLogin) {
       router.push('/register')
+      return
+    }
+    if (step.key === 'ai') {
+      router.push({ path: '/', query: { mode: 'ai' } })
       return
     }
     if (step.key === 'buy' && step.productId) {

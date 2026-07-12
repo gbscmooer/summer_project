@@ -27,6 +27,8 @@ CREATE TABLE IF NOT EXISTS t_user (
     onboarding_completed TINYINT NOT NULL DEFAULT 0 COMMENT '1-已完成新手教程',
     onboarding_flags     VARCHAR(512) NOT NULL DEFAULT '{}' COMMENT '新手教程步骤标记 JSON',
     points      INT          NOT NULL DEFAULT 100 COMMENT '积分余额（新用户赠送100）',
+    avg_rating  DECIMAL(3,2) DEFAULT NULL COMMENT '卖家平均评分 1-5',
+    review_count INT         NOT NULL DEFAULT 0 COMMENT '卖家收到的评价数',
     create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '注册时间',
     update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户表';
@@ -83,6 +85,19 @@ CREATE TABLE IF NOT EXISTS t_product_comment (
     INDEX idx_user_id (user_id),
     INDEX idx_create_time (create_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='商品留言表';
+
+-- ============================================================
+-- 商品收藏表（campus-product 服务使用）
+-- ============================================================
+CREATE TABLE IF NOT EXISTS t_product_favorite (
+    id          BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '收藏ID',
+    user_id     BIGINT NOT NULL COMMENT '用户ID',
+    product_id  BIGINT NOT NULL COMMENT '商品ID',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '收藏时间',
+    UNIQUE KEY uk_user_product (user_id, product_id),
+    INDEX idx_user_create (user_id, create_time),
+    INDEX idx_product_id (product_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='商品收藏表';
 
 -- ============================================================
 -- 话题帖子（campus-product 服务使用）
@@ -170,13 +185,32 @@ CREATE TABLE IF NOT EXISTS t_order (
     buyer_id      BIGINT         NOT NULL COMMENT '买家用户ID',
     seller_id     BIGINT         NOT NULL COMMENT '卖家用户ID',
     status        TINYINT        DEFAULT 0 COMMENT '0-待付款 1-已付款 2-已完成 3-已取消',
+    completed_at  DATETIME       NULL COMMENT '确认收货完成时间（评价窗口起点）',
     create_time   DATETIME DEFAULT CURRENT_TIMESTAMP,
     update_time   DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_buyer_id  (buyer_id),
     INDEX idx_seller_id (seller_id),
     INDEX idx_status    (status),
+    INDEX idx_status_create (status, create_time),
     INDEX idx_order_no  (order_no)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='订单表';
+
+-- ============================================================
+-- 订单交易评价（campus-order 服务使用）
+-- ============================================================
+CREATE TABLE IF NOT EXISTS t_order_review (
+    id          BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '评价ID',
+    order_id    BIGINT       NOT NULL COMMENT '订单ID',
+    product_id  BIGINT       NOT NULL COMMENT '商品ID',
+    buyer_id    BIGINT       NOT NULL COMMENT '买家用户ID',
+    seller_id   BIGINT       NOT NULL COMMENT '卖家用户ID',
+    rating      TINYINT      NOT NULL COMMENT '1-5',
+    content     VARCHAR(500) NULL COMMENT '评价内容',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '评价时间',
+    UNIQUE KEY uk_order_buyer (order_id, buyer_id),
+    INDEX idx_seller (seller_id),
+    INDEX idx_product (product_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='订单交易评价';
 
 -- ============================================================
 -- 通知表（campus-order 服务使用，MQ 消费者写入）

@@ -83,9 +83,7 @@ const routes = [
   },
   {
     path: '/ai-shopping',
-    name: 'AiShopping',
-    component: () => import('@/views/AiShopping.vue'),
-    meta: { title: 'AI 帮我找', requiresAuth: true }
+    redirect: '/?mode=ai'
   },
   {
     path: '/my',
@@ -98,6 +96,12 @@ const routes = [
     name: 'Activity',
     component: () => import('@/views/Activity.vue'),
     meta: { title: '我的动态', requiresAuth: true }
+  },
+  {
+    path: '/favorites',
+    name: 'Favorites',
+    component: () => import('@/views/Favorites.vue'),
+    meta: { title: '我的收藏', requiresAuth: true }
   },
   {
     path: '/events',
@@ -150,7 +154,7 @@ const router = createRouter({
 // ----------------------------------------------------------------------------
 // 全局前置守卫：需登录页面在未登录时跳转 /login，并携带 redirect 便于登录后回跳
 // ----------------------------------------------------------------------------
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, from, next) => {
   // 设置页面标题
   if (to.meta && to.meta.title) {
     document.title = `校园集市 · ${to.meta.title}`
@@ -161,14 +165,25 @@ router.beforeEach((to, from, next) => {
     next({ path: '/login', query: { redirect: to.fullPath } })
     return
   }
-  if (to.meta && to.meta.requiresAdmin && !userStore.isAdmin) {
-    next({ path: '/' })
-    return
+  if (to.meta && to.meta.requiresAdmin) {
+    if (userStore.isLogin && !userStore.isAdmin) {
+      await userStore.refreshProfile()
+    }
+    if (!userStore.isAdmin) {
+      ElMessage.warning('需要管理员权限才能访问管理后台')
+      next({ path: '/' })
+      return
+    }
   }
-  if (to.meta && to.meta.requiresMerchant && !userStore.isMerchant && !userStore.isAdmin) {
-    ElMessage.warning('需要商家认证后才能访问，请先申请成为商家')
-    next({ path: '/events' })
-    return
+  if (to.meta && to.meta.requiresMerchant) {
+    if (userStore.isLogin && !userStore.isMerchant && !userStore.isAdmin) {
+      await userStore.refreshProfile()
+    }
+    if (!userStore.isMerchant && !userStore.isAdmin) {
+      ElMessage.warning('需要商家认证后才能访问，请先申请成为商家')
+      next({ path: '/events' })
+      return
+    }
   }
   next()
 })

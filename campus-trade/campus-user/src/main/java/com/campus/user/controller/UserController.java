@@ -128,6 +128,16 @@ public class UserController {
         return Result.success(userService.resolveUserIdsByUsernames(names));
     }
 
+    /** 内部接口：订单评价后增量更新卖家信誉分。 */
+    @PostMapping("/internal/rating/apply")
+    public Result<Void> applyRating(
+            @RequestHeader(value = InternalApiTokenValidator.HEADER_NAME, required = false) String internalToken,
+            @Valid @RequestBody ApplyRatingRequest request) {
+        internalApiTokenValidator.requireValid(internalToken);
+        userService.applyRating(request.getSellerId(), request.getRating());
+        return Result.success(null);
+    }
+
     @GetMapping("/onboarding")
     public Result<OnboardingStatusResponse> getOnboardingStatus(
             @RequestHeader(value = "X-User-Id", required = false) Long userId) {

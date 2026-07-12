@@ -62,12 +62,36 @@
               <span class="meta-value">{{ sellerText }}</span>
             </div>
             <div class="meta-item">
+              <span class="meta-label">{{ t('orders.sellerRating') }}</span>
+              <button
+                type="button"
+                class="meta-link"
+                :disabled="!detail.sellerId"
+                @click="scrollToSellerReviews"
+              >
+                {{ sellerRatingText }}
+              </button>
+            </div>
+            <div class="meta-item">
               <span class="meta-label">Views</span>
               <span class="meta-value">{{ detail.viewCount }}</span>
+            </div>
+            <div v-if="userStore.isLogin" class="meta-item">
+              <span class="meta-label">{{ t('favorites.countLabel') }}</span>
+              <span class="meta-value">{{ favoriteCount }}</span>
             </div>
           </div>
 
           <div class="buy-box">
+            <el-button
+              size="large"
+              :type="favorited ? 'warning' : 'default'"
+              :loading="favoriteLoading"
+              @click="onToggleFavorite"
+            >
+              <el-icon class="fav-icon"><StarFilled v-if="favorited" /><Star v-else /></el-icon>
+              {{ favorited ? t('favorites.remove') : t('favorites.add') }}
+            </el-button>
             <el-button
               type="primary"
               size="large"
@@ -101,6 +125,35 @@
       <div class="oa-panel desc-panel">
         <h3 class="oa-section-title">Description</h3>
         <p class="description">{{ detail.description || 'No description provided.' }}</p>
+      </div>
+
+      <!-- 卖家交易评价 -->
+      <div id="seller-reviews" class="oa-panel reviews-panel">
+        <h3 class="oa-section-title">
+          {{ t('orders.sellerReviewsTitle') }}
+          <span v-if="reviewTotal > 0" class="section-count">({{ reviewTotal }})</span>
+        </h3>
+        <div v-loading="reviewsLoading" class="review-list">
+          <el-empty
+            v-if="!reviewsLoading && reviews.length === 0"
+            :description="t('orders.sellerReviewsEmpty')"
+          />
+          <div v-for="item in reviews" :key="item.reviewId" class="review-item">
+            <div class="review-meta">
+              <span class="review-author">
+                {{ item.buyerNickname || `${t('orders.reviewBuyer')} #${item.buyerId}` }}
+              </span>
+              <el-rate :model-value="item.rating || 0" disabled />
+              <span class="review-time">{{ formatCommentTime(item.createTime) }}</span>
+            </div>
+            <p class="review-content">{{ item.content || '—' }}</p>
+          </div>
+        </div>
+        <div v-if="reviewTotal > reviews.length" class="oa-pagination">
+          <el-button :loading="reviewsLoading" @click="loadMoreReviews">
+            {{ t('orders.loadMoreReviews') }}
+          </el-button>
+        </div>
       </div>
 
       <!-- 留言 -->
@@ -153,9 +206,10 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Picture, ShoppingCart, ArrowLeft } from '@element-plus/icons-vue'
+import { Picture, ShoppingCart, ArrowLeft, Star, StarFilled } from '@element-plus/icons-vue'
 import { getProductDetail, listProductComments, postProductComment } from '@/api/product'
-import { createOrder, seckillOrder, getSeckillResult } from '@/api/order'
+import { getFavoriteStatus, toggleFavorite } from '@/api/favorite'
+import { createOrder, seckillOrder, getSeckillResult, listSellerReviews } from '@/api/order'
 import { useUserStore } from '@/store/user'
 import { getStatusText } from '@/constants/product'
 import { useOnboarding } from '@/composables/useOnboarding'
@@ -177,6 +231,14 @@ const commentPageSize = ref(10)
 const commentsLoading = ref(false)
 const commentSubmitting = ref(false)
 const commentText = ref('')
+const favorited = ref(false)
+const favoriteCount = ref(0)
+const favoriteLoading = ref(false)
+const reviews = ref([])
+const reviewTotal = ref(0)
+const reviewPageNum = ref(1)
+const reviewPageSize = ref(10)
+const reviewsLoading = ref(false)
 
 const images = computed(() => {
   if (!detail.value || !Array.isArray(detail.value.images)) return []
@@ -188,6 +250,18 @@ const sellerText = computed(() => {
   return detail.value.sellerNickname || (detail.value.sellerId ? `用户 #${detail.value.sellerId}` : '-')
 })
 
+const sellerRatingText = computed(() => {
+  if (!detail.value) return '-'
+  const count = detail.value.sellerReviewCount
+  const avg = detail.value.sellerAvgRating
+  if (count == null || Number(count) <= 0 || avg == null) {
+    return t('orders.noRating')
+  }
+  const avgText = Number(avg).toFixed(1)
+  const countText = String(t('orders.reviewsCount')).replace('{n}', String(count))
+  return `${avgText} · ${countText}`
+})
+
 const canContactSeller = computed(() => {
   if (!userStore.isLogin || !detail.value?.sellerId) return false
   return detail.value.sellerId !== userStore.userInfo?.userId
@@ -196,6 +270,46 @@ const canContactSeller = computed(() => {
 function onContactSeller() {
   if (!canContactSeller.value) return
   router.push({ path: '/messages', query: { peerUserId: String(detail.value.sellerId) } })
+}
+
+function scrollToSellerReviews() {
+  const el = document.getElementById('seller-reviews')
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+async function fetchSellerReviews(reset = false) {
+  const sellerId = detail.value?.sellerId
+  if (!sellerId) {
+    reviews.value = []
+    reviewTotal.value = 0
+    return
+  }
+  if (reset) {
+    reviewPageNum.value = 1
+    reviews.value = []
+  }
+  reviewsLoading.value = true
+  try {
+    const res = await listSellerReviews(sellerId, {
+      pageNum: reviewPageNum.value,
+      pageSize: reviewPageSize.value
+    })
+    const list = res.data?.list || []
+    reviewTotal.value = Number(res.data?.total) || 0
+    reviews.value = reset ? list : [...reviews.value, ...list]
+  } catch {
+    if (reset) {
+      reviews.value = []
+      reviewTotal.value = 0
+    }
+  } finally {
+    reviewsLoading.value = false
+  }
+}
+
+function loadMoreReviews() {
+  reviewPageNum.value += 1
+  fetchSellerReviews(false)
 }
 
 function statusClass(status) {
@@ -213,16 +327,53 @@ async function fetchDetail() {
   const id = route.params.id
   if (!id) return
   loading.value = true
+  favorited.value = false
+  favoriteCount.value = 0
   try {
     const res = await getProductDetail(id)
     detail.value = res.data
     commentPageNum.value = 1
     comments.value = []
-    await fetchComments(true)
+    reviewPageNum.value = 1
+    reviews.value = []
+    await Promise.all([fetchComments(true), fetchFavoriteStatus(), fetchSellerReviews(true)])
   } catch {
     detail.value = null
   } finally {
     loading.value = false
+  }
+}
+
+async function fetchFavoriteStatus() {
+  const productId = detail.value?.productId || route.params.id
+  if (!productId || !userStore.isLogin) {
+    favorited.value = false
+    return
+  }
+  try {
+    const res = await getFavoriteStatus(productId)
+    favorited.value = !!res.data?.favorited
+    favoriteCount.value = Number(res.data?.favoriteCount) || 0
+  } catch {
+    favorited.value = false
+  }
+}
+
+async function onToggleFavorite() {
+  if (!userStore.isLogin) {
+    router.push({ path: '/login', query: { redirect: route.fullPath } })
+    return
+  }
+  const productId = detail.value?.productId
+  if (!productId || favoriteLoading.value) return
+  favoriteLoading.value = true
+  try {
+    const res = await toggleFavorite(productId)
+    favorited.value = !!res.data?.favorited
+    favoriteCount.value = Number(res.data?.favoriteCount) || 0
+    ElMessage.success(favorited.value ? t('favorites.addedTip') : t('favorites.removedTip'))
+  } finally {
+    favoriteLoading.value = false
   }
 }
 
@@ -406,7 +557,7 @@ onMounted(fetchDetail)
 
 .price-card {
   background: var(--oa-bg-sidebar);
-  border: 1px solid var(--oa-border-subtle);
+  border: none;
   border-radius: var(--oa-radius);
   padding: 20px 24px;
 }
@@ -427,7 +578,7 @@ onMounted(fetchDetail)
 
 .meta-grid {
   background: var(--oa-bg-sidebar);
-  border: 1px solid var(--oa-border-subtle);
+  border: none;
   border-radius: var(--oa-radius);
   padding: 4px 0;
 }
@@ -454,6 +605,21 @@ onMounted(fetchDetail)
   color: var(--oa-text);
 }
 
+.meta-link {
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-size: 13px;
+  color: var(--el-color-primary);
+  cursor: pointer;
+  text-align: right;
+}
+
+.meta-link:disabled {
+  color: var(--oa-text);
+  cursor: default;
+}
+
 .buy-box {
   display: flex;
   flex-direction: column;
@@ -466,6 +632,10 @@ onMounted(fetchDetail)
   height: 44px;
 }
 
+.fav-icon {
+  margin-right: 6px;
+}
+
 .desc-panel {
   margin-top: 0;
 }
@@ -475,6 +645,56 @@ onMounted(fetchDetail)
   line-height: 1.7;
   color: var(--oa-text-secondary);
   font-size: 14px;
+}
+
+.reviews-panel {
+  margin-top: 20px;
+}
+
+.section-count {
+  font-weight: 400;
+  color: var(--oa-text-secondary);
+}
+
+.review-list {
+  min-height: 64px;
+}
+
+.review-item {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--oa-border-subtle);
+}
+
+.review-item:last-child {
+  border-bottom: none;
+}
+
+.review-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.review-author {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--oa-text);
+}
+
+.review-time {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--oa-text-muted, var(--oa-text-secondary));
+}
+
+.review-content {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--oa-text-secondary);
+  white-space: pre-wrap;
 }
 
 .comments-panel {

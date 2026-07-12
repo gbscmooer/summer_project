@@ -82,6 +82,7 @@ async function onSubmit() {
       password: form.password
     })
     userStore.setLoginInfo(res.data)
+    await userStore.refreshProfile()
     ElMessage.success('登录成功')
     const redirect = route.query.redirect
     router.push(typeof redirect === 'string' ? redirect : '/')

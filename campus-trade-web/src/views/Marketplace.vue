@@ -203,7 +203,7 @@ onMounted(fetchList)
 }
 
 .product-card {
-  border: 1px solid var(--oa-border);
+  border: none;
   border-radius: 12px;
   overflow: hidden;
   cursor: pointer;

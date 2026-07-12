@@ -1,6 +1,7 @@
 package com.campus.order.feign;
 
 import com.campus.common.result.Result;
+import com.campus.order.feign.dto.ApplyRatingRequest;
 import com.campus.order.feign.dto.PointsTransferRequest;
 import com.campus.order.feign.dto.UserBriefDTO;
 import org.springframework.cloud.openfeign.FeignClient;
@@ -37,4 +38,8 @@ public interface UserFeignClient {
     /** 订单支付：扣买家积分、加卖家积分。 */
     @PostMapping("/user/internal/points/transfer")
     Result<Void> transferPoints(@RequestBody PointsTransferRequest request);
+
+    /** 订单评价后增量更新卖家 avg_rating / review_count。 */
+    @PostMapping("/user/internal/rating/apply")
+    Result<Void> applyRating(@RequestBody ApplyRatingRequest request);
 }

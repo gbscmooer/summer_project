@@ -88,17 +88,17 @@ a {
   letter-spacing: -0.02em;
 }
 
-/* OpenAI 卡片 */
+/* OpenAI 卡片 — 无边框，避免同质化卡片感 */
 .oa-card {
   background: var(--oa-bg-sidebar);
-  border: 1px solid var(--oa-border-subtle);
+  border: none;
   border-radius: var(--oa-radius);
   padding: 16px 20px;
 }
 
 .oa-card-flat {
   background: transparent;
-  border: 1px solid var(--oa-border-subtle);
+  border: none;
   border-radius: var(--oa-radius);
 }
 
@@ -136,7 +136,7 @@ html.dark {
 
 .el-card {
   background-color: var(--oa-bg-sidebar) !important;
-  border: 1px solid var(--oa-border-subtle) !important;
+  border: none !important;
   border-radius: var(--oa-radius) !important;
   box-shadow: none !important;
   color: var(--oa-text) !important;
@@ -285,7 +285,7 @@ html.dark {
 
 .oa-panel {
   background: var(--oa-bg-sidebar);
-  border: 1px solid var(--oa-border-subtle);
+  border: none;
   border-radius: var(--oa-radius);
   padding: 20px 24px;
 }
@@ -417,13 +417,12 @@ html.dark {
 
 .oa-list-item {
   padding: 16px 20px;
-  border: 1px solid var(--oa-border-subtle);
+  border: none;
   border-radius: var(--oa-radius);
-  transition: border-color 0.15s, background 0.15s;
+  transition: background 0.15s;
 }
 
 .oa-list-item:hover {
-  border-color: var(--oa-border);
   background: var(--oa-bg-hover);
 }
 

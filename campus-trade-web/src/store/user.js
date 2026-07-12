@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { getPoints } from '@/api/points'
+import { getUserInfo } from '@/api/user'
 
 // 从 localStorage 安全读取已持久化的用户信息
 function loadUserInfo() {
@@ -72,16 +73,28 @@ export const useUserStore = defineStore('user', {
       localStorage.setItem('userInfo', JSON.stringify(this.userInfo))
     },
 
-    // 合并更新用户信息（如个人中心拉取到完整资料后）
+    // 合并更新用户信息（如个人中心拉取到完整资料后）；忽略 undefined，避免冲掉 role
     setUserInfo(info) {
-      this.userInfo = { ...(this.userInfo || {}), ...info }
-      if (this.userInfo.role != null) {
-        this.userInfo.role = Number(this.userInfo.role)
+      if (!info || typeof info !== 'object') return
+      const next = { ...(this.userInfo || {}) }
+      for (const [key, value] of Object.entries(info)) {
+        if (value !== undefined) next[key] = value
       }
-      if (this.userInfo.points != null) {
-        this.userInfo.points = Number(this.userInfo.points)
-      }
+      if (next.role != null) next.role = Number(next.role)
+      if (next.points != null) next.points = Number(next.points)
+      this.userInfo = next
       localStorage.setItem('userInfo', JSON.stringify(this.userInfo))
+    },
+
+    async refreshProfile() {
+      if (!this.token) return null
+      try {
+        const res = await getUserInfo()
+        if (res.data) this.setUserInfo(res.data)
+        return this.userInfo
+      } catch {
+        return this.userInfo
+      }
     },
 
     async refreshPoints() {

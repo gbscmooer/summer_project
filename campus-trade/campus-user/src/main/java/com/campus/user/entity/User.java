@@ -3,6 +3,7 @@ package com.campus.user.entity;
 import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Data
@@ -42,6 +43,10 @@ public class User {
     private String onboardingFlags;
     /** 积分余额（新用户默认 100） */
     private Integer points;
+    /** 卖家平均评分 1-5，无评价时为 null */
+    private BigDecimal avgRating;
+    /** 卖家收到的评价数 */
+    private Integer reviewCount;
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
     @TableField(fill = FieldFill.INSERT_UPDATE)

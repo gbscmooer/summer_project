@@ -6,10 +6,15 @@ import com.campus.order.dto.CreateOrderRequest;
 import com.campus.order.dto.CreateOrderVO;
 import com.campus.order.dto.OrderDetailVO;
 import com.campus.order.dto.OrderListVO;
+import com.campus.order.dto.OrderReviewRequest;
+import com.campus.order.dto.OrderReviewVO;
+import com.campus.order.service.OrderReviewService;
 import com.campus.order.service.OrderService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
 
 /**
  * 订单接口（经网关，买家/卖家身份由网关注入的请求头 {@code X-User-Id} 标识）。
@@ -20,6 +25,7 @@ import org.springframework.web.bind.annotation.*;
 public class OrderController {
 
     private final OrderService orderService;
+    private final OrderReviewService orderReviewService;
 
     /** 下单。body {productId}，X-User-Id = buyerId。 */
     @PostMapping
@@ -113,5 +119,32 @@ public class OrderController {
             @PathVariable Long id) {
         orderService.cancel(buyerId, id);
         return Result.success("已取消", null);
+    }
+
+    /** 提交交易评价（仅买家，订单已完成且 7 天内，一单一评）。 */
+    @PostMapping("/{id}/review")
+    public Result<Map<String, Long>> submitReview(
+            @RequestHeader("X-User-Id") Long buyerId,
+            @PathVariable Long id,
+            @Valid @RequestBody OrderReviewRequest request) {
+        Long reviewId = orderReviewService.submitReview(buyerId, id, request);
+        return Result.success("评价成功", Map.of("reviewId", reviewId));
+    }
+
+    /** 查询订单评价（仅买卖家可见；未评价时 data 为 null）。 */
+    @GetMapping("/{id}/review")
+    public Result<OrderReviewVO> getReview(
+            @RequestHeader("X-User-Id") Long userId,
+            @PathVariable Long id) {
+        return Result.success(orderReviewService.getByOrder(userId, id));
+    }
+
+    /** 卖家收到的评价列表（公开分页）。 */
+    @GetMapping("/reviews/seller/{sellerId}")
+    public Result<PageResult<OrderReviewVO>> listSellerReviews(
+            @PathVariable Long sellerId,
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(defaultValue = "10") Integer pageSize) {
+        return Result.success(orderReviewService.listBySeller(sellerId, pageNum, pageSize));
     }
 }

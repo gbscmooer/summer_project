@@ -71,8 +71,9 @@
           <p class="section-desc">{{ t('profile.activityHint') }}</p>
           <div class="quick-actions">
             <el-button @click="$router.push('/activity')">{{ t('profile.goActivity') }}</el-button>
+            <el-button @click="$router.push('/favorites')">{{ t('profile.goFavorites') }}</el-button>
             <el-button
-              v-if="userStore.isMerchant"
+              v-if="userStore.isMerchant || userStore.isAdmin"
               type="primary"
               @click="$router.push('/merchant')"
             >
@@ -97,8 +98,11 @@
           <button type="button" class="side-link" @click="$router.push('/activity')">
             {{ t('profile.goActivity') }}
           </button>
+          <button type="button" class="side-link" @click="$router.push('/favorites')">
+            {{ t('profile.goFavorites') }}
+          </button>
           <button
-            v-if="userStore.isMerchant"
+            v-if="userStore.isMerchant || userStore.isAdmin"
             type="button"
             class="side-link"
             @click="$router.push('/merchant')"
@@ -189,9 +193,6 @@
         <el-form-item :label="t('profile.avatarUrl')" prop="avatar">
           <el-input v-model="editForm.avatar" :placeholder="t('profile.avatarPlaceholder')" />
         </el-form-item>
-        <el-form-item :label="t('profile.coverUrl')" prop="coverImage">
-          <el-input v-model="editForm.coverImage" :placeholder="t('profile.coverPlaceholder')" />
-        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="editVisible = false">{{ t('settings.cancel') }}</el-button>
@@ -201,15 +202,31 @@
 
     <!-- 编辑封面 -->
     <el-dialog v-model="coverVisible" :title="t('profile.editCover')" width="480px">
-      <el-form label-position="top">
-        <el-form-item :label="t('profile.coverUrl')">
-          <el-input v-model="coverDraft" :placeholder="t('profile.coverPlaceholder')" />
-        </el-form-item>
+      <div class="cover-edit">
+        <div class="cover-preview" :style="coverPreviewStyle">
+          <span v-if="!coverDraft" class="cover-preview-empty">{{ t('profile.coverPreviewEmpty') }}</span>
+        </div>
+        <div class="cover-actions">
+          <label class="cover-upload-btn" :class="{ disabled: coverUploading }">
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              :disabled="coverUploading"
+              @change="onCoverFileSelected"
+            />
+            {{ coverUploading ? t('profile.coverUploading') : t('profile.coverUpload') }}
+          </label>
+          <el-button v-if="coverDraft" text type="danger" @click="coverDraft = ''">
+            {{ t('profile.coverClear') }}
+          </el-button>
+        </div>
         <p class="form-hint">{{ t('profile.coverHint') }}</p>
-      </el-form>
+      </div>
       <template #footer>
         <el-button @click="coverVisible = false">{{ t('settings.cancel') }}</el-button>
-        <el-button type="primary" :loading="savingCover" @click="onSaveCover">{{ t('settings.confirm') }}</el-button>
+        <el-button type="primary" :loading="savingCover" :disabled="coverUploading" @click="onSaveCover">
+          {{ t('settings.confirm') }}
+        </el-button>
       </template>
     </el-dialog>
   </div>
@@ -222,11 +239,14 @@ import { ElMessage } from 'element-plus'
 import { ArrowDown } from '@element-plus/icons-vue'
 import ProfileHeader from '@/components/ProfileHeader.vue'
 import { getUserInfo, updateUserInfo, applyMerchant, getMyMerchantApplication } from '@/api/user'
+import { uploadProductImages } from '@/api/product'
 import { getPublicProfile } from '@/api/profile'
 import { listPostsByUser } from '@/api/topic'
 import { useOnboarding } from '@/composables/useOnboarding'
 import { useUserStore } from '@/store/user'
 import { useI18n } from '@/i18n'
+import { isSafeCoverUrl, validateCoverImageFile } from '@/utils/validateImage'
+import { prepareImageForUpload, compressErrorMessage, IMAGE_TARGET_MAX_BYTES } from '@/utils/imageCompress'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -365,6 +385,7 @@ const editVisible = ref(false)
 const coverVisible = ref(false)
 const saving = ref(false)
 const savingCover = ref(false)
+const coverUploading = ref(false)
 const editFormRef = ref(null)
 const coverDraft = ref('')
 const editForm = reactive({
@@ -372,8 +393,13 @@ const editForm = reactive({
   phone: '',
   avatar: '',
   bio: '',
-  coverImage: '',
   ipLocation: ''
+})
+
+const coverPreviewStyle = computed(() => {
+  const url = (coverDraft.value || '').trim()
+  if (!url) return {}
+  return { backgroundImage: `url(${url})` }
 })
 
 const editRules = {
@@ -392,7 +418,6 @@ function openEdit() {
   editForm.phone = info.value.phone || ''
   editForm.avatar = info.value.avatar || ''
   editForm.bio = info.value.bio || ''
-  editForm.coverImage = info.value.coverImage || ''
   editForm.ipLocation = info.value.ipLocation || ''
   editVisible.value = true
 }
@@ -400,6 +425,47 @@ function openEdit() {
 function openCoverEdit() {
   coverDraft.value = info.value?.coverImage || ''
   coverVisible.value = true
+}
+
+async function onCoverFileSelected(event) {
+  const raw = event.target.files?.[0]
+  event.target.value = ''
+  if (!raw) return
+
+  coverUploading.value = true
+  try {
+    let file
+    try {
+      const prepared = await prepareImageForUpload(raw)
+      file = prepared.file
+    } catch (err) {
+      ElMessage.warning(compressErrorMessage(err?.message || 'type'))
+      return
+    }
+
+    const check = await validateCoverImageFile(file, { maxBytes: IMAGE_TARGET_MAX_BYTES })
+    if (!check.ok) {
+      const map = {
+        type: 'profile.coverUploadType',
+        size: 'profile.coverUploadSize',
+        signature: 'profile.coverUploadSignature',
+        decode: 'profile.coverUploadDecode',
+        dimension: 'profile.coverUploadDimension'
+      }
+      ElMessage.warning(t(map[check.reason] || 'profile.coverUploadFail'))
+      return
+    }
+
+    const res = await uploadProductImages([file])
+    const url = res.data?.images?.[0]
+    if (!isSafeCoverUrl(url)) throw new Error('unsafe')
+    coverDraft.value = url
+    ElMessage.success(t('profile.coverUploadOk'))
+  } catch {
+    ElMessage.error(t('profile.coverUploadFail'))
+  } finally {
+    coverUploading.value = false
+  }
 }
 
 async function saveProfile(payload) {
@@ -423,7 +489,6 @@ async function onSaveEdit() {
       avatar: editForm.avatar,
       phone: editForm.phone,
       bio: editForm.bio,
-      coverImage: editForm.coverImage,
       ipLocation: editForm.ipLocation
     })
     editVisible.value = false
@@ -433,9 +498,14 @@ async function onSaveEdit() {
 }
 
 async function onSaveCover() {
+  const value = (coverDraft.value || '').trim()
+  if (value && !isSafeCoverUrl(value)) {
+    ElMessage.warning(t('profile.coverUnsafe'))
+    return
+  }
   savingCover.value = true
   try {
-    await saveProfile({ coverImage: coverDraft.value })
+    await saveProfile({ coverImage: value })
     coverVisible.value = false
   } finally {
     savingCover.value = false
@@ -677,6 +747,56 @@ onMounted(async () => {
   font-size: 12px;
   color: var(--oa-text-muted);
   line-height: 1.5;
+}
+
+.cover-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.cover-preview {
+  height: 140px;
+  border-radius: 10px;
+  background: var(--oa-bg-elevated);
+  background-size: cover;
+  background-position: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cover-preview-empty {
+  font-size: 13px;
+  color: var(--oa-text-muted);
+}
+
+.cover-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cover-upload-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: var(--oa-text);
+  color: var(--oa-on-primary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.cover-upload-btn input {
+  display: none;
+}
+
+.cover-upload-btn.disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 @media (max-width: 900px) {

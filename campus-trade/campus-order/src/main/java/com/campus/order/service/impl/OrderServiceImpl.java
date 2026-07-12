@@ -37,6 +37,7 @@ import com.campus.order.dto.SeckillResultVO;
 import java.time.Duration;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -190,7 +191,6 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public void pay(Long buyerId, Long orderId) {
         Order order = getOwnedOrder(buyerId, orderId);
         int points = toPoints(order.getPrice());
@@ -222,7 +222,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             throw new BizException(ResultCode.ORDER_STATUS_INVALID);
         }
 
-        // 先 CAS 占住 PAID，避免「先扣积分再更新」与取消订单竞态导致丢积分
+        // 先短事务 CAS 占住 PAID，再在事务外 Feign，避免长时间占用订单库连接
         boolean updated = lambdaUpdate()
                 .eq(Order::getId, orderId)
                 .eq(Order::getStatus, STATUS_UNPAID)
@@ -268,10 +268,12 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     @Override
     public void confirm(Long buyerId, Long orderId) {
         Order order = getOwnedOrder(buyerId, orderId);
+        LocalDateTime completedAt = LocalDateTime.now();
         boolean updated = lambdaUpdate()
                 .eq(Order::getId, orderId)
                 .eq(Order::getStatus, STATUS_PAID)
                 .set(Order::getStatus, STATUS_DONE)
+                .set(Order::getCompletedAt, completedAt)
                 .update();
         if (!updated) {
             throw new BizException(ResultCode.ORDER_STATUS_INVALID);
@@ -282,23 +284,45 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     @Transactional(rollbackFor = Exception.class)
     public void cancel(Long buyerId, Long orderId) {
         Order order = getOwnedOrder(buyerId, orderId);
-        boolean updated = lambdaUpdate()
-                .eq(Order::getId, orderId)
-                .eq(Order::getStatus, STATUS_UNPAID)
-                .set(Order::getStatus, STATUS_CANCELLED)
-                .update();
-        if (!updated) {
+        if (!tryCancelUnpaidAndRestore(order)) {
             Order currentOrder = getById(orderId);
             if (currentOrder != null && currentOrder.getStatus() == STATUS_CANCELLED) {
                 return;
             }
             throw new BizException(ResultCode.ORDER_STATUS_INVALID);
         }
-        // 回滚库存（库存+1 且把商品状态恢复为在售），传入 orderNo 保证幂等
-        unwrap(productFeign.restoreStock(order.getProductId(), order.getOrderNo()));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean closeUnpaidBySystem(Long orderId) {
+        Order order = getById(orderId);
+        if (order == null) {
+            return false;
+        }
+        return tryCancelUnpaidAndRestore(order);
     }
 
     // ==================== 私有辅助 ====================
+
+    /**
+     * CAS {@code UNPAID → CANCELLED}，成功则按 orderNo 幂等回滚库存。
+     *
+     * @return true 表示本次关单成功；false 表示状态已非未付（已支付/已取消等）
+     */
+    private boolean tryCancelUnpaidAndRestore(Order order) {
+        boolean updated = lambdaUpdate()
+                .eq(Order::getId, order.getId())
+                .eq(Order::getStatus, STATUS_UNPAID)
+                .set(Order::getStatus, STATUS_CANCELLED)
+                .update();
+        if (!updated) {
+            return false;
+        }
+        // 回滚库存（库存+1 且把商品状态恢复为在售），传入 orderNo 保证幂等
+        unwrap(productFeign.restoreStock(order.getProductId(), order.getOrderNo()));
+        return true;
+    }
 
     /**
      * 透传 Feign 业务结果：HTTP 200 但 {@code Result.code != 200} 时把下游业务码抛出。
@@ -702,7 +726,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         if (result == null || result.getCode() != ResultCode.SUCCESS.getCode() || result.getData() == null) {
             throw new BizException(ResultCode.FORBIDDEN);
         }
-        if (!UserRole.isMerchant(result.getData())) {
+        if (!UserRole.canAccessMerchantHub(result.getData())) {
             throw new BizException(ResultCode.FORBIDDEN);
         }
     }

@@ -61,6 +61,10 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
     /** 公开用户主页：GET /api/user/profile/{纯数字id} */
     private static final Pattern USER_PROFILE_PATTERN = Pattern.compile("^/api/user/profile/\\d+$");
 
+    /** 卖家评价列表：GET /api/order/reviews/seller/{纯数字id} */
+    private static final Pattern ORDER_SELLER_REVIEWS_PATTERN =
+            Pattern.compile("^/api/order/reviews/seller/\\d+$");
+
     /** 公开关注统计：GET /api/user/follow/followers|following */
     private static final Pattern USER_FOLLOW_LIST_PATTERN =
             Pattern.compile("^/api/user/follow/(followers|following)$");
@@ -146,6 +150,10 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
         }
         // 公开用户主页（可选注入 X-User-Id 以返回 following）
         if (HttpMethod.GET.equals(method) && USER_PROFILE_PATTERN.matcher(path).matches()) {
+            return true;
+        }
+        // 卖家评价列表公开读
+        if (HttpMethod.GET.equals(method) && ORDER_SELLER_REVIEWS_PATTERN.matcher(path).matches()) {
             return true;
         }
         // 公开关注统计

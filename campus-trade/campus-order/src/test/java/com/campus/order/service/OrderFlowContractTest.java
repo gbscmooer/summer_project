@@ -25,6 +25,16 @@ class OrderFlowContractTest {
     }
 
     @Test
+    void closeUnpaidBySystemIsTransactional() throws Exception {
+        Method method = OrderServiceImpl.class.getMethod("closeUnpaidBySystem", Long.class);
+        Transactional transactional = method.getAnnotation(Transactional.class);
+
+        assertNotNull(transactional, "closeUnpaidBySystem must roll back cancel when restoreStock fails");
+        assertEquals(1, transactional.rollbackFor().length);
+        assertEquals(Exception.class, transactional.rollbackFor()[0]);
+    }
+
+    @Test
     void productDeductFeignExposesSeckillCachePreserveFlag() throws Exception {
         Method method = ProductFeignClient.class.getMethod("deductStock", Long.class, String.class, boolean.class);
         Annotation[] annotations = method.getParameterAnnotations()[2];

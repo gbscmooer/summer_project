@@ -5,15 +5,25 @@
   </div>
 
   <!-- OpenAI Platform 主布局 -->
-  <div v-else class="platform-layout">
-    <aside class="sidebar">
+  <div v-else class="platform-layout" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
+    <aside class="sidebar" :class="{ 'sidebar--collapsed': sidebarCollapsed }">
       <!-- 项目选择器 -->
       <div class="project-selector">
         <div class="project-icon">
           <img src="/logo.png" alt="" class="project-logo" />
         </div>
         <span class="project-name">校园集市</span>
-        <el-icon class="project-chevron"><ArrowDown /></el-icon>
+        <button
+          type="button"
+          class="sidebar-toggle"
+          :title="sidebarCollapsed ? '展开侧栏' : '收起侧栏'"
+          @click="toggleSidebar"
+        >
+          <el-icon>
+            <Expand v-if="sidebarCollapsed" />
+            <Fold v-else />
+          </el-icon>
+        </button>
       </div>
 
       <!-- 主导航 -->
@@ -108,9 +118,10 @@ import {
   Bell,
   User,
   Setting,
-  ArrowDown,
   Tools,
-  Trophy
+  Trophy,
+  Fold,
+  Expand
 } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/user'
 import { getUnreadCount } from '@/api/notification'
@@ -126,6 +137,16 @@ const messageUnreadCount = ref(0)
 let unreadTimer = null
 const unreadRefreshEvent = 'campus:unread-count-refresh'
 const messageUnreadRefreshEvent = 'campus:message-unread-refresh'
+
+const SIDEBAR_KEY = 'campus-sidebar-collapsed'
+const sidebarCollapsed = ref(
+  typeof localStorage !== 'undefined' && localStorage.getItem(SIDEBAR_KEY) === '1'
+)
+
+function toggleSidebar() {
+  sidebarCollapsed.value = !sidebarCollapsed.value
+  localStorage.setItem(SIDEBAR_KEY, sidebarCollapsed.value ? '1' : '0')
+}
 
 const isAuthPage = computed(() => ['/login', '/register', '/forgot-password', '/reset-password'].includes(route.path))
 
@@ -153,7 +174,8 @@ const navItems = computed(() => {
     { path: '/my', labelKey: 'nav.profile', icon: User }
   )
   if (userStore.isAdmin) {
-    items.push({ path: '/admin', labelKey: 'nav.admin', icon: Tools })
+    // 管理员入口靠前，避免侧栏过长时被挤到下方
+    items.splice(3, 0, { path: '/admin', labelKey: 'nav.admin', icon: Tools })
   }
   items.push({ path: '/settings', labelKey: 'nav.settings', icon: Setting })
   return items
@@ -240,7 +262,10 @@ watch(
 onMounted(() => {
   window.addEventListener(unreadRefreshEvent, refreshUnreadCount)
   window.addEventListener(messageUnreadRefreshEvent, refreshMessageUnreadCount)
-  if (userStore.isLogin) startUnreadPolling()
+  if (userStore.isLogin) {
+    startUnreadPolling()
+    userStore.refreshProfile()
+  }
 })
 
 onUnmounted(() => {
@@ -274,6 +299,12 @@ function handleCommand(command) {
   display: flex;
   min-height: 100%;
   background: var(--oa-bg);
+  --oa-sidebar-width: 240px;
+  transition: --oa-sidebar-width 0.2s ease;
+}
+
+.platform-layout.sidebar-collapsed {
+  --oa-sidebar-width: 68px;
 }
 
 /* ---- Sidebar ---- */
@@ -289,6 +320,7 @@ function handleCommand(command) {
   left: 0;
   bottom: 0;
   z-index: 100;
+  transition: width 0.2s ease;
 }
 
 .project-selector {
@@ -298,12 +330,6 @@ function handleCommand(command) {
   padding: 12px 14px;
   margin: 8px 8px 4px;
   border-radius: var(--oa-radius-sm);
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.project-selector:hover {
-  background: var(--oa-bg-hover);
 }
 
 .project-icon {
@@ -330,9 +356,24 @@ function handleCommand(command) {
   white-space: nowrap;
 }
 
-.project-chevron {
-  font-size: 12px;
+.sidebar-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
   color: var(--oa-text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+
+.sidebar-toggle:hover {
+  background: var(--oa-bg-hover);
+  color: var(--oa-text);
 }
 
 .sidebar-nav {
@@ -386,7 +427,7 @@ function handleCommand(command) {
   margin: 8px 12px;
   padding: 12px;
   background: var(--oa-bg-elevated);
-  border: 1px solid var(--oa-border-subtle);
+  border: none;
   border-radius: var(--oa-radius-sm);
 }
 
@@ -513,6 +554,7 @@ function handleCommand(command) {
   margin-left: var(--oa-sidebar-width);
   min-height: 100vh;
   padding: 32px 40px 48px;
+  transition: margin-left 0.2s ease;
 }
 
 .main-content--bleed {
@@ -526,5 +568,50 @@ function handleCommand(command) {
   align-items: center;
   justify-content: center;
   background: var(--oa-bg);
+}
+
+/* Collapsed sidebar */
+.sidebar--collapsed .project-name,
+.sidebar--collapsed .nav-label,
+.sidebar--collapsed .sidebar-promo,
+.sidebar--collapsed .points-row,
+.sidebar--collapsed .user-info,
+.sidebar--collapsed .nav-badge {
+  display: none;
+}
+
+.sidebar--collapsed .project-selector {
+  justify-content: center;
+  padding: 12px 8px;
+  gap: 0;
+  position: relative;
+}
+
+.sidebar--collapsed .project-icon {
+  display: none;
+}
+
+.sidebar--collapsed .sidebar-toggle {
+  margin: 0 auto;
+}
+
+.sidebar--collapsed .nav-item {
+  justify-content: center;
+  padding: 10px;
+}
+
+.sidebar--collapsed .nav-icon {
+  margin: 0;
+}
+
+.sidebar--collapsed .user-block {
+  justify-content: center;
+  padding: 8px;
+}
+
+.sidebar--collapsed .sidebar-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 </style>

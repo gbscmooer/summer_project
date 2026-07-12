@@ -36,6 +36,13 @@ spring:
             readTimeout: 10000
 campus:
   internal-api-token: ${INTERNAL_API_TOKEN:}
+  order:
+    # 未支付订单超时自动关单（分钟）
+    unpaid-timeout-minutes: ${CAMPUS_ORDER_UNPAID_TIMEOUT_MINUTES:15}
+    # 超时关单扫描间隔（毫秒，fixedDelay：上次结束后再等）
+    timeout-scan-delay-ms: ${CAMPUS_ORDER_TIMEOUT_SCAN_DELAY_MS:60000}
+    # 每次扫描最多处理的订单数，避免一次扫全表
+    timeout-batch-size: ${CAMPUS_ORDER_TIMEOUT_BATCH_SIZE:100}
 mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true

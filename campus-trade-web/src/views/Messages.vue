@@ -711,7 +711,7 @@ onUnmounted(() => {
   margin: 12px 18px 0;
   padding: 10px 12px;
   border-radius: var(--oa-radius-sm);
-  border: 1px solid var(--oa-border-subtle);
+  border: none;
   background: var(--oa-bg-elevated);
   font-size: 13px;
   color: var(--oa-text-secondary);
@@ -742,7 +742,7 @@ onUnmounted(() => {
   padding: 10px 12px;
   border-radius: 12px;
   background: var(--oa-bg-elevated);
-  border: 1px solid var(--oa-border-subtle);
+  border: none;
 }
 
 .bubble-row.mine .bubble {

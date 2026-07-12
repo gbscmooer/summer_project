@@ -496,7 +496,7 @@ onMounted(loadAll)
 
 .side-section {
   padding: 14px 12px;
-  border: 1px solid var(--oa-border-subtle);
+  border: none;
   border-radius: var(--oa-radius);
   background: var(--oa-bg-sidebar, var(--oa-bg-elevated, #fafafa));
 }
@@ -831,7 +831,7 @@ onMounted(loadAll)
 }
 
 .product-card {
-  border: 1px solid var(--oa-border-subtle);
+  border: none;
   border-radius: var(--oa-radius);
   overflow: hidden;
   cursor: pointer;

@@ -30,6 +30,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.interceptor.TransactionAspectSupport;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDate;
@@ -77,6 +78,25 @@ public class PointsServiceImpl implements PointsService {
         vo.setLikeRewardPoints(PointsConstants.LIKE_QUEST_REWARD);
         vo.setPoints(user.getPoints() == null ? 0 : user.getPoints());
         return vo;
+    }
+
+    @Override
+    public void recordRegisterBonus(Long userId) {
+        if (userId == null || userId <= 0) {
+            throw new BizException(ResultCode.BAD_REQUEST);
+        }
+        User user = userMapper.selectById(userId);
+        if (user == null) {
+            throw new BizException(ResultCode.USER_NOT_FOUND);
+        }
+        int balance = user.getPoints() == null ? 0 : user.getPoints();
+        tryWriteLedger(
+                userId,
+                PointsConstants.NEW_USER_BONUS,
+                balance,
+                PointsConstants.REASON_NEW_USER_BONUS,
+                PointsConstants.REF_REGISTER,
+                String.valueOf(userId));
     }
 
     @Override
@@ -207,19 +227,14 @@ public class PointsServiceImpl implements PointsService {
             throw new BizException(ResultCode.BAD_REQUEST.getCode(), "refId 不能为空");
         }
 
-        // 幂等：买家扣款流水已存在则视为已处理
-        PointLedger existing = pointLedgerMapper.selectOne(new LambdaQueryWrapper<PointLedger>()
-                .eq(PointLedger::getUserId, request.getFromUserId())
-                .eq(PointLedger::getRefType, refType)
-                .eq(PointLedger::getRefId, refId)
-                .eq(PointLedger::getReason, PointsConstants.REASON_ORDER_PAY_DEBIT)
-                .last("LIMIT 1"));
-        if (existing != null) {
+        // 按 userId 升序行锁，避免并发双花与死锁；锁内查流水做幂等
+        User[] pair = lockPair(request.getFromUserId(), request.getToUserId());
+        User buyer = pair[0].getId().equals(request.getFromUserId()) ? pair[0] : pair[1];
+        User seller = pair[0].getId().equals(request.getToUserId()) ? pair[0] : pair[1];
+        if (findLedger(buyer.getId(), refType, refId, PointsConstants.REASON_ORDER_PAY_DEBIT) != null) {
             return;
         }
 
-        User buyer = requireUser(request.getFromUserId());
-        User seller = requireUser(request.getToUserId());
         int amount = request.getAmount();
         int buyerPoints = buyer.getPoints() == null ? 0 : buyer.getPoints();
         if (buyerPoints < amount) {
@@ -235,16 +250,22 @@ public class PointsServiceImpl implements PointsService {
             throw new BizException(ResultCode.POINTS_INSUFFICIENT);
         }
         User buyerAfter = userMapper.selectById(buyer.getId());
-        writeLedger(buyer.getId(), -amount, buyerAfter.getPoints(),
-                PointsConstants.REASON_ORDER_PAY_DEBIT, refType, refId);
+        if (!tryWriteLedger(buyer.getId(), -amount, buyerAfter.getPoints(),
+                PointsConstants.REASON_ORDER_PAY_DEBIT, refType, refId)) {
+            // uk 命中：对端已完成，回滚本事务余额变更并视为成功
+            markRollbackOnly();
+            return;
+        }
 
         userMapper.update(null,
                 new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<User>()
                         .eq(User::getId, seller.getId())
                         .setSql("points = points + " + amount));
         User sellerAfter = userMapper.selectById(seller.getId());
-        writeLedger(seller.getId(), amount, sellerAfter.getPoints(),
-                PointsConstants.REASON_ORDER_PAY_CREDIT, refType, refId);
+        if (!tryWriteLedger(seller.getId(), amount, sellerAfter.getPoints(),
+                PointsConstants.REASON_ORDER_PAY_CREDIT, refType, refId)) {
+            markRollbackOnly();
+        }
     }
 
     @Override
@@ -268,19 +289,13 @@ public class PointsServiceImpl implements PointsService {
             throw new BizException(ResultCode.BAD_REQUEST.getCode(), "refId 不能为空");
         }
 
-        // 幂等：打赏人扣款流水已存在则视为已处理
-        PointLedger existing = pointLedgerMapper.selectOne(new LambdaQueryWrapper<PointLedger>()
-                .eq(PointLedger::getUserId, request.getFromUserId())
-                .eq(PointLedger::getRefType, refType)
-                .eq(PointLedger::getRefId, refId)
-                .eq(PointLedger::getReason, PointsConstants.REASON_TOPIC_TIP_DEBIT)
-                .last("LIMIT 1"));
-        if (existing != null) {
+        User[] pair = lockPair(request.getFromUserId(), request.getToUserId());
+        User from = pair[0].getId().equals(request.getFromUserId()) ? pair[0] : pair[1];
+        User to = pair[0].getId().equals(request.getToUserId()) ? pair[0] : pair[1];
+        if (findLedger(from.getId(), refType, refId, PointsConstants.REASON_TOPIC_TIP_DEBIT) != null) {
             return false;
         }
 
-        User from = requireUser(request.getFromUserId());
-        User to = requireUser(request.getToUserId());
         int amount = request.getAmount();
         int fromPoints = from.getPoints() == null ? 0 : from.getPoints();
         if (fromPoints < amount) {
@@ -296,16 +311,22 @@ public class PointsServiceImpl implements PointsService {
             throw new BizException(ResultCode.POINTS_INSUFFICIENT);
         }
         User fromAfter = userMapper.selectById(from.getId());
-        writeLedger(from.getId(), -amount, fromAfter.getPoints(),
-                PointsConstants.REASON_TOPIC_TIP_DEBIT, refType, refId);
+        if (!tryWriteLedger(from.getId(), -amount, fromAfter.getPoints(),
+                PointsConstants.REASON_TOPIC_TIP_DEBIT, refType, refId)) {
+            markRollbackOnly();
+            return false;
+        }
 
         userMapper.update(null,
                 new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<User>()
                         .eq(User::getId, to.getId())
                         .setSql("points = points + " + amount));
         User toAfter = userMapper.selectById(to.getId());
-        writeLedger(to.getId(), amount, toAfter.getPoints(),
-                PointsConstants.REASON_TOPIC_TIP_CREDIT, refType, refId);
+        if (!tryWriteLedger(to.getId(), amount, toAfter.getPoints(),
+                PointsConstants.REASON_TOPIC_TIP_CREDIT, refType, refId)) {
+            markRollbackOnly();
+            return false;
+        }
         return true;
     }
 
@@ -462,6 +483,7 @@ public class PointsServiceImpl implements PointsService {
         return switch (reason) {
             case PointsConstants.REASON_CHECKIN -> "每日签到";
             case PointsConstants.REASON_LIKE_REWARD -> "点赞任务奖励";
+            case PointsConstants.REASON_NEW_USER_BONUS -> "新用户注册赠送";
             case PointsConstants.REASON_ORDER_PAY_DEBIT -> "购买商品";
             case PointsConstants.REASON_ORDER_PAY_CREDIT -> "商品销售收入";
             case PointsConstants.REASON_TOPIC_TIP_DEBIT -> "打赏帖子";
@@ -524,6 +546,62 @@ public class PointsServiceImpl implements PointsService {
         ledger.setRefType(refType);
         ledger.setRefId(refId);
         pointLedgerMapper.insert(ledger);
+    }
+
+    /** @return false 表示 uk_user_ref_reason 冲突（幂等命中） */
+    private boolean tryWriteLedger(Long userId, int delta, int balanceAfter,
+                                   String reason, String refType, String refId) {
+        try {
+            writeLedger(userId, delta, balanceAfter, reason, refType, refId);
+            return true;
+        } catch (DuplicateKeyException e) {
+            return false;
+        }
+    }
+
+    private PointLedger findLedger(Long userId, String refType, String refId, String reason) {
+        return pointLedgerMapper.selectOne(new LambdaQueryWrapper<PointLedger>()
+                .eq(PointLedger::getUserId, userId)
+                .eq(PointLedger::getRefType, refType)
+                .eq(PointLedger::getRefId, refId)
+                .eq(PointLedger::getReason, reason)
+                .last("LIMIT 1"));
+    }
+
+    /** 按 id 升序 SELECT … FOR UPDATE，返回 [较小 id 用户, 较大 id 用户]。 */
+    private User[] lockPair(Long userIdA, Long userIdB) {
+        Long firstId = userIdA <= userIdB ? userIdA : userIdB;
+        Long secondId = userIdA <= userIdB ? userIdB : userIdA;
+        User first = lockUser(firstId);
+        User second = firstId.equals(secondId) ? first : lockUser(secondId);
+        return new User[]{first, second};
+    }
+
+    private User lockUser(Long userId) {
+        if (userId == null || userId <= 0) {
+            throw new BizException(ResultCode.BAD_REQUEST);
+        }
+        User user = userMapper.selectOne(new LambdaQueryWrapper<User>()
+                .eq(User::getId, userId)
+                .last("FOR UPDATE"));
+        if (user == null) {
+            throw new BizException(ResultCode.NOT_FOUND);
+        }
+        if (UserStatus.isEffectivelyBanned(user.getStatus(), user.getBanUntil())) {
+            throw new BizException(ResultCode.USER_BANNED);
+        }
+        if (user.getPoints() == null) {
+            user.setPoints(0);
+        }
+        return user;
+    }
+
+    private static void markRollbackOnly() {
+        try {
+            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+        } catch (RuntimeException ignored) {
+            // 无事务上下文时（如纯单元测试）忽略
+        }
     }
 
     private DailyLikeQuest findQuest(Long userId, LocalDate date) {

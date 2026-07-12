@@ -16,8 +16,12 @@ class HttpMethodContractTest {
         assertNoForbiddenMappings(UserController.class);
         assertNoForbiddenMappings(MerchantController.class);
         assertNoForbiddenMappings(AdminMerchantController.class);
+        assertNoForbiddenMappings(AdminUserController.class);
         assertNoForbiddenMappings(ProfileController.class);
         assertNoForbiddenMappings(FollowController.class);
+        assertNoForbiddenMappings(EventsController.class);
+        assertNoForbiddenMappings(FriendController.class);
+        assertNoForbiddenMappings(MessageController.class);
     }
 
     private void assertNoForbiddenMappings(Class<?> controllerClass) {

@@ -476,7 +476,7 @@ onMounted(async () => {
 }
 
 .sum-card {
-  border: 1px solid var(--oa-border);
+  border: none;
   border-radius: 10px;
   padding: 12px 14px;
 }
@@ -506,7 +506,7 @@ onMounted(async () => {
 }
 
 .chart-block {
-  border: 1px solid var(--oa-border);
+  border: none;
   border-radius: 10px;
   padding: 12px;
 }

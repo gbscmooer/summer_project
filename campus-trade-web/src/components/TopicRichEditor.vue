@@ -90,7 +90,8 @@
       <input
         ref="fileInput"
         type="file"
-        accept="image/*"
+        accept="image/jpeg,image/png,image/webp"
+        multiple
         class="file-input"
         @change="onImageSelected"
       />
@@ -126,6 +127,7 @@ import {
 import { useI18n } from '@/i18n'
 import { uploadProductImages } from '@/api/product'
 import { sanitizeHtml, isRichContentEmpty } from '@/utils/sanitizeHtml'
+import { prepareImageForUpload, compressErrorMessage } from '@/utils/imageCompress'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
@@ -248,29 +250,41 @@ function pickImage() {
 }
 
 async function onImageSelected(event) {
-  const file = event.target.files?.[0]
+  const files = Array.from(event.target.files || [])
   event.target.value = ''
-  if (!file) return
-  if (!file.type.startsWith('image/')) {
-    ElMessage.warning(t('topics.editorImageOnly'))
-    return
-  }
+  if (!files.length) return
+
   uploading.value = true
+  let compressedCount = 0
   try {
-    const res = await uploadProductImages([file])
-    const url = res.data?.images?.[0]
-    if (!url) {
+    const prepared = []
+    for (const raw of files.slice(0, 5)) {
+      try {
+        const { file, compressed } = await prepareImageForUpload(raw)
+        if (compressed) compressedCount += 1
+        prepared.push(file)
+      } catch (err) {
+        ElMessage.warning(compressErrorMessage(err?.message || 'type'))
+      }
+    }
+    if (!prepared.length) return
+
+    const res = await uploadProductImages(prepared)
+    const urls = res.data?.images || []
+    if (!urls.length) {
       ElMessage.error(t('topics.editorUploadFail'))
       return
     }
     restoreSelection()
     await nextTick()
-    document.execCommand(
-      'insertHTML',
-      false,
-      `<p><img src="${escapeAttr(url)}" alt="" /></p><p><br></p>`
-    )
+    const html = urls
+      .map((url) => `<p><img src="${escapeAttr(url)}" alt="" /></p>`)
+      .join('') + '<p><br></p>'
+    document.execCommand('insertHTML', false, html)
     emitHtml()
+    if (compressedCount > 0) {
+      ElMessage.success(`已插入 ${urls.length} 张图片（${compressedCount} 张已压缩至 1MB 内）`)
+    }
   } catch {
     ElMessage.error(t('topics.editorUploadFail'))
   } finally {

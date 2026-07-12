@@ -1,6 +1,7 @@
 package com.campus.product.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.campus.common.exception.BizException;
@@ -322,20 +323,23 @@ public class TopicPostServiceImpl extends ServiceImpl<TopicPostMapper, TopicPost
             throw ex;
         }
 
-        if (existing == null || existing.getStatus() == null
-                || existing.getStatus() != TopicTipReceipt.STATUS_DONE) {
-            boolean updated = lambdaUpdate()
-                    .eq(TopicPost::getId, postId)
-                    .setSql("tip_total = IFNULL(tip_total, 0) + " + tipAmount)
-                    .update();
-            if (!updated) {
-                throw new BizException(ResultCode.TOPIC_POST_NOT_FOUND);
-            }
-            if (existing != null && existing.getId() != null) {
-                TopicTipReceipt done = new TopicTipReceipt();
-                done.setId(existing.getId());
-                done.setStatus(TopicTipReceipt.STATUS_DONE);
-                topicTipReceiptMapper.updateById(done);
+        // CAS PENDING→DONE：仅胜出方累加 tip_total，避免幂等重试虚高
+        if (existing != null && existing.getId() != null) {
+            int claimed = topicTipReceiptMapper.update(null,
+                    new LambdaUpdateWrapper<TopicTipReceipt>()
+                            .eq(TopicTipReceipt::getId, existing.getId())
+                            .and(w -> w.eq(TopicTipReceipt::getStatus, TopicTipReceipt.STATUS_PENDING)
+                                    .or()
+                                    .isNull(TopicTipReceipt::getStatus))
+                            .set(TopicTipReceipt::getStatus, TopicTipReceipt.STATUS_DONE));
+            if (claimed > 0) {
+                boolean updated = lambdaUpdate()
+                        .eq(TopicPost::getId, postId)
+                        .setSql("tip_total = IFNULL(tip_total, 0) + " + tipAmount)
+                        .update();
+                if (!updated) {
+                    throw new BizException(ResultCode.TOPIC_POST_NOT_FOUND);
+                }
             }
         }
         TopicPost refreshed = getById(postId);

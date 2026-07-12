@@ -13,6 +13,9 @@ public interface PointsService {
 
     EventStatusVO getEventStatus(Long userId);
 
+    /** 注册赠送积分入账流水（幂等：同一 userId 只记一次）。 */
+    void recordRegisterBonus(Long userId);
+
     /** 每日签到，成功返回最新余额。 */
     PointsBalanceVO checkin(Long userId);
 

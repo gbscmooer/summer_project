@@ -11,6 +11,7 @@ import com.campus.user.entity.User;
 import com.campus.user.mapper.UserMapper;
 import com.campus.user.service.OnboardingFlagCodec;
 import com.campus.user.service.PointsConstants;
+import com.campus.user.service.PointsService;
 import com.campus.user.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -21,13 +22,19 @@ import org.springframework.util.StringUtils;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements UserService {
 
+    /** 封面仅允许站内上传图片路径，拒绝外链 / javascript: 等注入 */
+    private static final Pattern SAFE_COVER_IMAGE =
+            Pattern.compile("^/api/product/image/[a-f0-9]{32}\\.(jpg|png|webp)$");
+
     private final BCryptPasswordEncoder passwordEncoder;
+    private final PointsService pointsService;
 
     @Override
     public Long register(RegisterRequest request) {
@@ -72,6 +79,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             }
             throw new BizException(ResultCode.USERNAME_EXISTS);
         }
+        pointsService.recordRegisterBonus(user.getId());
         return user.getId();
     }
 
@@ -140,7 +148,14 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             hasUpdates = true;
         }
         if (request.getCoverImage() != null) {
-            user.setCoverImage(request.getCoverImage().trim());
+            String cover = request.getCoverImage().trim();
+            if (cover.isEmpty()) {
+                user.setCoverImage("");
+            } else if (SAFE_COVER_IMAGE.matcher(cover).matches()) {
+                user.setCoverImage(cover);
+            } else {
+                throw new BizException(400, "封面仅支持站内上传图片");
+            }
             hasUpdates = true;
         }
         if (request.getIpLocation() != null) {
@@ -156,7 +171,13 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     public List<UserBriefVO> batchGetUsers(List<Long> ids) {
         if (ids == null || ids.isEmpty()) return List.of();
         return listByIds(ids).stream()
-                .map(u -> new UserBriefVO(u.getId(), u.getNickname(), u.getAvatar(), u.getBio()))
+                .map(u -> new UserBriefVO(
+                        u.getId(),
+                        u.getNickname(),
+                        u.getAvatar(),
+                        u.getBio(),
+                        u.getAvgRating(),
+                        u.getReviewCount() == null ? 0 : u.getReviewCount()))
                 .collect(Collectors.toList());
     }
 
@@ -250,6 +271,17 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         patch.setId(userId);
         patch.setOnboardingCompleted(1);
         updateById(patch);
+    }
+
+    @Override
+    public void applyRating(Long sellerId, int rating) {
+        if (sellerId == null || sellerId <= 0 || rating < 1 || rating > 5) {
+            throw new BizException(ResultCode.BAD_REQUEST);
+        }
+        int updated = baseMapper.applyRatingAtomic(sellerId, rating);
+        if (updated == 0) {
+            throw new BizException(ResultCode.USER_NOT_FOUND);
+        }
     }
 
     private void clearExpiredBan(Long userId) {

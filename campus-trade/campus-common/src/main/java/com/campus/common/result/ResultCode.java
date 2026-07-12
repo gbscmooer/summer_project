@@ -63,7 +63,11 @@ public enum ResultCode {
     ORDER_CANNOT_BUY_OWN(3002, "不能购买自己发布的商品"),
     ORDER_STATUS_INVALID(3003, "当前订单状态不允许此操作"),
     ORDER_PURCHASE_LIMIT(3004, "已达该商品购买上限"),
-    POINTS_INSUFFICIENT(3005, "积分不足");
+    POINTS_INSUFFICIENT(3005, "积分不足"),
+    ORDER_NOT_COMPLETED(3006, "订单未完成，无法评价"),
+    ORDER_REVIEW_EXISTS(3007, "该订单已评价"),
+    ORDER_REVIEW_EXPIRED(3008, "已超过评价期限（完成后7天内）"),
+    ORDER_REVIEW_NOT_FOUND(3009, "评价不存在");
 
     private final int code;
     private final String message;

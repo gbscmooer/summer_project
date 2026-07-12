@@ -65,6 +65,7 @@ import { Picture, VideoCamera } from '@element-plus/icons-vue'
 import { useI18n } from '@/i18n'
 import { useUserStore } from '@/store/user'
 import { uploadProductImages } from '@/api/product'
+import { prepareImageForUpload, compressErrorMessage } from '@/utils/imageCompress'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
@@ -105,18 +106,24 @@ function pickImage() {
 }
 
 async function onFileChange(event) {
-  const file = event.target.files?.[0]
+  const raw = event.target.files?.[0]
   event.target.value = ''
-  if (!file) return
+  if (!raw) return
   uploading.value = true
   try {
+    const { file, compressed } = await prepareImageForUpload(raw)
     const res = await uploadProductImages([file])
     const url = res.data?.images?.[0]
     if (url) {
       emit('update:imageUrl', url)
+      if (compressed) {
+        ElMessage.success('图片已压缩至 1MB 内并上传')
+      }
     }
-  } catch {
-    // request interceptor shows error
+  } catch (err) {
+    if (err?.message && ['type', 'size', 'decode', 'dimension', 'compress'].includes(err.message)) {
+      ElMessage.warning(compressErrorMessage(err.message))
+    }
   } finally {
     uploading.value = false
   }
@@ -132,7 +139,7 @@ defineExpose({
 
 <style scoped>
 .comment-bar {
-  border: 1px solid var(--oa-border-subtle);
+  border: none;
   border-radius: 16px;
   background: var(--oa-bg-elevated, #fff);
   overflow: hidden;
@@ -173,7 +180,7 @@ defineExpose({
   width: 96px;
   height: 96px;
   border-radius: 10px;
-  border: 1px solid var(--oa-border-subtle);
+  border: none;
 }
 
 .preview-remove {

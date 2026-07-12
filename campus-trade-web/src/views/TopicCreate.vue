@@ -20,14 +20,14 @@
           />
         </el-form-item>
         <el-form-item :label="t('topics.postContent')" required>
-          <el-input
+          <TopicRichEditor
             v-model="form.content"
-            type="textarea"
-            :rows="8"
+            v-model:product-ids="form.productIds"
+            :products="myProducts"
+            :products-loading="productsLoading"
             :placeholder="t('topics.postContentPlaceholder')"
-            maxlength="5000"
-            show-word-limit
           />
+          <p class="editor-hint">支持上传多张图片（仅本地上传，超过 1MB 自动压缩），不会自动发布。</p>
         </el-form-item>
         <el-form-item>
           <div class="tip-switch-row">
@@ -50,31 +50,48 @@
 </template>
 
 <script setup>
-import { reactive, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft } from '@element-plus/icons-vue'
 import { createTopicPost } from '@/api/topic'
+import { getMyProducts } from '@/api/product'
 import { useI18n } from '@/i18n'
+import { isRichContentEmpty } from '@/utils/sanitizeHtml'
+import TopicRichEditor from '@/components/TopicRichEditor.vue'
 
 const router = useRouter()
 const { t } = useI18n()
 
 const submitting = ref(false)
+const productsLoading = ref(false)
+const myProducts = ref([])
 const form = reactive({
   title: '',
   content: '',
-  tipEnabled: false
+  tipEnabled: false,
+  productIds: []
+})
+
+onMounted(async () => {
+  productsLoading.value = true
+  try {
+    const res = await getMyProducts({ pageNum: 1, pageSize: 50 })
+    myProducts.value = res.data?.list || []
+  } catch {
+    myProducts.value = []
+  } finally {
+    productsLoading.value = false
+  }
 })
 
 async function onSubmit() {
   const title = form.title.trim()
-  const content = form.content.trim()
   if (!title) {
     ElMessage.warning(t('topics.titleRequired'))
     return
   }
-  if (!content) {
+  if (isRichContentEmpty(form.content)) {
     ElMessage.warning(t('topics.contentRequired'))
     return
   }
@@ -82,8 +99,9 @@ async function onSubmit() {
   try {
     const res = await createTopicPost({
       title,
-      content,
-      tipEnabled: form.tipEnabled
+      content: form.content,
+      tipEnabled: form.tipEnabled,
+      productIds: form.productIds
     })
     ElMessage.success(t('topics.publishDone'))
     const id = res.data?.postId || res.data?.id
@@ -99,11 +117,18 @@ async function onSubmit() {
 
 <style scoped>
 .topic-create-page {
-  max-width: 720px;
+  max-width: 820px;
 }
 
 .create-panel {
   padding: 24px;
+}
+
+.editor-hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--oa-text-muted);
+  line-height: 1.45;
 }
 
 .tip-switch-row {

@@ -19,6 +19,10 @@ public class ProductDetailVO {
     private String category;
     private Long sellerId;
     private String sellerNickname;
+    /** 卖家平均评分 */
+    private BigDecimal sellerAvgRating;
+    /** 卖家评价数 */
+    private Integer sellerReviewCount;
     private Integer status;
     private Integer stock;
     private Integer viewCount;

@@ -250,7 +250,7 @@ async function onShare() {
   width: 20px;
   height: 20px;
   margin-top: 4px;
-  border: 1px solid var(--oa-border-subtle);
+  border: none;
   border-radius: 50%;
   background: var(--oa-bg-page, #fff);
   color: var(--oa-text-muted);
@@ -347,7 +347,7 @@ async function onShare() {
   height: 160px;
   border-radius: 10px;
   margin-bottom: 8px;
-  border: 1px solid var(--oa-border-subtle);
+  border: none;
 }
 
 .comment-actions {

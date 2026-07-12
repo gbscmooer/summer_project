@@ -99,3 +99,29 @@ export function getSellerDashboard() {
     method: 'get'
   })
 }
+
+// 提交交易评价：body { rating: 1-5, content? } -> data { reviewId }
+export function submitOrderReview(orderId, data) {
+  return request({
+    url: `/order/${orderId}/review`,
+    method: 'post',
+    data
+  })
+}
+
+// 查询订单评价（买卖家可见；未评价时 data 为 null）
+export function getOrderReview(orderId) {
+  return request({
+    url: `/order/${orderId}/review`,
+    method: 'get'
+  })
+}
+
+// 卖家评价列表（公开）：params { pageNum, pageSize }
+export function listSellerReviews(sellerId, params) {
+  return request({
+    url: `/order/reviews/seller/${sellerId}`,
+    method: 'get',
+    params
+  })
+}

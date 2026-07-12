@@ -33,6 +33,12 @@ public interface OrderService {
     /** 取消：仅买家本人，状态 0→3，并回滚商品库存。 */
     void cancel(Long buyerId, Long orderId);
 
+    /**
+     * 系统关单（超时未付）：不校验买家，CAS {@code UNPAID → CANCELLED}，成功则回滚库存。
+     * CAS 失败（已支付/已取消等）返回 {@code false}，不抛业务异常。
+     */
+    boolean closeUnpaidBySystem(Long orderId);
+
     /** 秒杀预扣与排队。 */
     String seckill(Long buyerId, Long productId);
 

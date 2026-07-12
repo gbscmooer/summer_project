@@ -185,8 +185,9 @@
             style="width: 200px"
           />
         </el-form-item>
-        <el-form-item label="Image URLs" prop="images">
-          <el-input v-model="productEditForm.images" type="textarea" :rows="3" />
+        <el-form-item label="商品图片" prop="imageList">
+          <ImageUploadGallery v-model="productEditForm.imageList" :max-count="5" />
+          <p class="edit-hint">仅支持本地上传，不可填写外链；超过 1MB 自动压缩。</p>
         </el-form-item>
         <el-form-item :label="t('topics.postContent')" prop="description">
           <el-input v-model="productEditForm.description" type="textarea" :rows="4" maxlength="500" show-word-limit />
@@ -222,6 +223,7 @@ import { getSellerDashboard } from '@/api/order'
 import { getStatusText, CATEGORIES } from '@/constants/product'
 import { useUserStore } from '@/store/user'
 import { useI18n } from '@/i18n'
+import ImageUploadGallery from '@/components/ImageUploadGallery.vue'
 
 use([CanvasRenderer, PieChart, LineChart, GridComponent, TooltipComponent, LegendComponent])
 
@@ -375,7 +377,7 @@ const productEditForm = reactive({
   category: '',
   price: 0,
   stock: 1,
-  images: '',
+  imageList: [],
   description: ''
 })
 
@@ -394,7 +396,19 @@ const productEditRules = {
     }
   ],
   stock: [{ required: true, message: '请输入库存', trigger: 'blur' }],
-  images: [{ required: true, message: '请至少填写一张图片URL', trigger: 'blur' }]
+  imageList: [
+    {
+      required: true,
+      validator: (_rule, value, callback) => {
+        if (!Array.isArray(value) || value.length === 0) {
+          callback(new Error('请至少上传一张商品图片'))
+        } else {
+          callback()
+        }
+      },
+      trigger: 'change'
+    }
+  ]
 }
 
 async function openEditProduct(row) {
@@ -409,7 +423,7 @@ async function openEditProduct(row) {
     productEditForm.price = data.price || 0
     productEditForm.stock = data.stock || 1
     productEditForm.description = data.description || ''
-    productEditForm.images = Array.isArray(data.images) ? data.images.join(',') : ''
+    productEditForm.imageList = Array.isArray(data.images) ? [...data.images] : []
   } catch {
     productEditVisible.value = false
   } finally {
@@ -426,16 +440,11 @@ async function onSaveProductEdit() {
   }
   productSaving.value = true
   try {
-    const cleanImages = productEditForm.images
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .join(',')
     await updateProduct(editingProductId.value, {
       title: productEditForm.title,
       description: productEditForm.description,
       price: productEditForm.price,
-      images: cleanImages,
+      images: productEditForm.imageList.join(','),
       category: productEditForm.category,
       stock: productEditForm.stock
     })
@@ -501,7 +510,7 @@ onMounted(async () => {
   padding: 14px;
   border-radius: 8px;
   background: var(--oa-bg-elevated);
-  border: 1px solid var(--oa-border-subtle);
+  border: none;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -533,7 +542,7 @@ onMounted(async () => {
   padding: 16px;
   border-radius: 8px;
   background: var(--oa-bg-elevated);
-  border: 1px solid var(--oa-border-subtle);
+  border: none;
 }
 
 .chart-title {
@@ -550,6 +559,13 @@ onMounted(async () => {
 
 .quota-hint {
   margin-bottom: 12px;
+}
+
+.edit-hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--oa-text-muted);
+  line-height: 1.45;
 }
 
 .thumb-img {

@@ -93,6 +93,14 @@
                   >
                     Confirm
                   </el-button>
+                  <el-button
+                    v-else-if="order.status === 2"
+                    size="small"
+                    type="warning"
+                    @click="openReview(order)"
+                  >
+                    {{ t('orders.review') }}
+                  </el-button>
                 </template>
               </div>
             </div>
@@ -128,6 +136,58 @@
         </el-descriptions>
       </div>
     </el-dialog>
+
+    <el-dialog
+      v-model="reviewVisible"
+      :title="t('orders.reviewTitle')"
+      width="480px"
+      @closed="resetReviewForm"
+    >
+      <div v-loading="reviewLoading">
+        <p v-if="reviewOrder" class="review-product">{{ reviewOrder.productTitle }}</p>
+        <p class="review-hint">{{ t('orders.within7Days') }}</p>
+        <div v-if="existingReview" class="review-readonly">
+          <div class="review-row">
+            <span class="review-label">{{ t('orders.rating') }}</span>
+            <el-rate :model-value="existingReview.rating" disabled />
+          </div>
+          <div class="review-row">
+            <span class="review-label">{{ t('orders.content') }}</span>
+            <p class="review-content">{{ existingReview.content || '—' }}</p>
+          </div>
+          <p class="review-meta">{{ t('orders.alreadyReviewed') }} · {{ formatTime(existingReview.createTime) }}</p>
+        </div>
+        <div v-else class="review-form">
+          <div class="review-row">
+            <span class="review-label">{{ t('orders.rating') }}</span>
+            <el-rate v-model="reviewRating" :max="5" />
+          </div>
+          <div class="review-row">
+            <span class="review-label">{{ t('orders.content') }}</span>
+            <el-input
+              v-model="reviewContent"
+              type="textarea"
+              :rows="3"
+              maxlength="500"
+              show-word-limit
+              :placeholder="t('orders.contentPlaceholder')"
+            />
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="reviewVisible = false">{{ t('common.cancel') }}</el-button>
+        <el-button
+          v-if="!existingReview"
+          type="primary"
+          :loading="reviewSubmitting"
+          :disabled="!reviewRating"
+          @click="onSubmitReview"
+        >
+          {{ t('orders.submit') }}
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -140,12 +200,16 @@ import {
   getOrderDetail,
   payOrder,
   confirmOrder,
-  cancelOrder
+  cancelOrder,
+  getOrderReview,
+  submitOrderReview
 } from '@/api/order'
 import { useOnboarding } from '@/composables/useOnboarding'
+import { useUserStore } from '@/store/user'
 import { useI18n } from '@/i18n'
 
 const onboarding = useOnboarding()
+const userStore = useUserStore()
 const { t } = useI18n()
 
 const statusOptions = [
@@ -167,6 +231,14 @@ const detailVisible = ref(false)
 const detailLoading = ref(false)
 const orderDetail = ref(null)
 const actingId = ref(null)
+
+const reviewVisible = ref(false)
+const reviewLoading = ref(false)
+const reviewSubmitting = ref(false)
+const reviewOrder = ref(null)
+const existingReview = ref(null)
+const reviewRating = ref(0)
+const reviewContent = ref('')
 
 function statusClass(status) {
   const map = { 0: 'oa-status-warning', 1: 'oa-status-primary', 2: 'oa-status-success', 3: 'oa-status-info' }
@@ -252,6 +324,7 @@ function onPay(order) {
         await payOrder(order.orderId)
         ElMessage.success('Payment successful')
         await fetchOrders()
+        await userStore.refreshPoints()
         await onboarding.refresh()
       } finally {
         actingId.value = null
@@ -297,6 +370,52 @@ function onCancel(order) {
       }
     })
     .catch(() => {})
+}
+
+function resetReviewForm() {
+  reviewOrder.value = null
+  existingReview.value = null
+  reviewRating.value = 0
+  reviewContent.value = ''
+  reviewLoading.value = false
+  reviewSubmitting.value = false
+}
+
+async function openReview(order) {
+  reviewOrder.value = order
+  reviewVisible.value = true
+  reviewLoading.value = true
+  existingReview.value = null
+  reviewRating.value = 0
+  reviewContent.value = ''
+  try {
+    const res = await getOrderReview(order.orderId)
+    if (res.data) {
+      existingReview.value = res.data
+    }
+  } catch {
+    existingReview.value = null
+  } finally {
+    reviewLoading.value = false
+  }
+}
+
+async function onSubmitReview() {
+  if (!reviewOrder.value || !reviewRating.value) return
+  reviewSubmitting.value = true
+  try {
+    await submitOrderReview(reviewOrder.value.orderId, {
+      rating: reviewRating.value,
+      content: reviewContent.value?.trim() || undefined
+    })
+    ElMessage.success(t('orders.submitSuccess'))
+    reviewVisible.value = false
+    await fetchOrders()
+  } catch {
+    // request 拦截器已提示业务错误
+  } finally {
+    reviewSubmitting.value = false
+  }
 }
 
 onMounted(fetchOrders)
@@ -347,6 +466,41 @@ onMounted(fetchOrders)
   flex-wrap: wrap;
   align-items: center;
   gap: 16px;
+}
+
+.review-product {
+  margin: 0 0 8px;
+  font-weight: 500;
+  color: var(--oa-text);
+}
+
+.review-hint {
+  margin: 0 0 16px;
+  font-size: 12px;
+  color: var(--oa-text-secondary, #888);
+}
+
+.review-row {
+  margin-bottom: 14px;
+}
+
+.review-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: var(--oa-text-secondary, #666);
+}
+
+.review-content {
+  margin: 0;
+  white-space: pre-wrap;
+  color: var(--oa-text);
+}
+
+.review-meta {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--oa-text-secondary, #888);
 }
 
 .order-actions {

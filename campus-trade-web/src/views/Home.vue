@@ -6,21 +6,27 @@
 
     <!-- 搜索区 -->
     <section class="search-hero">
-      <el-input
-        v-model="keyword"
-        :placeholder="searchPlaceholder"
-        clearable
-        size="large"
-        class="hero-search"
-        @keyup.enter="runSearch"
-      >
-        <template #prefix>
-          <el-icon><Search /></el-icon>
-        </template>
-        <template #append>
-          <el-button :icon="Search" @click="runSearch">{{ t('home.search') }}</el-button>
-        </template>
-      </el-input>
+      <div class="search-shell" :class="{ 'ai-glow': searchMode === 'ai' }">
+        <div class="search-shell-inner">
+          <el-input
+            v-model="keyword"
+            :placeholder="searchPlaceholder"
+            clearable
+            size="large"
+            class="hero-search"
+            @keyup.enter="runSearch"
+          >
+            <template #prefix>
+              <el-icon><Search /></el-icon>
+            </template>
+            <template #append>
+              <el-button :icon="Search" :loading="aiLoading" @click="runSearch">
+                {{ t('home.search') }}
+              </el-button>
+            </template>
+          </el-input>
+        </div>
+      </div>
       <div class="mode-row">
         <button
           v-for="m in searchModes"
@@ -102,13 +108,16 @@
           </div>
         </section>
 
-        <!-- 商品搜索结果 -->
-        <section v-if="resultMode === 'products'" class="section">
+        <!-- 商品 / AI 搜索结果 -->
+        <section v-if="resultMode === 'products' || resultMode === 'ai'" class="section">
           <div class="feed-head">
-            <h2 class="section-title">{{ t('home.productResults') }}</h2>
+            <h2 class="section-title">
+              {{ resultMode === 'ai' ? t('home.aiResults') : t('home.productResults') }}
+            </h2>
             <button type="button" class="text-btn" @click="backToFeed">{{ t('home.backToFeed') }}</button>
           </div>
-          <div v-loading="productLoading" class="product-grid">
+          <p v-if="resultMode === 'ai' && aiSummary" class="ai-summary">{{ aiSummary }}</p>
+          <div v-loading="productLoading || aiLoading" class="product-grid">
             <div
               v-for="item in productList"
               :key="item.productId"
@@ -130,7 +139,7 @@
                 </div>
               </div>
             </div>
-            <div v-if="!productLoading && productList.length === 0" class="empty-hint">
+            <div v-if="!productLoading && !aiLoading && productList.length === 0" class="empty-hint">
               {{ t('home.noProducts') }}
             </div>
           </div>
@@ -195,11 +204,12 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Check, ArrowRight, Search, Picture, Refresh } from '@element-plus/icons-vue'
 import { searchProducts, getProductList } from '@/api/product'
+import { searchProductsByAi } from '@/api/ai'
 import { getFeed, listTopicPosts } from '@/api/topic'
 import { getEventsStatus } from '@/api/points'
 import { useUserStore } from '@/store/user'
@@ -207,6 +217,7 @@ import { useI18n } from '@/i18n'
 import { useOnboarding } from '@/composables/useOnboarding'
 import { htmlToPlainText } from '@/utils/sanitizeHtml'
 
+const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
 const { t } = useI18n()
@@ -225,7 +236,9 @@ const resultMode = ref('feed')
 const feedLoading = ref(false)
 const feedPosts = ref([])
 const productLoading = ref(false)
+const aiLoading = ref(false)
 const productList = ref([])
+const aiSummary = ref('')
 
 const eventsStatus = ref(null)
 
@@ -296,10 +309,15 @@ function requireLogin(redirect) {
 }
 
 function setSearchMode(id) {
-  searchMode.value = id
   if (id === 'ai') {
-    if (!requireLogin('/ai-shopping')) return
-    router.push('/ai-shopping')
+    if (!requireLogin('/?mode=ai')) {
+      searchMode.value = 'posts'
+      return
+    }
+    searchMode.value = 'ai'
+    if (route.query.mode !== 'ai') {
+      router.replace({ path: '/', query: { ...route.query, mode: 'ai' } })
+    }
     return
   }
   if (id === 'create') {
@@ -307,11 +325,17 @@ function setSearchMode(id) {
     router.push('/topics/create')
     return
   }
+  searchMode.value = id
+  if (route.query.mode === 'ai') {
+    const q = { ...route.query }
+    delete q.mode
+    router.replace({ path: '/', query: q })
+  }
 }
 
 function runSearch() {
   if (searchMode.value === 'ai') {
-    setSearchMode('ai')
+    fetchAiProducts()
     return
   }
   if (searchMode.value === 'create') {
@@ -330,6 +354,30 @@ function runSearch() {
   }
   resultMode.value = 'feed'
   refreshFeed()
+}
+
+async function fetchAiProducts() {
+  const q = keyword.value.trim()
+  if (!q) {
+    ElMessage.info(t('home.searchAiPlaceholder'))
+    return
+  }
+  if (!requireLogin('/?mode=ai')) return
+  resultMode.value = 'ai'
+  aiLoading.value = true
+  aiSummary.value = ''
+  try {
+    const res = await searchProductsByAi({ query: q, pageSize: 12 })
+    const data = res.data || {}
+    productList.value = data.products || []
+    aiSummary.value = data.intent?.explanation || data.summary || ''
+    onboarding.trackStep('ai')
+  } catch {
+    productList.value = []
+    aiSummary.value = ''
+  } finally {
+    aiLoading.value = false
+  }
 }
 
 async function fetchProducts() {
@@ -356,6 +404,22 @@ async function fetchProducts() {
 function backToFeed() {
   resultMode.value = 'feed'
   searchMode.value = 'posts'
+  aiSummary.value = ''
+  if (route.query.mode === 'ai') {
+    const q = { ...route.query }
+    delete q.mode
+    router.replace({ path: '/', query: q })
+  }
+}
+
+function applyModeFromRoute() {
+  if (route.query.mode === 'ai') {
+    if (!userStore.isLogin) {
+      requireLogin('/?mode=ai')
+      return
+    }
+    searchMode.value = 'ai'
+  }
 }
 
 async function refreshFeed() {
@@ -419,9 +483,15 @@ async function loadEventsSummary() {
 }
 
 onMounted(async () => {
+  applyModeFromRoute()
   await Promise.all([refreshFeed(), loadEventsSummary(), onboarding.refresh()])
   onboarding.trackStep('browse')
 })
+
+watch(
+  () => route.query.mode,
+  () => applyModeFromRoute()
+)
 </script>
 
 <style scoped>
@@ -443,8 +513,67 @@ onMounted(async () => {
   margin-bottom: 28px;
 }
 
+.search-shell {
+  position: relative;
+  border-radius: 14px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.search-shell-inner {
+  position: relative;
+  z-index: 1;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--oa-bg-sidebar);
+}
+
+/* 仅边缘彩色流光，不覆盖输入区 */
+.search-shell.ai-glow {
+  border-color: transparent;
+  background:
+    linear-gradient(var(--oa-bg-sidebar), var(--oa-bg-sidebar)) padding-box,
+    linear-gradient(
+      90deg,
+      #4285f4,
+      #9b72cb,
+      #d96570,
+      #fbbc04,
+      #34a853,
+      #4285f4,
+      #9b72cb
+    ) border-box;
+  background-size: auto, 300% 100%;
+  animation: ai-border-flow 2.4s linear infinite;
+}
+
+.search-shell.ai-glow :deep(.el-input__wrapper) {
+  box-shadow: none !important;
+}
+
+.search-shell.ai-glow :deep(.el-input-group__append) {
+  box-shadow: none;
+}
+
+@keyframes ai-border-flow {
+  to {
+    background-position: 0 0, 300% 0;
+  }
+}
+
 .hero-search {
   width: 100%;
+}
+
+.ai-summary {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border-radius: var(--oa-radius-sm);
+  background: var(--oa-bg-elevated);
+  color: var(--oa-text-secondary);
+  font-size: 13px;
+  line-height: 1.55;
 }
 
 .mode-row {
@@ -456,24 +585,23 @@ onMounted(async () => {
 
 .mode-btn {
   padding: 6px 14px;
-  border: 1px solid var(--oa-border-subtle);
+  border: none;
   border-radius: 8px;
-  background: var(--oa-bg-sidebar);
+  background: var(--oa-bg-elevated);
   color: var(--oa-text-secondary);
   font-size: 13px;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  transition: background 0.15s, color 0.15s;
 }
 
 .mode-btn:hover {
   color: var(--oa-text);
-  border-color: var(--oa-border);
+  background: var(--oa-bg-hover);
 }
 
 .mode-btn.active {
   background: var(--oa-bg-hover);
   color: var(--oa-text);
-  border-color: var(--oa-border);
 }
 
 .home-grid {
@@ -527,15 +655,15 @@ onMounted(async () => {
 
 .feed-card {
   padding: 16px 18px;
-  border: 1px solid var(--oa-border-subtle);
+  border: none;
   border-radius: var(--oa-radius);
   background: var(--oa-bg-sidebar);
   cursor: pointer;
-  transition: border-color 0.15s;
+  transition: background 0.15s;
 }
 
 .feed-card:hover {
-  border-color: var(--oa-border);
+  background: var(--oa-bg-hover);
 }
 
 .feed-card-title {
@@ -578,7 +706,7 @@ onMounted(async () => {
 
 /* Onboarding — keep existing look */
 .onboarding-section {
-  border: 1px solid var(--oa-border-subtle);
+  border: none;
   border-radius: var(--oa-radius-lg, var(--oa-radius));
   padding: 20px;
   background: var(--oa-bg-elevated);
@@ -729,18 +857,18 @@ onMounted(async () => {
 .promo-card {
   position: relative;
   height: 72px;
-  border: 1px solid var(--oa-border-subtle);
+  border: none;
   border-radius: var(--oa-radius);
   overflow: hidden;
   cursor: pointer;
   display: flex;
   align-items: flex-end;
   padding: 12px;
-  transition: border-color 0.15s;
+  transition: opacity 0.15s;
 }
 
 .promo-card:hover {
-  border-color: var(--oa-border);
+  opacity: 0.92;
 }
 
 .promo-card-bg {
@@ -802,16 +930,16 @@ onMounted(async () => {
 }
 
 .product-card {
-  border: 1px solid var(--oa-border-subtle);
+  border: none;
   border-radius: var(--oa-radius);
   overflow: hidden;
   cursor: pointer;
   background: var(--oa-bg-sidebar);
-  transition: border-color 0.15s;
+  transition: background 0.15s, transform 0.15s;
 }
 
 .product-card:hover {
-  border-color: var(--oa-border);
+  background: var(--oa-bg-hover);
 }
 
 .product-cover {
@@ -876,7 +1004,7 @@ onMounted(async () => {
 
 .aside-card {
   padding: 16px;
-  border: 1px solid var(--oa-border-subtle);
+  border: none;
   border-radius: var(--oa-radius);
   background: var(--oa-bg-sidebar);
 }

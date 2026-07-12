@@ -253,8 +253,15 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
         product.setViewCount(product.getViewCount() + 1);
         ProductDetailVO vo = ProductDetailVO.from(product);
         enrichSellerNickname(vo);
+        // 缓存不含卖家评分，避免 TTL 内信誉「冻住」；命中缓存时仍会强制刷新评分
+        BigDecimal cachedRating = vo.getSellerAvgRating();
+        Integer cachedReviewCount = vo.getSellerReviewCount();
+        vo.setSellerAvgRating(null);
+        vo.setSellerReviewCount(null);
         // 缓存雪崩防护：基础 30 分钟 + 随机 0~5 分钟，错峰过期
         safeSetCache(cacheKey, vo, randomDetailTtlMillis());
+        vo.setSellerAvgRating(cachedRating);
+        vo.setSellerReviewCount(cachedReviewCount);
         if (!isRedisHealthy()) {
             localCache.put(productId, new LocalCacheEntry(vo, false, 5000L));
         }
@@ -578,9 +585,10 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
     }
 
     private void enrichSellerNickname(ProductDetailVO vo) {
-        if (vo == null || vo.getSellerId() == null || StringUtils.hasText(vo.getSellerNickname())) {
+        if (vo == null || vo.getSellerId() == null) {
             return;
         }
+        boolean needNickname = !StringUtils.hasText(vo.getSellerNickname());
         try {
             var result = userFeignClient.batchGetUsers(String.valueOf(vo.getSellerId()));
             if (result == null
@@ -592,12 +600,17 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
             }
             result.getData().stream()
                     .filter(user -> vo.getSellerId().equals(user.getUserId()))
-                    .map(UserBriefDTO::getNickname)
-                    .filter(StringUtils::hasText)
                     .findFirst()
-                    .ifPresent(vo::setSellerNickname);
+                    .ifPresent(user -> {
+                        if (needNickname && StringUtils.hasText(user.getNickname())) {
+                            vo.setSellerNickname(user.getNickname());
+                        }
+                        // 评分每次强制刷新，避免详情缓存冻住信誉
+                        vo.setSellerAvgRating(user.getAvgRating());
+                        vo.setSellerReviewCount(user.getReviewCount() == null ? 0 : user.getReviewCount());
+                    });
         } catch (Exception e) {
-            log.warn("补全商品卖家昵称失败，降级返回基础商品信息. productId={}, sellerId={}",
+            log.warn("补全商品卖家信息失败，降级返回基础商品信息. productId={}, sellerId={}",
                     vo.getProductId(), vo.getSellerId(), e);
         }
     }
@@ -890,7 +903,7 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
 
     private void requireMerchant(Long userId) {
         int role = resolveUserRole(userId);
-        if (!UserRole.isMerchant(role)) {
+        if (!UserRole.canAccessMerchantHub(role)) {
             throw new BizException(ResultCode.FORBIDDEN);
         }
     }
