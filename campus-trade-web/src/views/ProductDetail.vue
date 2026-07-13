@@ -2,10 +2,10 @@
   <div class="page-container" v-loading="loading">
     <button class="oa-back-btn" @click="$router.back()">
       <el-icon><ArrowLeft /></el-icon>
-      Back
+      {{ t('productDetail.back') }}
     </button>
 
-    <el-empty v-if="!loading && !detail" description="Listing not found or delisted" />
+    <el-empty v-if="!loading && !detail" :description="t('productDetail.notFound')" />
 
     <template v-if="detail">
       <h1 class="page-title listing-title">{{ detail.title }}</h1>
@@ -44,21 +44,21 @@
 
           <div class="meta-grid">
             <div class="meta-item">
-              <span class="meta-label">Category</span>
+              <span class="meta-label">{{ t('productDetail.category') }}</span>
               <span class="meta-value">{{ detail.category }}</span>
             </div>
             <div class="meta-item">
-              <span class="meta-label">Status</span>
+              <span class="meta-label">{{ t('productDetail.status') }}</span>
               <span class="oa-status" :class="statusClass(detail.status)">
                 {{ getStatusText(detail.status) }}
               </span>
             </div>
             <div class="meta-item">
-              <span class="meta-label">Stock</span>
+              <span class="meta-label">{{ t('productDetail.stock') }}</span>
               <span class="meta-value">{{ detail.stock }}</span>
             </div>
             <div class="meta-item">
-              <span class="meta-label">Seller</span>
+              <span class="meta-label">{{ t('productDetail.seller') }}</span>
               <span class="meta-value">{{ sellerText }}</span>
             </div>
             <div class="meta-item">
@@ -73,7 +73,7 @@
               </button>
             </div>
             <div class="meta-item">
-              <span class="meta-label">Views</span>
+              <span class="meta-label">{{ t('productDetail.views') }}</span>
               <span class="meta-value">{{ detail.viewCount }}</span>
             </div>
             <div v-if="userStore.isLogin" class="meta-item">
@@ -97,18 +97,16 @@
               size="large"
               :icon="ShoppingCart"
               :loading="buying"
-              :disabled="detail.status !== 1 || seckilling"
+              :disabled="buying || detail.status !== 1"
               @click="onBuy"
             >
-              {{ detail.status === 1 ? 'Buy now' : 'Unavailable' }}
-            </el-button>
-            <el-button
-              size="large"
-              :loading="seckilling"
-              :disabled="detail.status !== 1 || buying"
-              @click="onSeckill"
-            >
-              {{ seckilling ? 'Queuing...' : 'Flash sale' }}
+              {{
+                detail.status !== 1
+                  ? t('productDetail.unavailable')
+                  : detail.saleType === 1
+                    ? t('productDetail.grabNow')
+                    : t('productDetail.buyNow')
+              }}
             </el-button>
             <el-button
               v-if="canContactSeller"
@@ -123,8 +121,8 @@
 
       <!-- 描述 -->
       <div class="oa-panel desc-panel">
-        <h3 class="oa-section-title">Description</h3>
-        <p class="description">{{ detail.description || 'No description provided.' }}</p>
+        <h3 class="oa-section-title">{{ t('productDetail.description') }}</h3>
+        <p class="description">{{ detail.description || t('productDetail.noDescription') }}</p>
       </div>
 
       <!-- 卖家交易评价 -->
@@ -158,7 +156,7 @@
 
       <!-- 留言 -->
       <div class="oa-panel comments-panel">
-        <h3 class="oa-section-title">Comments ({{ commentTotal }})</h3>
+        <h3 class="oa-section-title">{{ t('productDetail.comments').replace('{n}', String(commentTotal)) }}</h3>
 
         <div v-if="userStore.isLogin" class="comment-form">
           <el-input
@@ -167,7 +165,7 @@
             :rows="3"
             maxlength="500"
             show-word-limit
-            placeholder="Ask a question or leave a message for the seller..."
+            :placeholder="t('productDetail.commentPlaceholder')"
           />
           <el-button
             type="primary"
@@ -175,16 +173,16 @@
             :disabled="!commentText.trim()"
             @click="onPostComment"
           >
-            Post comment
+            {{ t('productDetail.postComment') }}
           </el-button>
         </div>
         <p v-else class="comment-login-hint">
-          <router-link :to="{ path: '/login', query: { redirect: route.fullPath } }">Sign in</router-link>
-          to leave a comment.
+          <router-link :to="{ path: '/login', query: { redirect: route.fullPath } }">{{ t('common.login') }}</router-link>
+          {{ t('productDetail.commentLoginSuffix') }}
         </p>
 
         <div v-loading="commentsLoading" class="comment-list">
-          <el-empty v-if="!commentsLoading && comments.length === 0" description="No comments yet" />
+          <el-empty v-if="!commentsLoading && comments.length === 0" :description="t('productDetail.noComments')" />
           <div v-for="item in comments" :key="item.commentId" class="comment-item">
             <div class="comment-meta">
               <span class="comment-author">{{ commentAuthor(item) }}</span>
@@ -195,7 +193,7 @@
         </div>
 
         <div v-if="commentTotal > comments.length" class="oa-pagination">
-          <el-button :loading="commentsLoading" @click="loadMoreComments">Load more</el-button>
+          <el-button :loading="commentsLoading" @click="loadMoreComments">{{ t('productDetail.loadMore') }}</el-button>
         </div>
       </div>
     </template>
@@ -223,7 +221,6 @@ const { t } = useI18n()
 const loading = ref(false)
 const detail = ref(null)
 const buying = ref(false)
-const seckilling = ref(false)
 const comments = ref([])
 const commentTotal = ref(0)
 const commentPageNum = ref(1)
@@ -437,7 +434,7 @@ async function onPostComment() {
   commentSubmitting.value = true
   try {
     await postProductComment(productId, { content })
-    ElMessage.success('Comment posted')
+    ElMessage.success(t('productDetail.commentPosted'))
     commentText.value = ''
     await fetchComments(true)
   } finally {
@@ -450,13 +447,17 @@ async function onBuy() {
     router.push({ path: '/login', query: { redirect: route.fullPath } })
     return
   }
-  if (buying.value) return
+  if (buying.value || detail.value?.status !== 1) return
   const productId = detail.value?.productId
   if (!productId) return
   buying.value = true
   try {
+    if (detail.value.saleType === 1) {
+      await onSeckillBuy(productId)
+      return
+    }
     const res = await createOrder({ productId })
-    ElMessage.success(res.message || 'Order placed')
+    ElMessage.success(res.message || t('productDetail.orderPlaced'))
     await onboarding.refresh()
     router.push('/orders')
   } finally {
@@ -464,47 +465,29 @@ async function onBuy() {
   }
 }
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
+const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms))
 
-async function pollSeckillResult(productId, maxAttempts = 30) {
-  for (let i = 0; i < maxAttempts; i++) {
-    await sleep(1000)
+async function onSeckillBuy(productId) {
+  await seckillOrder({ productId })
+  ElMessage.info(t('productDetail.seckillQueuing'))
+
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    await wait(1000)
     const res = await getSeckillResult(productId)
-    const status = res.data?.status
-    const orderNo = res.data?.orderNo
-    if (status === 0) continue
-    if (status === 1) return { success: true, orderNo }
-    return { success: false }
-  }
-  return { success: false, timeout: true }
-}
-
-async function onSeckill() {
-  if (!userStore.isLogin) {
-    router.push({ path: '/login', query: { redirect: route.fullPath } })
+    const result = res.data || {}
+    if (result.status === 0) continue
+    if (result.status === 1) {
+      const message = t('productDetail.seckillSuccess').replace('{no}', result.orderNo || '')
+      ElMessage.success(message)
+      await onboarding.refresh()
+      router.push('/orders')
+      return
+    }
+    ElMessage.error(res.message || t('productDetail.seckillFailed'))
     return
   }
-  if (seckilling.value) return
-  const productId = detail.value?.productId
-  if (!productId) return
-  seckilling.value = true
-  try {
-    const res = await seckillOrder({ productId })
-    ElMessage.info(res.message || 'Queuing, please wait')
-    const result = await pollSeckillResult(productId)
-    if (result.success) {
-      ElMessage.success(`Flash sale success, order ${result.orderNo}`)
-      router.push('/orders')
-    } else if (result.timeout) {
-      ElMessage.warning('Still queuing, check Orders later')
-    } else {
-      ElMessage.error('Flash sale failed, try again')
-    }
-  } finally {
-    seckilling.value = false
-  }
+
+  ElMessage.warning(t('productDetail.seckillStillQueuing'))
 }
 
 watch(() => route.params.id, fetchDetail)

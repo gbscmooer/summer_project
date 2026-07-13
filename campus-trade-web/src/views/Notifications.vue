@@ -1,7 +1,7 @@
 <template>
   <div class="page-container">
     <div class="page-header">
-      <h1 class="page-title">Notifications</h1>
+      <h1 class="page-title">{{ t('notifications.title') }}</h1>
       <el-button
         v-if="list.some((n) => n.isRead === 0)"
         type="primary"
@@ -9,14 +9,14 @@
         :loading="markingAll"
         @click="onMarkAllRead"
       >
-        Mark all read
+        {{ t('notifications.markAllRead') }}
       </el-button>
     </div>
 
     <div class="oa-panel">
       <div v-loading="loading">
         <div v-if="!loading && list.length === 0" class="oa-empty-state">
-          <p>Your notifications will appear here</p>
+          <p>{{ t('notifications.empty') }}</p>
         </div>
 
         <div v-else class="notify-list">
@@ -29,11 +29,11 @@
           >
             <div class="notify-head">
               <span class="notify-title">{{ item.title }}</span>
-              <span v-if="item.isRead === 0" class="oa-status oa-status-danger">Unread</span>
+              <span v-if="item.isRead === 0" class="oa-status oa-status-danger">{{ t('notifications.unread') }}</span>
             </div>
             <p class="notify-content">{{ item.content }}</p>
             <div class="notify-meta">
-              <span v-if="item.orderNo" class="oa-meta">Order #{{ item.orderNo }}</span>
+              <span v-if="item.orderNo" class="oa-meta">{{ t('notifications.orderNo').replace('{no}', item.orderNo) }}</span>
               <span class="oa-meta">{{ formatTime(item.createTime) }}</span>
             </div>
           </div>
@@ -65,8 +65,10 @@ import {
   markAllNotificationsRead
 } from '@/api/notification'
 import { useOnboarding } from '@/composables/useOnboarding'
+import { useI18n } from '@/i18n'
 
 const onboarding = useOnboarding()
+const { t } = useI18n()
 
 const list = ref([])
 const total = ref(0)
@@ -116,7 +118,7 @@ async function onItemClick(item) {
     await markNotificationRead(item.id)
     item.isRead = 1
     refreshUnreadBadge()
-    ElMessage.success('Marked as read')
+    ElMessage.success(t('notifications.markedRead'))
   } catch {
     // handled by interceptor
   }
@@ -126,7 +128,7 @@ async function onMarkAllRead() {
   markingAll.value = true
   try {
     await markAllNotificationsRead()
-    ElMessage.success('All marked as read')
+    ElMessage.success(t('notifications.allMarkedRead'))
     await fetchList()
     refreshUnreadBadge()
   } finally {

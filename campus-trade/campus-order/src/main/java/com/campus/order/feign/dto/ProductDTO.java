@@ -20,4 +20,6 @@ public class ProductDTO {
     private Integer isTutorial;
     /** 每用户限购 */
     private Integer purchaseLimit;
+    /** 0-普通购买 1-秒杀 */
+    private Integer saleType;
 }

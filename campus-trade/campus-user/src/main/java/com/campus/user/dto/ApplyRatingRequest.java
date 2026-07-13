@@ -15,4 +15,8 @@ public class ApplyRatingRequest {
     @Min(1)
     @Max(5)
     private Integer rating;
+
+    /** 订单评价主键，用于信誉增量幂等。 */
+    @NotNull
+    private Long reviewId;
 }

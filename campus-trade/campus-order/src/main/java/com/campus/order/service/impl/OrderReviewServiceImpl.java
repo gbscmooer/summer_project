@@ -40,6 +40,7 @@ public class OrderReviewServiceImpl extends ServiceImpl<OrderReviewMapper, Order
 
     private static final int STATUS_DONE = 2;
     private static final int REVIEW_WINDOW_DAYS = 7;
+    private static final int RATING_SYNC_MAX_ATTEMPTS = 3;
 
     private final OrderMapper orderMapper;
     private final UserFeignClient userFeignClient;
@@ -87,6 +88,7 @@ public class OrderReviewServiceImpl extends ServiceImpl<OrderReviewMapper, Order
         review.setBuyerId(buyerId);
         review.setSellerId(order.getSellerId());
         review.setRating(rating);
+        review.setRatingApplied(0);
         String content = request.getContent() == null ? null : request.getContent().trim();
         review.setContent(StringUtils.hasText(content) ? content : null);
 
@@ -97,27 +99,51 @@ public class OrderReviewServiceImpl extends ServiceImpl<OrderReviewMapper, Order
         }
 
         Long sellerId = order.getSellerId();
+        Long reviewId = review.getId();
         ApplyRatingRequest apply = new ApplyRatingRequest();
         apply.setSellerId(sellerId);
         apply.setRating(rating);
+        apply.setReviewId(reviewId);
         // 提交后再调用户服务，避免「用户侧已加分、订单评价事务回滚」
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
-                    try {
-                        unwrap(userFeignClient.applyRating(apply));
-                    } catch (Exception e) {
-                        log.error("评价已落库但卖家信誉更新失败，需对账. orderId={}, sellerId={}, rating={}, reviewId={}",
-                                orderId, sellerId, rating, review.getId(), e);
-                    }
+                    syncSellerRating(orderId, sellerId, rating, reviewId, apply);
                 }
             });
         } else {
-            unwrap(userFeignClient.applyRating(apply));
+            syncSellerRating(orderId, sellerId, rating, reviewId, apply);
         }
 
         return review.getId();
+    }
+
+    private void syncSellerRating(Long orderId, Long sellerId, int rating, Long reviewId, ApplyRatingRequest apply) {
+        Exception last = null;
+        for (int attempt = 1; attempt <= RATING_SYNC_MAX_ATTEMPTS; attempt++) {
+            try {
+                unwrap(userFeignClient.applyRating(apply));
+                lambdaUpdate()
+                        .eq(OrderReview::getId, reviewId)
+                        .eq(OrderReview::getRatingApplied, 0)
+                        .set(OrderReview::getRatingApplied, 1)
+                        .update();
+                return;
+            } catch (Exception e) {
+                last = e;
+                log.warn("卖家信誉同步失败，准备重试. attempt={}/{}, orderId={}, reviewId={}",
+                        attempt, RATING_SYNC_MAX_ATTEMPTS, orderId, reviewId, e);
+                try {
+                    Thread.sleep(50L * attempt);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        }
+        log.error("评价已落库但卖家信誉更新失败（已重试），需对账. orderId={}, sellerId={}, rating={}, reviewId={}",
+                orderId, sellerId, rating, reviewId, last);
     }
 
     @Override

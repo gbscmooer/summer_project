@@ -123,7 +123,7 @@
             <span class="field-value">{{ aiHealth.probeLatencyMs }} ms</span>
           </div>
           <div v-if="aiHealth.message" class="runtime-item runtime-item-wide">
-            <span class="field-label">Message</span>
+            <span class="field-label">{{ t('settings.aiStatusMessage') }}</span>
             <span class="field-value muted">{{ aiHealth.message }}</span>
           </div>
         </div>

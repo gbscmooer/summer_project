@@ -21,8 +21,9 @@ TRUNCATE TABLE t_user;
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- ---------------------------------------------------------------------------
--- Users: 1 admin + 3 demo + 200 load-test accounts
+-- Users: 1 admin + 3 demo + 1500 load-test accounts
 -- ---------------------------------------------------------------------------
+SET SESSION cte_max_recursion_depth = 2000;
 INSERT INTO t_user (username, password, nickname, avatar, phone, role) VALUES
 ('admin',    @pwd, '系统管理员', 'https://api.dicebear.com/7.x/avataaars/svg?seed=admin',    '13800000000', 1),
 ('zhangsan', @pwd, '张三',       'https://api.dicebear.com/7.x/avataaars/svg?seed=zhangsan', '13800138001', 0),
@@ -33,10 +34,10 @@ INSERT INTO t_user (username, password, nickname, avatar, phone, role)
 WITH RECURSIVE seq AS (
     SELECT 1 AS i
     UNION ALL
-    SELECT i + 1 FROM seq WHERE i < 200
+    SELECT i + 1 FROM seq WHERE i < 1500
 )
 SELECT
-    CONCAT('perfuser', LPAD(i, 3, '0')),
+    IF(i < 1000, CONCAT('perfuser', LPAD(i, 3, '0')), CONCAT('perfuser', i)),
     @pwd,
     CONCAT('压测用户', i),
     CONCAT('https://api.dicebear.com/7.x/avataaars/svg?seed=perf', i),
@@ -47,7 +48,7 @@ FROM seq;
 -- ---------------------------------------------------------------------------
 -- Products: 1000 items (id=1 reserved for JMeter seckill: 高等数学 + stock=100)
 -- ---------------------------------------------------------------------------
-INSERT INTO t_product (title, description, price, images, category, seller_id, status, stock, view_count)
+INSERT INTO t_product (title, description, price, images, category, seller_id, status, stock, view_count, sale_type)
 SELECT
     '同济版高等数学（上下册）',
     'perf-seed: JMeter 秒杀压测锚点商品，含「数学」关键词便于搜索压测',
@@ -57,7 +58,8 @@ SELECT
     (SELECT id FROM t_user WHERE username = 'zhangsan' LIMIT 1),
     1,
     100,
-    256;
+    256,
+    1;
 
 INSERT INTO t_product (title, description, price, images, category, seller_id, status, stock, view_count)
 WITH RECURSIVE seq AS (
@@ -96,3 +98,32 @@ SELECT
     20 + (i * 17 % 480)
 FROM seq
 CROSS JOIN user_bounds ub;
+
+-- ---------------------------------------------------------------------------
+-- Onboarding: official seller + 0-yuan tutorial product (is_tutorial=1)
+-- ---------------------------------------------------------------------------
+INSERT INTO t_user (username, password, nickname, avatar, phone, role, onboarding_completed)
+VALUES (
+    'campus_official',
+    @pwd,
+    '校园集市官方',
+    'https://api.dicebear.com/7.x/shapes/svg?seed=campus',
+    NULL,
+    0,
+    1
+);
+
+INSERT INTO t_product (title, description, price, images, category, seller_id, status, stock, view_count, is_tutorial, purchase_limit)
+VALUES (
+    '【新手体验】校园集市入门礼包',
+    '专为新用户准备的 0 元体验商品，完成新手教程中的购买、付款与确认收货流程。每位用户限购 2 件。',
+    0.00,
+    'https://picsum.photos/seed/tutorial/400/300',
+    '生活',
+    (SELECT id FROM t_user WHERE username = 'campus_official' LIMIT 1),
+    1,
+    9999,
+    0,
+    1,
+    2
+);

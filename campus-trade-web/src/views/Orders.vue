@@ -1,7 +1,7 @@
 <template>
   <div class="page-container">
     <div class="page-header">
-      <h1 class="page-title">Orders</h1>
+      <h1 class="page-title">{{ t('orders.title') }}</h1>
     </div>
 
     <div class="oa-panel">
@@ -12,14 +12,14 @@
           :class="{ active: activeTab === 'buyer' }"
           @click="switchTab('buyer')"
         >
-          Purchases
+          {{ t('orders.purchases') }}
         </button>
         <button
           class="oa-filter-pill"
           :class="{ active: activeTab === 'seller' }"
           @click="switchTab('seller')"
         >
-          Sales
+          {{ t('orders.sales') }}
         </button>
       </div>
 
@@ -38,9 +38,9 @@
 
       <div v-loading="loading">
         <div v-if="!loading && list.length === 0" class="oa-empty-state">
-          <p>{{ activeTab === 'buyer' ? 'No purchases yet' : 'No sales yet' }}</p>
+          <p>{{ activeTab === 'buyer' ? t('orders.emptyPurchases') : t('orders.emptySales') }}</p>
           <el-button v-if="activeTab === 'buyer'" type="primary" @click="$router.push('/')">
-            Browse marketplace
+            {{ t('orders.browseMarketplace') }}
           </el-button>
         </div>
 
@@ -57,7 +57,7 @@
                 <div class="order-meta">
                   <span class="oa-price">{{ formatPoints(order.price) }}</span>
                   <span class="oa-meta">
-                    {{ activeTab === 'buyer' ? 'Seller' : 'Buyer' }}:
+                    {{ activeTab === 'buyer' ? t('orders.seller') : t('orders.buyer') }}:
                     {{ order.counterpartNickname || '—' }}
                   </span>
                   <span class="oa-meta">#{{ order.orderNo }}</span>
@@ -65,7 +65,7 @@
                 </div>
               </div>
               <div class="order-actions">
-                <el-button size="small" @click="openDetail(order.orderId)">Details</el-button>
+                <el-button size="small" @click="openDetail(order.orderId)">{{ t('orders.details') }}</el-button>
                 <template v-if="activeTab === 'buyer'">
                   <template v-if="order.status === 0">
                     <el-button
@@ -74,14 +74,14 @@
                       :loading="actingId === order.orderId"
                       @click="onPay(order)"
                     >
-                      Pay
+                      {{ t('orders.pay') }}
                     </el-button>
                     <el-button
                       size="small"
                       :loading="actingId === order.orderId"
                       @click="onCancel(order)"
                     >
-                      Cancel
+                      {{ t('orders.cancel') }}
                     </el-button>
                   </template>
                   <el-button
@@ -91,7 +91,7 @@
                     :loading="actingId === order.orderId"
                     @click="onConfirm(order)"
                   >
-                    Confirm
+                    {{ t('orders.confirm') }}
                   </el-button>
                   <el-button
                     v-else-if="order.status === 2"
@@ -122,17 +122,17 @@
       </div>
     </div>
 
-    <el-dialog v-model="detailVisible" title="Order details" width="520px">
+    <el-dialog v-model="detailVisible" :title="t('orders.detailTitle')" width="520px">
       <div v-loading="detailLoading">
-        <el-empty v-if="!detailLoading && !orderDetail" description="Unable to load order" />
+        <el-empty v-if="!detailLoading && !orderDetail" :description="t('orders.loadFailed')" />
         <el-descriptions v-else-if="orderDetail" :column="1" border>
-          <el-descriptions-item label="Order No">{{ orderDetail.orderNo }}</el-descriptions-item>
-          <el-descriptions-item label="Product">{{ orderDetail.productTitle }}</el-descriptions-item>
-          <el-descriptions-item label="Price">{{ formatPoints(orderDetail.price) }}</el-descriptions-item>
-          <el-descriptions-item label="Status">{{ orderDetail.statusText }}</el-descriptions-item>
-          <el-descriptions-item label="Buyer">{{ orderDetail.buyerNickname || '—' }}</el-descriptions-item>
-          <el-descriptions-item label="Seller">{{ orderDetail.sellerNickname || '—' }}</el-descriptions-item>
-          <el-descriptions-item label="Created">{{ formatTime(orderDetail.createTime) }}</el-descriptions-item>
+          <el-descriptions-item :label="t('orders.orderNo')">{{ orderDetail.orderNo }}</el-descriptions-item>
+          <el-descriptions-item :label="t('orders.product')">{{ orderDetail.productTitle }}</el-descriptions-item>
+          <el-descriptions-item :label="t('orders.price')">{{ formatPoints(orderDetail.price) }}</el-descriptions-item>
+          <el-descriptions-item :label="t('orders.status')">{{ orderDetail.statusText }}</el-descriptions-item>
+          <el-descriptions-item :label="t('orders.buyer')">{{ orderDetail.buyerNickname || '—' }}</el-descriptions-item>
+          <el-descriptions-item :label="t('orders.seller')">{{ orderDetail.sellerNickname || '—' }}</el-descriptions-item>
+          <el-descriptions-item :label="t('orders.created')">{{ formatTime(orderDetail.createTime) }}</el-descriptions-item>
         </el-descriptions>
       </div>
     </el-dialog>
@@ -192,7 +192,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   getBuyerOrders,
@@ -212,13 +212,13 @@ const onboarding = useOnboarding()
 const userStore = useUserStore()
 const { t } = useI18n()
 
-const statusOptions = [
-  { label: 'All', value: 'all' },
-  { label: 'Pending', value: 0 },
-  { label: 'Paid', value: 1 },
-  { label: 'Completed', value: 2 },
-  { label: 'Cancelled', value: 3 }
-]
+const statusOptions = computed(() => [
+  { label: t('orders.statusAll'), value: 'all' },
+  { label: t('orders.statusPending'), value: 0 },
+  { label: t('orders.statusPaid'), value: 1 },
+  { label: t('orders.statusCompleted'), value: 2 },
+  { label: t('orders.statusCancelled'), value: 3 }
+])
 
 const activeTab = ref('buyer')
 const statusFilter = ref('all')
@@ -313,16 +313,20 @@ function onSizeChange() {
 }
 
 function onPay(order) {
-  ElMessageBox.confirm(`Confirm payment for "${order.productTitle}"?`, 'Payment', {
-    confirmButtonText: 'Pay',
-    cancelButtonText: 'Cancel',
-    type: 'warning'
-  })
+  ElMessageBox.confirm(
+    t('orders.payConfirm').replace('{title}', order.productTitle),
+    t('orders.payDialogTitle'),
+    {
+      confirmButtonText: t('orders.pay'),
+      cancelButtonText: t('common.cancel'),
+      type: 'warning'
+    }
+  )
     .then(async () => {
       actingId.value = order.orderId
       try {
         await payOrder(order.orderId)
-        ElMessage.success('Payment successful')
+        ElMessage.success(t('orders.paySuccess'))
         await fetchOrders()
         await userStore.refreshPoints()
         await onboarding.refresh()
@@ -334,16 +338,20 @@ function onPay(order) {
 }
 
 function onConfirm(order) {
-  ElMessageBox.confirm(`Confirm receipt of "${order.productTitle}"?`, 'Confirm receipt', {
-    confirmButtonText: 'Confirm',
-    cancelButtonText: 'Cancel',
-    type: 'warning'
-  })
+  ElMessageBox.confirm(
+    t('orders.confirmReceiptMsg').replace('{title}', order.productTitle),
+    t('orders.confirmReceiptTitle'),
+    {
+      confirmButtonText: t('orders.confirm'),
+      cancelButtonText: t('common.cancel'),
+      type: 'warning'
+    }
+  )
     .then(async () => {
       actingId.value = order.orderId
       try {
         await confirmOrder(order.orderId)
-        ElMessage.success('Receipt confirmed')
+        ElMessage.success(t('orders.confirmReceiptSuccess'))
         await fetchOrders()
         await onboarding.refresh()
       } finally {
@@ -354,16 +362,20 @@ function onConfirm(order) {
 }
 
 function onCancel(order) {
-  ElMessageBox.confirm(`Cancel order "${order.productTitle}"?`, 'Cancel order', {
-    confirmButtonText: 'Cancel order',
-    cancelButtonText: 'Keep',
-    type: 'warning'
-  })
+  ElMessageBox.confirm(
+    t('orders.cancelConfirm').replace('{title}', order.productTitle),
+    t('orders.cancelTitle'),
+    {
+      confirmButtonText: t('orders.cancelOrderBtn'),
+      cancelButtonText: t('orders.keepOrder'),
+      type: 'warning'
+    }
+  )
     .then(async () => {
       actingId.value = order.orderId
       try {
         await cancelOrder(order.orderId)
-        ElMessage.success('Order cancelled')
+        ElMessage.success(t('orders.cancelSuccess'))
         await fetchOrders()
       } finally {
         actingId.value = null
@@ -451,62 +463,71 @@ onMounted(fetchOrders)
 .order-title-line {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .order-title {
-  font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--oa-text);
 }
 
 .order-meta {
+  margin-top: 6px;
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 16px;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.order-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .review-product {
+  font-weight: 600;
   margin: 0 0 8px;
-  font-weight: 500;
-  color: var(--oa-text);
 }
 
 .review-hint {
   margin: 0 0 16px;
-  font-size: 12px;
-  color: var(--oa-text-secondary, #888);
+  font-size: 13px;
+  color: var(--oa-text-muted);
 }
 
 .review-row {
-  margin-bottom: 14px;
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+  align-items: flex-start;
 }
 
 .review-label {
-  display: block;
-  margin-bottom: 6px;
+  width: 72px;
+  flex-shrink: 0;
+  padding-top: 4px;
+  color: var(--oa-text-muted);
   font-size: 13px;
-  color: var(--oa-text-secondary, #666);
 }
 
 .review-content {
   margin: 0;
   white-space: pre-wrap;
-  color: var(--oa-text);
 }
 
 .review-meta {
   margin: 8px 0 0;
   font-size: 12px;
-  color: var(--oa-text-secondary, #888);
+  color: var(--oa-text-muted);
 }
 
-.order-actions {
-  display: flex;
+.review-form .review-row {
   align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
+}
+
+.review-form .review-label {
+  padding-top: 0;
 }
 </style>

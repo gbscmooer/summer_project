@@ -47,4 +47,4 @@ curl -sf --get "${BASE_URL}/api/product/search" \
   --data-urlencode "pageSize=5" | python3 -c \
   "import json,sys; d=json.load(sys.stdin); t=d['data']['total']; print(f'    search hits total={t}'); assert t>0"
 
-echo "Done. Accounts: admin/123456 (管理员), zhangsan/123456, perfuser001..perfuser200/123456"
+echo "Done. Accounts: admin/123456 (管理员), zhangsan/123456, perfuser001..perfuser1500/123456"

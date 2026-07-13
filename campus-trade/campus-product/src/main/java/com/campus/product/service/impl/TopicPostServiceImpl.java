@@ -46,7 +46,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -253,10 +252,12 @@ public class TopicPostServiceImpl extends ServiceImpl<TopicPostMapper, TopicPost
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public Integer tip(Long tipperId, Long postId, Integer amount, String requestId) {
         if (amount == null || amount <= 0) {
             throw new BizException(ResultCode.TOPIC_TIP_INVALID);
+        }
+        if (!StringUtils.hasText(requestId)) {
+            throw new BizException(ResultCode.BAD_REQUEST.getCode(), "requestId 不能为空");
         }
         TopicPost post = requirePost(postId);
         if (post.getTipEnabled() == null || post.getTipEnabled() != 1) {
@@ -266,9 +267,7 @@ public class TopicPostServiceImpl extends ServiceImpl<TopicPostMapper, TopicPost
             throw new BizException(ResultCode.TOPIC_TIP_SELF);
         }
 
-        String idempotencyKey = (requestId != null && !requestId.isBlank())
-                ? requestId.trim()
-                : UUID.randomUUID().toString();
+        String idempotencyKey = requestId.trim();
 
         // 本地收据：保证积分划转成功后 tip_total 可在重试时补齐，且不会重复累加
         TopicTipReceipt existing = topicTipReceiptMapper.selectOne(
@@ -276,8 +275,7 @@ public class TopicPostServiceImpl extends ServiceImpl<TopicPostMapper, TopicPost
                         .eq(TopicTipReceipt::getRequestId, idempotencyKey)
                         .last("LIMIT 1"));
         if (existing != null && existing.getStatus() != null && existing.getStatus() == TopicTipReceipt.STATUS_DONE) {
-            TopicPost refreshed = getById(postId);
-            return refreshed == null || refreshed.getTipTotal() == null ? existing.getAmount() : refreshed.getTipTotal();
+            return reconcileTipTotal(postId, existing.getAmount());
         }
 
         if (existing == null) {
@@ -297,14 +295,16 @@ public class TopicPostServiceImpl extends ServiceImpl<TopicPostMapper, TopicPost
                                 .last("LIMIT 1"));
                 if (existing != null && existing.getStatus() != null
                         && existing.getStatus() == TopicTipReceipt.STATUS_DONE) {
-                    TopicPost refreshed = getById(postId);
-                    return refreshed == null || refreshed.getTipTotal() == null
-                            ? existing.getAmount() : refreshed.getTipTotal();
+                    return reconcileTipTotal(postId, existing.getAmount());
                 }
             }
         }
 
-        int tipAmount = existing != null && existing.getAmount() != null ? existing.getAmount() : amount;
+        if (existing == null || existing.getId() == null) {
+            throw new BizException(ResultCode.INTERNAL_ERROR.getCode(), "打赏收据创建失败");
+        }
+
+        int tipAmount = existing.getAmount() != null ? existing.getAmount() : amount;
 
         PointsTransferRequest transfer = new PointsTransferRequest();
         transfer.setFromUserId(tipperId);
@@ -315,35 +315,56 @@ public class TopicPostServiceImpl extends ServiceImpl<TopicPostMapper, TopicPost
         transfer.setRefId(postId + ":" + tipperId + ":" + idempotencyKey);
         try {
             unwrap(userFeignClient.tipPoints(transfer));
-        } catch (RuntimeException ex) {
-            if (existing != null && existing.getId() != null
+        } catch (BizException ex) {
+            if (isDefinitiveTipFailure(ex)
                     && (existing.getStatus() == null || existing.getStatus() == TopicTipReceipt.STATUS_PENDING)) {
                 topicTipReceiptMapper.deleteById(existing.getId());
             }
             throw ex;
+        } catch (RuntimeException ex) {
+            // 超时等未知结果：保留 PENDING 收据，客户端用同一 requestId 重试；积分侧幂等
+            log.error("打赏积分划转结果未知，保留收据待重试. postId={}, requestId={}", postId, idempotencyKey, ex);
+            throw ex;
         }
 
         // CAS PENDING→DONE：仅胜出方累加 tip_total，避免幂等重试虚高
-        if (existing != null && existing.getId() != null) {
-            int claimed = topicTipReceiptMapper.update(null,
-                    new LambdaUpdateWrapper<TopicTipReceipt>()
-                            .eq(TopicTipReceipt::getId, existing.getId())
-                            .and(w -> w.eq(TopicTipReceipt::getStatus, TopicTipReceipt.STATUS_PENDING)
-                                    .or()
-                                    .isNull(TopicTipReceipt::getStatus))
-                            .set(TopicTipReceipt::getStatus, TopicTipReceipt.STATUS_DONE));
-            if (claimed > 0) {
-                boolean updated = lambdaUpdate()
-                        .eq(TopicPost::getId, postId)
-                        .setSql("tip_total = IFNULL(tip_total, 0) + " + tipAmount)
-                        .update();
-                if (!updated) {
-                    throw new BizException(ResultCode.TOPIC_POST_NOT_FOUND);
-                }
+        int claimed = topicTipReceiptMapper.update(null,
+                new LambdaUpdateWrapper<TopicTipReceipt>()
+                        .eq(TopicTipReceipt::getId, existing.getId())
+                        .and(w -> w.eq(TopicTipReceipt::getStatus, TopicTipReceipt.STATUS_PENDING)
+                                .or()
+                                .isNull(TopicTipReceipt::getStatus))
+                        .set(TopicTipReceipt::getStatus, TopicTipReceipt.STATUS_DONE));
+        if (claimed > 0) {
+            boolean updated = lambdaUpdate()
+                    .eq(TopicPost::getId, postId)
+                    .setSql("tip_total = IFNULL(tip_total, 0) + " + tipAmount)
+                    .update();
+            if (!updated) {
+                // 帖子已被删：积分已到账、收据已 DONE，记录告警但不回滚积分
+                log.error("CRITICAL: 打赏积分已划转但帖子不存在，tip_total 未累加. postId={}, tipperId={}, amount={}, requestId={}",
+                        postId, tipperId, tipAmount, idempotencyKey);
             }
         }
+        return reconcileTipTotal(postId, tipAmount);
+    }
+
+    private Integer reconcileTipTotal(Long postId, Integer fallbackAmount) {
         TopicPost refreshed = getById(postId);
-        return refreshed == null || refreshed.getTipTotal() == null ? tipAmount : refreshed.getTipTotal();
+        if (refreshed == null || refreshed.getTipTotal() == null) {
+            return fallbackAmount == null ? 0 : fallbackAmount;
+        }
+        return refreshed.getTipTotal();
+    }
+
+    private static boolean isDefinitiveTipFailure(BizException exception) {
+        int code = exception.getCode();
+        return code == ResultCode.POINTS_INSUFFICIENT.getCode()
+                || code == ResultCode.TOPIC_TIP_INVALID.getCode()
+                || code == ResultCode.TOPIC_TIP_SELF.getCode()
+                || code == ResultCode.BAD_REQUEST.getCode()
+                || code == ResultCode.USER_NOT_FOUND.getCode()
+                || code == ResultCode.NOT_FOUND.getCode();
     }
 
     @Override

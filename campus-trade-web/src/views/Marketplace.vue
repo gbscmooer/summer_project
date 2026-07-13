@@ -207,7 +207,7 @@ onMounted(fetchList)
   border-radius: 12px;
   overflow: hidden;
   cursor: pointer;
-  background: var(--oa-panel, #fff);
+  background: var(--oa-bg-sidebar, var(--oa-bg-elevated, #fff));
   transition: border-color 0.15s ease;
 }
 

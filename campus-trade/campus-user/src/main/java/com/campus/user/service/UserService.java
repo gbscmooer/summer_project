@@ -20,6 +20,9 @@ public interface UserService {
     void markOnboardingStep(Long userId, String step);
     void completeOnboarding(Long userId);
 
-    /** 订单评价后增量更新卖家信誉：review_count+1 并重算 avg_rating。 */
-    void applyRating(Long sellerId, int rating);
+    /** 订单评价后增量更新卖家信誉：review_count+1 并重算 avg_rating（reviewId 幂等）。 */
+    void applyRating(Long sellerId, int rating, Long reviewId);
+
+    /** 网关鉴权后二次校验：账号是否仍可访问。 */
+    UserAccessStatusVO getAccessStatus(Long userId);
 }

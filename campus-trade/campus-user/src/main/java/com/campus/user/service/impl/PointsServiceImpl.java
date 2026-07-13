@@ -149,14 +149,17 @@ public class PointsServiceImpl implements PointsService {
         }
 
         DailyLikeQuest quest = findOrCreateQuest(userId, today);
-        int count = quest.getLikeCount() == null ? 0 : quest.getLikeCount();
-        count = count + 1;
-        quest.setLikeCount(count);
-        dailyLikeQuestMapper.updateById(quest);
+        dailyLikeQuestMapper.update(null,
+                new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<DailyLikeQuest>()
+                        .eq(DailyLikeQuest::getId, quest.getId())
+                        .setSql("like_count = IFNULL(like_count, 0) + 1"));
+        DailyLikeQuest refreshed = findQuest(userId, today);
+        int count = refreshed == null || refreshed.getLikeCount() == null ? 0 : refreshed.getLikeCount();
 
         if (count >= PointsConstants.LIKE_QUEST_TARGET
-                && (quest.getRewarded() == null || quest.getRewarded() == 0)) {
-            tryAwardLikeReward(userId, today, quest);
+                && refreshed != null
+                && (refreshed.getRewarded() == null || refreshed.getRewarded() == 0)) {
+            tryAwardLikeReward(userId, today, refreshed);
         }
         return getEventStatus(userId);
     }
@@ -183,9 +186,10 @@ public class PointsServiceImpl implements PointsService {
             return getEventStatus(userId);
         }
 
-        int count = quest.getLikeCount() == null ? 0 : quest.getLikeCount();
-        quest.setLikeCount(Math.max(0, count - 1));
-        dailyLikeQuestMapper.updateById(quest);
+        dailyLikeQuestMapper.update(null,
+                new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<DailyLikeQuest>()
+                        .eq(DailyLikeQuest::getId, quest.getId())
+                        .setSql("like_count = GREATEST(IFNULL(like_count, 0) - 1, 0)"));
         return getEventStatus(userId);
     }
 

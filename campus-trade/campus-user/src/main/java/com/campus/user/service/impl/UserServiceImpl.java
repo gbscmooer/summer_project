@@ -7,7 +7,9 @@ import com.campus.common.exception.BizException;
 import com.campus.common.result.ResultCode;
 import com.campus.common.util.JwtUtil;
 import com.campus.user.dto.*;
+import com.campus.user.entity.RatingApplyLog;
 import com.campus.user.entity.User;
+import com.campus.user.mapper.RatingApplyLogMapper;
 import com.campus.user.mapper.UserMapper;
 import com.campus.user.service.OnboardingFlagCodec;
 import com.campus.user.service.PointsConstants;
@@ -15,8 +17,10 @@ import com.campus.user.service.PointsService;
 import com.campus.user.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
@@ -35,6 +39,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
     private final BCryptPasswordEncoder passwordEncoder;
     private final PointsService pointsService;
+    private final RatingApplyLogMapper ratingApplyLogMapper;
 
     @Override
     public Long register(RegisterRequest request) {
@@ -274,9 +279,47 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     }
 
     @Override
-    public void applyRating(Long sellerId, int rating) {
+    public UserAccessStatusVO getAccessStatus(Long userId) {
+        if (userId == null || userId <= 0) {
+            throw new BizException(ResultCode.BAD_REQUEST);
+        }
+        User user = getById(userId);
+        if (user == null) {
+            throw new BizException(ResultCode.USER_NOT_FOUND);
+        }
+        if (UserStatus.isEffectivelyBanned(user.getStatus(), user.getBanUntil())) {
+            String message = ResultCode.USER_BANNED.getMessage();
+            if (StringUtils.hasText(user.getBanReason())) {
+                message = message + "（原因：" + user.getBanReason().trim() + "）";
+            }
+            return new UserAccessStatusVO(true, message);
+        }
+        if (UserStatus.isBanned(user.getStatus())) {
+            clearExpiredBan(user.getId());
+        }
+        return new UserAccessStatusVO(false, null);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void applyRating(Long sellerId, int rating, Long reviewId) {
         if (sellerId == null || sellerId <= 0 || rating < 1 || rating > 5) {
             throw new BizException(ResultCode.BAD_REQUEST);
+        }
+        if (reviewId == null || reviewId <= 0) {
+            throw new BizException(ResultCode.BAD_REQUEST.getCode(), "reviewId 不能为空");
+        }
+        RatingApplyLog log = new RatingApplyLog();
+        log.setReviewId(reviewId);
+        log.setSellerId(sellerId);
+        log.setRating(rating);
+        try {
+            ratingApplyLogMapper.insert(log);
+        } catch (DuplicateKeyException e) {
+            // 同一评价已加过分，幂等成功
+            return;
+        } catch (DataIntegrityViolationException e) {
+            return;
         }
         int updated = baseMapper.applyRatingAtomic(sellerId, rating);
         if (updated == 0) {

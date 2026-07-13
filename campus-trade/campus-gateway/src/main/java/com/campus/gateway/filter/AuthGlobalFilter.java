@@ -3,8 +3,10 @@ package com.campus.gateway.filter;
 import com.campus.common.result.Result;
 import com.campus.common.util.JwtUtil;
 import com.campus.common.security.InternalApiTokenValidator;
+import com.campus.gateway.client.BanStatusClient;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
@@ -32,7 +34,7 @@ import java.util.regex.Pattern;
  *   <li>白名单路径放行（注册/登录/商品列表/搜索/商品详情 GET）。</li>
  *   <li>无论是否白名单，先剥离客户端伪造的 {@code X-User-Id} 头，防止越权。</li>
  *   <li>非白名单请求校验 {@code Authorization: Bearer <token>}，无效则返回 401 JSON。</li>
- *   <li>有效 token 解析出 userId，通过 {@code X-User-Id} 透传给下游服务。</li>
+ *   <li>有效 token 解析出 userId，查询用户封禁状态，再通过 {@code X-User-Id} 透传给下游服务。</li>
  * </ol>
  */
 @Component
@@ -73,6 +75,17 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
     private static final Pattern PRODUCT_IMAGE_PATTERN = Pattern.compile("^/api/product/image/[a-zA-Z0-9._-]+$");
 
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final BanStatusClient banStatusClient;
+
+    /** 单测用无参构造：跳过封禁二次校验。 */
+    public AuthGlobalFilter() {
+        this.banStatusClient = null;
+    }
+
+    @Autowired
+    public AuthGlobalFilter(BanStatusClient banStatusClient) {
+        this.banStatusClient = banStatusClient;
+    }
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
@@ -113,13 +126,27 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
 
         return Mono.fromCallable(() -> JwtUtil.parseUserId(token))
                 .subscribeOn(Schedulers.boundedElastic())
-                .flatMap(userId -> {
-                    ServerHttpRequest authedRequest = sanitizedRequest.mutate()
-                            .header(HEADER_USER_ID, String.valueOf(userId))
-                            .build();
-                    return chain.filter(sanitizedExchange.mutate().request(authedRequest).build());
-                })
+                .flatMap(userId -> enforceAccess(userId)
+                        .flatMap(decision -> {
+                            if (decision == BanStatusClient.AccessDecision.BANNED) {
+                                return forbidden(sanitizedExchange, 1007, "账号已被封禁，请联系管理员");
+                            }
+                            if (decision == BanStatusClient.AccessDecision.UNAVAILABLE) {
+                                return serviceUnavailable(sanitizedExchange);
+                            }
+                            ServerHttpRequest authedRequest = sanitizedRequest.mutate()
+                                    .header(HEADER_USER_ID, String.valueOf(userId))
+                                    .build();
+                            return chain.filter(sanitizedExchange.mutate().request(authedRequest).build());
+                        }))
                 .onErrorResume(e -> unauthorized(sanitizedExchange));
+    }
+
+    private Mono<BanStatusClient.AccessDecision> enforceAccess(Long userId) {
+        if (banStatusClient == null) {
+            return Mono.just(BanStatusClient.AccessDecision.ALLOW);
+        }
+        return banStatusClient.check(userId);
     }
 
     /**
@@ -174,6 +201,7 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
 
     /**
      * 白名单请求：无 token 直接放行；有 token 则尽力解析并注入 X-User-Id，解析失败仍放行。
+     * 已封禁用户即使访问公开读接口也不注入身份，避免个性化写侧效应。
      */
     private Mono<Void> injectOptionalUser(
             ServerWebExchange exchange,
@@ -186,12 +214,16 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
         }
         return Mono.fromCallable(() -> JwtUtil.parseUserId(token))
                 .subscribeOn(Schedulers.boundedElastic())
-                .flatMap(userId -> {
-                    ServerHttpRequest authedRequest = sanitizedRequest.mutate()
-                            .header(HEADER_USER_ID, String.valueOf(userId))
-                            .build();
-                    return chain.filter(exchange.mutate().request(authedRequest).build());
-                })
+                .flatMap(userId -> enforceAccess(userId)
+                        .flatMap(decision -> {
+                            if (decision != BanStatusClient.AccessDecision.ALLOW) {
+                                return chain.filter(exchange);
+                            }
+                            ServerHttpRequest authedRequest = sanitizedRequest.mutate()
+                                    .header(HEADER_USER_ID, String.valueOf(userId))
+                                    .build();
+                            return chain.filter(exchange.mutate().request(authedRequest).build());
+                        }))
                 .onErrorResume(e -> chain.filter(exchange));
     }
 
@@ -225,18 +257,28 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
      * 直接写出 HTTP 401 + JSON 响应体 {"code":401,"message":"未登录或Token已失效","data":null}。
      */
     private Mono<Void> unauthorized(ServerWebExchange exchange) {
-        ServerHttpResponse response = exchange.getResponse();
-        response.setStatusCode(HttpStatus.UNAUTHORIZED);
-        response.getHeaders().setContentType(MediaType.parseMediaType(MediaType.APPLICATION_JSON_VALUE + ";charset=UTF-8"));
+        return writeJson(exchange, HttpStatus.UNAUTHORIZED, Result.error(401, "未登录或Token已失效"));
+    }
 
-        Result<Void> body = Result.error(401, "未登录或Token已失效");
+    private Mono<Void> forbidden(ServerWebExchange exchange, int code, String message) {
+        return writeJson(exchange, HttpStatus.FORBIDDEN, Result.error(code, message));
+    }
+
+    private Mono<Void> serviceUnavailable(ServerWebExchange exchange) {
+        return writeJson(exchange, HttpStatus.SERVICE_UNAVAILABLE,
+                Result.error(503, "账号状态校验暂时不可用，请稍后重试"));
+    }
+
+    private Mono<Void> writeJson(ServerWebExchange exchange, HttpStatus status, Result<?> body) {
+        ServerHttpResponse response = exchange.getResponse();
+        response.setStatusCode(status);
+        response.getHeaders().setContentType(MediaType.parseMediaType(MediaType.APPLICATION_JSON_VALUE + ";charset=UTF-8"));
         byte[] bytes;
         try {
             bytes = objectMapper.writeValueAsBytes(body);
         } catch (JsonProcessingException e) {
-            // 兜底：序列化失败时手写 JSON，保证响应仍是合法 JSON。
-            bytes = "{\"code\":401,\"message\":\"未登录或Token已失效\",\"data\":null}"
-                    .getBytes(StandardCharsets.UTF_8);
+            bytes = ("{\"code\":" + status.value() + ",\"message\":\"" + status.getReasonPhrase()
+                    + "\",\"data\":null}").getBytes(StandardCharsets.UTF_8);
         }
         DataBuffer buffer = response.bufferFactory().wrap(bytes);
         return response.writeWith(Mono.just(buffer));

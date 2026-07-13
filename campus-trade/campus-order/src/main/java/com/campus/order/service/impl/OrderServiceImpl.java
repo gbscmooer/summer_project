@@ -80,6 +80,9 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         if (product == null) {
             throw new BizException(ResultCode.PRODUCT_NOT_FOUND);
         }
+        if (product.getSaleType() != null && product.getSaleType() == 1) {
+            throw new BizException(ResultCode.BAD_REQUEST.getCode(), "秒杀商品请走秒杀下单");
+        }
         // 2. 商品必须在售（status==1）
         if (product.getStatus() == null || product.getStatus() != 1) {
             throw new BizException(ResultCode.PRODUCT_OFF_SHELF);
@@ -246,15 +249,34 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
 
         try {
             unwrap(userFeign.transferPoints(transfer));
+        } catch (BizException ex) {
+            if (isDefinitivePayFailure(ex)) {
+                // 明确失败（如积分不足）：回滚订单状态，避免「已付款但未扣积分」
+                lambdaUpdate()
+                        .eq(Order::getId, orderId)
+                        .eq(Order::getStatus, STATUS_PAID)
+                        .set(Order::getStatus, STATUS_UNPAID)
+                        .update();
+            } else {
+                // 业务码未知：保持 PAID，依赖积分划转幂等重试自愈
+                log.error("支付积分划转业务失败且非明确可回滚，订单保持已支付. orderId={}, code={}",
+                        orderId, ex.getCode(), ex);
+            }
+            throw ex;
         } catch (RuntimeException ex) {
-            // 划转失败则回滚订单状态，避免「已付款但未扣积分」
-            lambdaUpdate()
-                    .eq(Order::getId, orderId)
-                    .eq(Order::getStatus, STATUS_PAID)
-                    .set(Order::getStatus, STATUS_UNPAID)
-                    .update();
+            // 超时/网络等：积分可能已扣成功，禁止回滚为未支付，避免「扣积分 + 取消订单还库存」
+            log.error("支付积分划转结果未知，订单保持已支付待重试. orderId={}", orderId, ex);
             throw ex;
         }
+    }
+
+    /** 明确可回滚的支付失败：积分侧确认未划转。 */
+    private static boolean isDefinitivePayFailure(BizException exception) {
+        int code = exception.getCode();
+        return code == ResultCode.POINTS_INSUFFICIENT.getCode()
+                || code == ResultCode.BAD_REQUEST.getCode()
+                || code == ResultCode.USER_NOT_FOUND.getCode()
+                || code == ResultCode.NOT_FOUND.getCode();
     }
 
     /** 将订单成交积分（DECIMAL）转为整数积分。 */
@@ -425,6 +447,9 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         ProductDTO product = (ProductDTO) redisTemplate.opsForValue().get(productKey);
         if (product == null) {
             throw new BizException(ResultCode.PRODUCT_NOT_FOUND);
+        }
+        if (product.getSaleType() == null || product.getSaleType() != 1) {
+            throw new BizException(ResultCode.BAD_REQUEST.getCode(), "非秒杀商品不可秒杀下单");
         }
         if (buyerId.equals(product.getSellerId())) {
             throw new BizException(ResultCode.ORDER_CANNOT_BUY_OWN);

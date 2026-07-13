@@ -1,4 +1,4 @@
-package com.campus.order.entity;
+package com.campus.user.entity;
 
 import com.baomidou.mybatisplus.annotation.FieldFill;
 import com.baomidou.mybatisplus.annotation.IdType;
@@ -9,28 +9,17 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 
+/** 评价信誉增量幂等日志：同一 reviewId 只加分一次。 */
 @Data
-@TableName("t_order_review")
-public class OrderReview {
+@TableName("t_rating_apply_log")
+public class RatingApplyLog {
 
-    @TableId(type = IdType.AUTO)
-    private Long id;
-
-    private Long orderId;
-
-    private Long productId;
-
-    private Long buyerId;
+    @TableId(type = IdType.INPUT)
+    private Long reviewId;
 
     private Long sellerId;
 
-    /** 评分 1-5 */
     private Integer rating;
-
-    private String content;
-
-    /** 0-未同步卖家信誉 1-已同步 */
-    private Integer ratingApplied;
 
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;

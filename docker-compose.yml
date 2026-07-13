@@ -126,6 +126,7 @@ services:
       - SPRING_CLOUD_INETUTILS_PREFERRED_NETWORKS=172.20
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required and must be at least 32 bytes}
       - JWT_EXPIRATION_MINUTES=${JWT_EXPIRATION_MINUTES:-120}
+      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN:?INTERNAL_API_TOKEN is required and must be at least 32 bytes}
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-}
       - JAVA_OPTS=-Xms256m -Xmx256m
     depends_on:

@@ -31,6 +31,8 @@ public class ProductDetailVO {
     private Integer isTutorial;
     /** 每用户限购，null 表示不限 */
     private Integer purchaseLimit;
+    /** 0-普通购买 1-秒杀 */
+    private Integer saleType;
 
     public static ProductDetailVO from(Product p) {
         ProductDetailVO vo = new ProductDetailVO();
@@ -52,6 +54,7 @@ public class ProductDetailVO {
         vo.setCreateTime(p.getCreateTime());
         vo.setIsTutorial(p.getIsTutorial() == null ? 0 : p.getIsTutorial());
         vo.setPurchaseLimit(p.getPurchaseLimit());
+        vo.setSaleType(p.getSaleType() == null ? 0 : p.getSaleType());
         return vo;
     }
 }

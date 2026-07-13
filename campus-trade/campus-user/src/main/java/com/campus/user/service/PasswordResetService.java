@@ -191,6 +191,16 @@ public class PasswordResetService {
             throw new BizException(ResultCode.RESET_TOKEN_INVALID);
         }
 
+        // CAS 占坑：并发下仅一请求能标记 used_at，避免同一 token 重置多次密码
+        int claimed = tokenMapper.update(null, new LambdaUpdateWrapper<PasswordResetToken>()
+                .eq(PasswordResetToken::getId, row.getId())
+                .isNull(PasswordResetToken::getUsedAt)
+                .gt(PasswordResetToken::getExpiresAt, LocalDateTime.now())
+                .set(PasswordResetToken::getUsedAt, LocalDateTime.now()));
+        if (claimed == 0) {
+            throw new BizException(ResultCode.RESET_TOKEN_INVALID);
+        }
+
         User user = userMapper.selectById(row.getUserId());
         if (user == null) {
             throw new BizException(ResultCode.RESET_TOKEN_INVALID);
@@ -199,10 +209,6 @@ public class PasswordResetService {
         userMapper.update(null, new LambdaUpdateWrapper<User>()
                 .eq(User::getId, user.getId())
                 .set(User::getPassword, passwordEncoder.encode(newPassword)));
-
-        tokenMapper.update(null, new LambdaUpdateWrapper<PasswordResetToken>()
-                .eq(PasswordResetToken::getId, row.getId())
-                .set(PasswordResetToken::getUsedAt, LocalDateTime.now()));
     }
 
     private static String randomToken() {

@@ -64,6 +64,7 @@ CREATE TABLE IF NOT EXISTS t_product (
     view_count  INT             DEFAULT 0 COMMENT '浏览量',
     is_tutorial TINYINT         NOT NULL DEFAULT 0 COMMENT '1-新手教程专用商品',
     purchase_limit INT          NULL COMMENT '每用户限购数量，NULL 表示不限',
+    sale_type   TINYINT         NOT NULL DEFAULT 0 COMMENT '0-普通购买 1-秒杀',
     create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
     update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_seller_id  (seller_id),
@@ -206,11 +207,20 @@ CREATE TABLE IF NOT EXISTS t_order_review (
     seller_id   BIGINT       NOT NULL COMMENT '卖家用户ID',
     rating      TINYINT      NOT NULL COMMENT '1-5',
     content     VARCHAR(500) NULL COMMENT '评价内容',
+    rating_applied TINYINT NOT NULL DEFAULT 0 COMMENT '0-未同步信誉 1-已同步',
     create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '评价时间',
     UNIQUE KEY uk_order_buyer (order_id, buyer_id),
     INDEX idx_seller (seller_id),
     INDEX idx_product (product_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='订单交易评价';
+
+CREATE TABLE IF NOT EXISTS t_rating_apply_log (
+    review_id   BIGINT PRIMARY KEY COMMENT '订单评价ID',
+    seller_id   BIGINT  NOT NULL COMMENT '卖家用户ID',
+    rating      TINYINT NOT NULL COMMENT '1-5',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '落账时间',
+    INDEX idx_seller (seller_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='卖家信誉增量幂等日志';
 
 -- ============================================================
 -- 通知表（campus-order 服务使用，MQ 消费者写入）

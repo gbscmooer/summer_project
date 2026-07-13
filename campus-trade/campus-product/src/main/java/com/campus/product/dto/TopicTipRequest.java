@@ -2,6 +2,7 @@ package com.campus.product.dto;
 
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
@@ -14,7 +15,8 @@ public class TopicTipRequest {
     @Max(value = 10000, message = "单次打赏不超过10000")
     private Integer amount;
 
-    /** 客户端幂等键；同一 requestId 重试不会重复扣款。 */
+    /** 客户端幂等键；必填，同一 requestId 重试不会重复扣款。 */
+    @NotBlank(message = "requestId 不能为空")
     @Size(max = 64, message = "requestId 过长")
     private String requestId;
 }

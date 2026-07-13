@@ -128,13 +128,22 @@ public class UserController {
         return Result.success(userService.resolveUserIdsByUsernames(names));
     }
 
-    /** 内部接口：订单评价后增量更新卖家信誉分。 */
+    /** 内部接口：网关鉴权后查询账号是否仍可访问（封禁即时生效）。 */
+    @GetMapping("/internal/access-status")
+    public Result<UserAccessStatusVO> getAccessStatus(
+            @RequestHeader(value = InternalApiTokenValidator.HEADER_NAME, required = false) String internalToken,
+            @RequestParam Long userId) {
+        internalApiTokenValidator.requireValid(internalToken);
+        return Result.success(userService.getAccessStatus(userId));
+    }
+
+    /** 内部接口：订单评价后增量更新卖家信誉分（reviewId 幂等）。 */
     @PostMapping("/internal/rating/apply")
     public Result<Void> applyRating(
             @RequestHeader(value = InternalApiTokenValidator.HEADER_NAME, required = false) String internalToken,
             @Valid @RequestBody ApplyRatingRequest request) {
         internalApiTokenValidator.requireValid(internalToken);
-        userService.applyRating(request.getSellerId(), request.getRating());
+        userService.applyRating(request.getSellerId(), request.getRating(), request.getReviewId());
         return Result.success(null);
     }
 

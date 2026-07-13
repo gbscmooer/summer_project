@@ -175,7 +175,7 @@
             style="width: 200px"
           />
         </el-form-item>
-        <el-form-item label="Stock" prop="stock">
+        <el-form-item :label="t('merchant.stock')" prop="stock">
           <el-input-number
             v-model="productEditForm.stock"
             :min="1"

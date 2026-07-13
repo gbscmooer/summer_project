@@ -25,6 +25,9 @@ public class Product {
     private Integer isTutorial;
     /** 每用户限购数量 */
     private Integer purchaseLimit;
+    /** 0-普通购买 1-秒杀 */
+    @TableField("sale_type")
+    private Integer saleType;
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
     @TableField(fill = FieldFill.INSERT_UPDATE)

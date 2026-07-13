@@ -1,7 +1,7 @@
 <template>
   <el-card class="auth-card">
     <h2 class="auth-title">注册校园集市</h2>
-    <p class="auth-subtitle">Create your account</p>
+    <p class="auth-subtitle">{{ t('auth.registerSubtitle') }}</p>
     <el-form
       ref="formRef"
       :model="form"
@@ -71,8 +71,10 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { User, Lock, Iphone, Message } from '@element-plus/icons-vue'
 import { register } from '@/api/user'
+import { useI18n } from '@/i18n'
 
 const router = useRouter()
+const { t } = useI18n()
 const formRef = ref(null)
 const loading = ref(false)
 

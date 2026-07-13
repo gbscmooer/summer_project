@@ -52,6 +52,9 @@ spring:
           filters:
             - StripPrefix=1
 
+campus:
+  internal-api-token: ${INTERNAL_API_TOKEN:}
+
 logging:
   level:
     com.campus: ${LOGGING_LEVEL_COM_CAMPUS:INFO}

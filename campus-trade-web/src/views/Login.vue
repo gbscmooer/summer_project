@@ -1,7 +1,7 @@
 <template>
   <el-card class="auth-card">
     <h2 class="auth-title">登录校园集市</h2>
-    <p class="auth-subtitle">Sign in to your account</p>
+    <p class="auth-subtitle">{{ t('auth.loginSubtitle') }}</p>
     <el-form
       ref="formRef"
       :model="form"
@@ -50,10 +50,12 @@ import { ElMessage } from 'element-plus'
 import { User, Lock } from '@element-plus/icons-vue'
 import { login } from '@/api/user'
 import { useUserStore } from '@/store/user'
+import { useI18n } from '@/i18n'
 
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
+const { t } = useI18n()
 
 const formRef = ref(null)
 const loading = ref(false)
