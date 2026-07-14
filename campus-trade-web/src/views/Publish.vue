@@ -36,7 +36,7 @@
           <el-icon><MagicStick /></el-icon>
           AI 图片助手
         </el-button>
-        <span class="toolbar-hint">可选：根据实拍图生成标题/描述模版</span>
+        <span class="toolbar-hint">可根据实拍图生成标题与描述草稿</span>
       </div>
 
       <el-form
@@ -51,7 +51,7 @@
           <el-form-item prop="title">
             <el-input
               v-model="form.title"
-              placeholder="一句话描述你的商品"
+              placeholder="请输入商品标题"
               maxlength="50"
               show-word-limit
               clearable
@@ -151,7 +151,7 @@
         :rows="3"
         maxlength="500"
         show-word-limit
-        placeholder="可选：补充型号、购买年份、配件、功能情况或已知瑕疵"
+        placeholder="可补充型号、购买年份、配件、功能情况或已知瑕疵"
       />
       <p v-if="form.imageList.length === 0" class="ai-dialog-warn">请先在表单中上传至少一张实拍图。</p>
       <div v-if="draftInfo" class="draft-result">
@@ -304,7 +304,7 @@ async function generateDraft() {
     form.category = categories.includes(draft.category) ? draft.category : (form.category || '其他')
     if (draft.suggestedPrice != null) form.price = Number(draft.suggestedPrice)
     draftInfo.value = draft
-    ElMessage.success('模版已填入表单，请检查修改后再手动发布')
+    ElMessage.success('草稿已填入表单，请核对后手动发布')
     aiDialogVisible.value = false
   } finally {
     aiLoading.value = false

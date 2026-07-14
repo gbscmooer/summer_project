@@ -12,7 +12,7 @@
       <el-form-item label="用户名" prop="username">
         <el-input
           v-model="form.username"
-          placeholder="4-20位，登录用（同时作为昵称）"
+          placeholder="4-20位字符，用于登录与展示"
           clearable
           :prefix-icon="User"
         />
@@ -20,7 +20,7 @@
       <el-form-item label="邮箱" prop="email">
         <el-input
           v-model="form.email"
-          placeholder="用于找回密码（注册时不验证）"
+          placeholder="用于账号安全与密码找回"
           clearable
           :prefix-icon="Message"
         />
@@ -28,7 +28,7 @@
       <el-form-item label="手机号（可选）" prop="phone">
         <el-input
           v-model="form.phone"
-          placeholder="可不填"
+          placeholder="请输入手机号"
           clearable
           :prefix-icon="Iphone"
         />
@@ -37,7 +37,7 @@
         <el-input
           v-model="form.password"
           type="password"
-          placeholder="6-20位密码"
+          placeholder="请输入 6-20 位密码"
           show-password
           :prefix-icon="Lock"
         />

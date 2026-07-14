@@ -51,12 +51,12 @@ INSERT IGNORE INTO t_user (username, password, nickname, avatar, role, onboardin
 ('campus_official', '$2a$10$fPwyITwOcv4Ggd3cbTdX6uxOQs5X96/CuKS/4K/3cz4gZhnt7nLJi', '校园集市官方', 'https://api.dicebear.com/7.x/shapes/svg?seed=campus', 0, 1);
 
 DELETE FROM t_product
-WHERE title = '【新手体验】校园集市入门礼包'
+WHERE title IN ('【新手体验】校园集市入门礼包', '【官方推荐】校园集市入门礼包')
   AND seller_id = (SELECT id FROM t_user WHERE username = 'campus_official');
 
 INSERT INTO t_product (title, description, price, images, category, seller_id, status, stock, view_count, is_tutorial, purchase_limit) VALUES
-('【新手体验】校园集市入门礼包',
- '专为新用户准备的 0 元体验商品，完成新手教程中的购买、付款与确认收货流程。每位用户限购 2 件。',
+('【官方推荐】校园集市入门礼包',
+ '专为新用户准备的 0 元入门商品，用于完成购买、付款与确认收货流程。每位用户限购 2 件。',
  0.00,
  'https://picsum.photos/seed/tutorial/400/300',
  '生活',

@@ -39,7 +39,7 @@ WITH RECURSIVE seq AS (
 SELECT
     IF(i < 1000, CONCAT('perfuser', LPAD(i, 3, '0')), CONCAT('perfuser', i)),
     @pwd,
-    CONCAT('压测用户', i),
+    CONCAT('性能测试用户', i),
     CONCAT('https://api.dicebear.com/7.x/avataaars/svg?seed=perf', i),
     CONCAT('139', LPAD(10000000 + i, 8, '0')),
     0
@@ -51,7 +51,7 @@ FROM seq;
 INSERT INTO t_product (title, description, price, images, category, seller_id, status, stock, view_count, sale_type)
 SELECT
     '同济版高等数学（上下册）',
-    'perf-seed: JMeter 秒杀压测锚点商品，含「数学」关键词便于搜索压测',
+    '高并发吞吐测试模块锚点商品，含「数学」关键词便于搜索性能评估',
     25.00,
     'https://picsum.photos/seed/math-anchor/400/300',
     '教材',
@@ -88,7 +88,7 @@ SELECT
         CONCAT('运动鞋九成新', i),
         CONCAT('保温杯 500ml', i)
     ),
-    CONCAT('perf-seed: 校园二手压测数据集第 ', i, ' 条'),
+    CONCAT('校园二手性能基准评估数据集第 ', i, ' 条'),
     ROUND(8.00 + (i % 120) + ((i % 9) * 0.25), 2),
     CONCAT('https://picsum.photos/seed/perf', i, '/400/300'),
     ELT(1 + (i % 4), '教材', '数码', '生活', '运动'),
@@ -115,8 +115,8 @@ VALUES (
 
 INSERT INTO t_product (title, description, price, images, category, seller_id, status, stock, view_count, is_tutorial, purchase_limit)
 VALUES (
-    '【新手体验】校园集市入门礼包',
-    '专为新用户准备的 0 元体验商品，完成新手教程中的购买、付款与确认收货流程。每位用户限购 2 件。',
+    '【官方推荐】校园集市入门礼包',
+    '专为新用户准备的 0 元入门商品，用于完成购买、付款与确认收货流程。每位用户限购 2 件。',
     0.00,
     'https://picsum.photos/seed/tutorial/400/300',
     '生活',
