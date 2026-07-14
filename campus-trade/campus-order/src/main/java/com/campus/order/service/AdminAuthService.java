@@ -12,11 +12,24 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class AdminAuthService {
 
-    private static final int ROLE_ADMIN = UserRole.ADMIN;
-
     private final UserFeignClient userFeignClient;
 
     public void requireAdmin(Long userId) {
+        int role = resolveRole(userId);
+        if (!UserRole.isAdmin(role)) {
+            throw new BizException(ResultCode.FORBIDDEN);
+        }
+    }
+
+    /** 管理员或特殊认证官方可发送系统通知。 */
+    public void requireNotificationSender(Long userId) {
+        int role = resolveRole(userId);
+        if (!UserRole.canSendNotification(role)) {
+            throw new BizException(ResultCode.FORBIDDEN);
+        }
+    }
+
+    private int resolveRole(Long userId) {
         if (userId == null) {
             throw new BizException(ResultCode.UNAUTHORIZED);
         }
@@ -24,8 +37,6 @@ public class AdminAuthService {
         if (result == null || result.getCode() != ResultCode.SUCCESS.getCode() || result.getData() == null) {
             throw new BizException(ResultCode.FORBIDDEN);
         }
-        if (result.getData() != ROLE_ADMIN) {
-            throw new BizException(ResultCode.FORBIDDEN);
-        }
+        return result.getData();
     }
 }

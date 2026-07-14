@@ -25,7 +25,7 @@ public class AdminNotificationController {
     public Result<AdminBroadcastResult> broadcast(
             @RequestHeader("X-User-Id") Long userId,
             @Valid @RequestBody AdminBroadcastRequest request) {
-        adminAuthService.requireAdmin(userId);
+        adminAuthService.requireNotificationSender(userId);
         AdminBroadcastResult result = notificationService.broadcast(userId, request);
         return Result.success("通知已发送", result);
     }

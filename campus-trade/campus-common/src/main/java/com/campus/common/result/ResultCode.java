@@ -40,6 +40,11 @@ public enum ResultCode {
     FOLLOW_ALREADY(1026, "已关注该用户"),
     FOLLOW_NOT_FOUND(1027, "未关注该用户"),
     USER_NOT_FOUND(1028, "用户不存在"),
+    SPECIAL_CERT_ALREADY(1029, "您已是特殊认证账号"),
+    SPECIAL_CERT_APPLICATION_PENDING(1030, "已有待审核的特殊认证申请"),
+    SPECIAL_CERT_APPLICATION_NOT_FOUND(1031, "特殊认证申请不存在"),
+    SPECIAL_CERT_APPLICATION_REVIEWED(1032, "该特殊认证申请已处理"),
+    SPECIAL_CERT_NOT_ELIGIBLE(1033, "当前角色不可申请特殊认证"),
 
     // 商品业务码
     PRODUCT_NOT_FOUND(2001, "商品不存在"),

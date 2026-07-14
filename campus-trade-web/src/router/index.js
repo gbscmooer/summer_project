@@ -137,7 +137,7 @@ const routes = [
     path: '/admin',
     name: 'Admin',
     component: () => import('@/views/Admin.vue'),
-    meta: { title: '管理后台', requiresAuth: true, requiresAdmin: true }
+    meta: { title: '管理后台', requiresAuth: true, requiresNotifyAccess: true }
   },
   // 兜底：未匹配路由回首页
   {
@@ -171,6 +171,16 @@ router.beforeEach(async (to, from, next) => {
     }
     if (!userStore.isAdmin) {
       ElMessage.warning('需要管理员权限才能访问管理后台')
+      next({ path: '/' })
+      return
+    }
+  }
+  if (to.meta && to.meta.requiresNotifyAccess) {
+    if (userStore.isLogin && !userStore.canSendNotification) {
+      await userStore.refreshProfile()
+    }
+    if (!userStore.canSendNotification) {
+      ElMessage.warning('需要管理员或特殊认证权限才能访问')
       next({ path: '/' })
       return
     }

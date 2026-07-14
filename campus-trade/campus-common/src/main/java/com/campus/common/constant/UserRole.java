@@ -11,6 +11,8 @@ public final class UserRole {
     public static final int ADMIN = 1;
     /** 商家（经管理员审核后由个人账户升级） */
     public static final int MERCHANT = 2;
+    /** 特殊认证 / 校园集市官方（用户申请、管理员审核通过后生效，可发送系统通知） */
+    public static final int OFFICIAL = 3;
 
     private UserRole() {
     }
@@ -23,6 +25,10 @@ public final class UserRole {
         return role == ADMIN;
     }
 
+    public static boolean isOfficial(int role) {
+        return role == OFFICIAL;
+    }
+
     /** 商家或管理员可发布商品。 */
     public static boolean canPublish(int role) {
         return role == ADMIN || role == MERCHANT;
@@ -31,6 +37,11 @@ public final class UserRole {
     /** 商家中心（看板/配额/收入统计）对商家与管理员开放。 */
     public static boolean canAccessMerchantHub(int role) {
         return canPublish(role);
+    }
+
+    /** 管理员或特殊认证官方可发送系统通知。 */
+    public static boolean canSendNotification(int role) {
+        return role == ADMIN || role == OFFICIAL;
     }
 
     /** @deprecated 使用 {@link #canPublish(int)} */
