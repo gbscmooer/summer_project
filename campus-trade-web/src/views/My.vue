@@ -216,7 +216,14 @@
       </el-form>
       <template #footer>
         <el-button @click="editVisible = false">{{ t('settings.cancel') }}</el-button>
-        <el-button type="primary" :loading="saving" @click="onSaveEdit">{{ t('settings.confirm') }}</el-button>
+        <el-button
+          type="primary"
+          :loading="saving"
+          :disabled="avatarUploading"
+          @click="onSaveEdit"
+        >
+          {{ t('settings.confirm') }}
+        </el-button>
       </template>
     </el-dialog>
 
@@ -612,6 +619,12 @@ async function saveProfile(payload) {
 
 async function onSaveEdit() {
   if (!editFormRef.value) return
+  // 裁剪确认后上传仍在进行：此时 avatarTouched 可能仍为 false（或刚清除），
+  // 若提前保存会提交旧头像/空串，导致新图丢失甚至把头像清空。
+  if (avatarUploading.value) {
+    ElMessage.warning(t('profile.avatarUploading'))
+    return
+  }
   try {
     await editFormRef.value.validate()
   } catch {
