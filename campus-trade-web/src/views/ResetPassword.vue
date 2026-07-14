@@ -21,7 +21,7 @@
         <el-input
           v-model="form.password"
           type="password"
-          placeholder="6-20位密码"
+          placeholder="请输入 6-20 位密码"
           show-password
           :prefix-icon="Lock"
         />
@@ -30,7 +30,7 @@
         <el-input
           v-model="form.confirmPassword"
           type="password"
-          placeholder="请再次输入"
+          placeholder="请再次输入新密码"
           show-password
           :prefix-icon="Lock"
           @keyup.enter="onSubmit"

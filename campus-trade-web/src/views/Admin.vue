@@ -34,7 +34,7 @@
                 v-model="notifyForm.usernames"
                 type="textarea"
                 :rows="2"
-                placeholder="zhangsan,lisi"
+                placeholder="user01,user02"
               />
               <p class="setting-hint">{{ t('admin.notifyUsernamesHint') }}</p>
             </el-form-item>

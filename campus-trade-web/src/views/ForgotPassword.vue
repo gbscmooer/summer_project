@@ -12,7 +12,7 @@
       <el-form-item label="用户名" prop="username">
         <el-input
           v-model="form.username"
-          placeholder="注册时的用户名"
+          placeholder="请输入用户名"
           clearable
           :prefix-icon="User"
           @keyup.enter="onSubmit"
