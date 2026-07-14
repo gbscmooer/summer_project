@@ -1,11 +1,18 @@
 /**
- * 头像工具：优先用用户自定义 URL；外链失败时用本地 SVG data URI（不依赖第三方 CDN）。
+ * 头像工具：优先用站内上传路径；外链 / dicebear 等不安全 URL 用本地字母头像。
  */
+
+import { isSafeAvatarUrl } from '@/utils/validateImage'
 
 export function isProbablyBrokenCdn(url) {
   if (!url) return true
   const u = String(url)
   return u.includes('dicebear.com') || u.includes('api.dicebear')
+}
+
+/** 是否可作为 <img src> 的可信头像（仅站内上传路径） */
+export function isTrustedAvatarUrl(url) {
+  return isSafeAvatarUrl(url)
 }
 
 /** 由昵称/用户名生成稳定色相的字母头像（SVG data URI）。 */
@@ -24,9 +31,11 @@ export function letterAvatarDataUri(name, size = 128) {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
 }
 
-/** 展示用头像：有自定义非 CDN URL 时用原图，否则本地字母头像。 */
+/**
+ * 展示用头像：仅站内上传路径用原图；legacy 外链 / dicebear 一律回退字母头像（防注入展示）。
+ */
 export function resolveAvatarSrc(avatar, name) {
-  if (avatar && !isProbablyBrokenCdn(avatar)) {
+  if (isTrustedAvatarUrl(avatar)) {
     return avatar
   }
   return letterAvatarDataUri(name)

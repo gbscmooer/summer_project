@@ -190,8 +190,28 @@
         <el-form-item :label="t('profile.phone')" prop="phone">
           <el-input v-model="editForm.phone" :placeholder="t('profile.phonePlaceholder')" />
         </el-form-item>
-        <el-form-item :label="t('profile.avatarUrl')" prop="avatar">
-          <el-input v-model="editForm.avatar" :placeholder="t('profile.avatarPlaceholder')" />
+        <el-form-item :label="t('profile.avatar')" prop="avatar">
+          <div class="avatar-edit">
+            <div class="avatar-edit-preview">
+              <img v-if="avatarPreviewSrc" :src="avatarPreviewSrc" alt="" class="avatar-edit-img" />
+              <span v-else class="avatar-edit-letter">{{ avatarEditLetter }}</span>
+            </div>
+            <div class="avatar-edit-actions">
+              <label class="cover-upload-btn" :class="{ disabled: avatarUploading }">
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  :disabled="avatarUploading"
+                  @change="onAvatarFileSelected"
+                />
+                {{ avatarUploading ? t('profile.avatarUploading') : t('profile.avatarUpload') }}
+              </label>
+              <el-button v-if="editForm.avatar" text type="danger" @click="clearAvatar">
+                {{ t('profile.avatarClear') }}
+              </el-button>
+            </div>
+            <p class="form-hint">{{ t('profile.avatarHint') }}</p>
+          </div>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -229,15 +249,27 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <ImageCropDialog
+      v-model="cropVisible"
+      :image-src="cropImageSrc"
+      :title="cropTitle"
+      :aspect-ratio="cropAspect"
+      :output-max-width="cropMaxWidth"
+      :output-max-height="cropMaxHeight"
+      :file-name="cropFileName"
+      @confirm="onCropConfirmed"
+    />
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch, onBeforeUnmount } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowDown } from '@element-plus/icons-vue'
 import ProfileHeader from '@/components/ProfileHeader.vue'
+import ImageCropDialog from '@/components/ImageCropDialog.vue'
 import { getUserInfo, updateUserInfo, applyMerchant, getMyMerchantApplication } from '@/api/user'
 import { uploadProductImages } from '@/api/product'
 import { getPublicProfile } from '@/api/profile'
@@ -245,8 +277,9 @@ import { listPostsByUser } from '@/api/topic'
 import { useOnboarding } from '@/composables/useOnboarding'
 import { useUserStore } from '@/store/user'
 import { useI18n } from '@/i18n'
-import { isSafeCoverUrl, validateCoverImageFile } from '@/utils/validateImage'
+import { isSafeCoverUrl, isSafeAvatarUrl, validateCoverImageFile } from '@/utils/validateImage'
 import { prepareImageForUpload, compressErrorMessage, IMAGE_TARGET_MAX_BYTES } from '@/utils/imageCompress'
+import { resolveAvatarSrc } from '@/utils/avatar'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -386,6 +419,7 @@ const coverVisible = ref(false)
 const saving = ref(false)
 const savingCover = ref(false)
 const coverUploading = ref(false)
+const avatarUploading = ref(false)
 const editFormRef = ref(null)
 const coverDraft = ref('')
 const editForm = reactive({
@@ -396,9 +430,29 @@ const editForm = reactive({
   ipLocation: ''
 })
 
+const cropVisible = ref(false)
+const cropImageSrc = ref('')
+const cropTarget = ref('avatar') // 'avatar' | 'cover'
+const cropAspect = ref(1)
+const cropMaxWidth = ref(512)
+const cropMaxHeight = ref(512)
+const cropFileName = ref('avatar.jpg')
+const avatarTouched = ref(false)
+const cropTitle = computed(() =>
+  cropTarget.value === 'cover' ? t('profile.cropCoverTitle') : t('profile.cropAvatarTitle')
+)
+
+const avatarPreviewSrc = computed(() =>
+  resolveAvatarSrc(editForm.avatar, editForm.nickname || info.value?.nickname || info.value?.username)
+)
+const avatarEditLetter = computed(() => {
+  const name = editForm.nickname || info.value?.nickname || info.value?.username || 'U'
+  return String(name).charAt(0).toUpperCase() || 'U'
+})
+
 const coverPreviewStyle = computed(() => {
   const url = (coverDraft.value || '').trim()
-  if (!url) return {}
+  if (!url || !isSafeCoverUrl(url)) return {}
   return { backgroundImage: `url(${url})` }
 })
 
@@ -412,59 +466,140 @@ const editRules = {
   ipLocation: [{ max: 50, message: 'IP 属地最多 50 字', trigger: 'blur' }]
 }
 
+function revokeCropSrc() {
+  if (cropImageSrc.value && cropImageSrc.value.startsWith('blob:')) {
+    URL.revokeObjectURL(cropImageSrc.value)
+  }
+  cropImageSrc.value = ''
+}
+
+function openCropDialog(file, target) {
+  revokeCropSrc()
+  cropTarget.value = target
+  if (target === 'cover') {
+    cropAspect.value = 3
+    cropMaxWidth.value = 1920
+    cropMaxHeight.value = 640
+    cropFileName.value = 'cover.jpg'
+  } else {
+    cropAspect.value = 1
+    cropMaxWidth.value = 512
+    cropMaxHeight.value = 512
+    cropFileName.value = 'avatar.jpg'
+  }
+  cropImageSrc.value = URL.createObjectURL(file)
+  cropVisible.value = true
+}
+
 function openEdit() {
   if (!info.value) return
   editForm.nickname = info.value.nickname || ''
   editForm.phone = info.value.phone || ''
-  editForm.avatar = info.value.avatar || ''
+  // 仅保留站内安全路径；legacy 外链不写入表单，避免再次提交
+  editForm.avatar = isSafeAvatarUrl(info.value.avatar) ? info.value.avatar : ''
   editForm.bio = info.value.bio || ''
   editForm.ipLocation = info.value.ipLocation || ''
+  avatarTouched.value = false
   editVisible.value = true
 }
 
 function openCoverEdit() {
-  coverDraft.value = info.value?.coverImage || ''
+  const cover = info.value?.coverImage || ''
+  coverDraft.value = isSafeCoverUrl(cover) ? cover : ''
   coverVisible.value = true
+}
+
+function clearAvatar() {
+  editForm.avatar = ''
+  avatarTouched.value = true
+}
+
+async function uploadCroppedImage(file) {
+  let prepared
+  try {
+    prepared = await prepareImageForUpload(file)
+  } catch (err) {
+    ElMessage.warning(compressErrorMessage(err?.message || 'type'))
+    return null
+  }
+
+  const check = await validateCoverImageFile(prepared.file, { maxBytes: IMAGE_TARGET_MAX_BYTES })
+  if (!check.ok) {
+    const map = {
+      type: 'profile.coverUploadType',
+      size: 'profile.coverUploadSize',
+      signature: 'profile.coverUploadSignature',
+      decode: 'profile.coverUploadDecode',
+      dimension: 'profile.coverUploadDimension'
+    }
+    ElMessage.warning(t(map[check.reason] || 'profile.coverUploadFail'))
+    return null
+  }
+
+  const res = await uploadProductImages([prepared.file])
+  const url = res.data?.images?.[0]
+  if (!isSafeCoverUrl(url)) throw new Error('unsafe')
+  return url
+}
+
+async function onAvatarFileSelected(event) {
+  const raw = event.target.files?.[0]
+  event.target.value = ''
+  if (!raw) return
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(raw.type) && !/\.(jpe?g|png|webp)$/i.test(raw.name || '')) {
+    ElMessage.warning(t('profile.coverUploadType'))
+    return
+  }
+  if (raw.size > 20 * 1024 * 1024) {
+    ElMessage.warning(compressErrorMessage('size'))
+    return
+  }
+  openCropDialog(raw, 'avatar')
 }
 
 async function onCoverFileSelected(event) {
   const raw = event.target.files?.[0]
   event.target.value = ''
   if (!raw) return
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(raw.type) && !/\.(jpe?g|png|webp)$/i.test(raw.name || '')) {
+    ElMessage.warning(t('profile.coverUploadType'))
+    return
+  }
+  if (raw.size > 20 * 1024 * 1024) {
+    ElMessage.warning(compressErrorMessage('size'))
+    return
+  }
+  openCropDialog(raw, 'cover')
+}
 
-  coverUploading.value = true
+async function onCropConfirmed(file) {
+  revokeCropSrc()
+  if (!file) {
+    ElMessage.error(t('profile.cropFail'))
+    return
+  }
+  const isCover = cropTarget.value === 'cover'
+  if (isCover) {
+    coverUploading.value = true
+  } else {
+    avatarUploading.value = true
+  }
   try {
-    let file
-    try {
-      const prepared = await prepareImageForUpload(raw)
-      file = prepared.file
-    } catch (err) {
-      ElMessage.warning(compressErrorMessage(err?.message || 'type'))
-      return
+    const url = await uploadCroppedImage(file)
+    if (!url) return
+    if (isCover) {
+      coverDraft.value = url
+      ElMessage.success(t('profile.coverUploadOk'))
+    } else {
+      editForm.avatar = url
+      avatarTouched.value = true
+      ElMessage.success(t('profile.avatarUploadOk'))
     }
-
-    const check = await validateCoverImageFile(file, { maxBytes: IMAGE_TARGET_MAX_BYTES })
-    if (!check.ok) {
-      const map = {
-        type: 'profile.coverUploadType',
-        size: 'profile.coverUploadSize',
-        signature: 'profile.coverUploadSignature',
-        decode: 'profile.coverUploadDecode',
-        dimension: 'profile.coverUploadDimension'
-      }
-      ElMessage.warning(t(map[check.reason] || 'profile.coverUploadFail'))
-      return
-    }
-
-    const res = await uploadProductImages([file])
-    const url = res.data?.images?.[0]
-    if (!isSafeCoverUrl(url)) throw new Error('unsafe')
-    coverDraft.value = url
-    ElMessage.success(t('profile.coverUploadOk'))
   } catch {
-    ElMessage.error(t('profile.coverUploadFail'))
+    ElMessage.error(isCover ? t('profile.coverUploadFail') : t('profile.avatarUploadFail'))
   } finally {
     coverUploading.value = false
+    avatarUploading.value = false
   }
 }
 
@@ -482,15 +617,24 @@ async function onSaveEdit() {
   } catch {
     return
   }
+  const avatar = (editForm.avatar || '').trim()
+  if (avatar && !isSafeAvatarUrl(avatar)) {
+    ElMessage.warning(t('profile.avatarUnsafe'))
+    return
+  }
   saving.value = true
   try {
-    await saveProfile({
+    const payload = {
       nickname: editForm.nickname,
-      avatar: editForm.avatar,
       phone: editForm.phone,
       bio: editForm.bio,
       ipLocation: editForm.ipLocation
-    })
+    }
+    // 仅在用户上传/清除头像时提交；legacy 外链保留在库中但禁止再经表单写入
+    if (avatarTouched.value || isSafeAvatarUrl(avatar)) {
+      payload.avatar = avatar
+    }
+    await saveProfile(payload)
     editVisible.value = false
   } finally {
     saving.value = false
@@ -520,11 +664,19 @@ function syncPanelFromQuery() {
 
 watch(() => route.query.panel, syncPanelFromQuery)
 
+watch(cropVisible, (visible) => {
+  if (!visible) revokeCropSrc()
+})
+
 onMounted(async () => {
   await fetchInfo()
   await fetchMerchantApplication()
   syncPanelFromQuery()
   userStore.refreshPoints()
+})
+
+onBeforeUnmount(() => {
+  revokeCropSrc()
 })
 </script>
 
@@ -797,6 +949,43 @@ onMounted(async () => {
 .cover-upload-btn.disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.avatar-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.avatar-edit-preview {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--oa-bg-elevated);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.avatar-edit-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatar-edit-letter {
+  font-size: 36px;
+  font-weight: 600;
+  color: var(--oa-text-secondary);
+}
+
+.avatar-edit-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 @media (max-width: 900px) {
