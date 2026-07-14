@@ -34,7 +34,7 @@ import java.util.stream.Collectors;
 public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements UserService {
 
     /** 封面仅允许站内上传图片路径，拒绝外链 / javascript: 等注入 */
-    private static final Pattern SAFE_COVER_IMAGE =
+    private static final Pattern SAFE_UPLOADED_IMAGE =
             Pattern.compile("^/api/product/image/[a-f0-9]{32}\\.(jpg|png|webp)$");
 
     private final BCryptPasswordEncoder passwordEncoder;
@@ -140,8 +140,15 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             user.setNickname(request.getNickname());
             hasUpdates = true;
         }
-        if (StringUtils.hasText(request.getAvatar())) {
-            user.setAvatar(request.getAvatar());
+        if (request.getAvatar() != null) {
+            String avatar = request.getAvatar().trim();
+            if (avatar.isEmpty()) {
+                user.setAvatar("");
+            } else if (SAFE_UPLOADED_IMAGE.matcher(avatar).matches()) {
+                user.setAvatar(avatar);
+            } else {
+                throw new BizException(400, "头像仅支持站内上传图片");
+            }
             hasUpdates = true;
         }
         if (StringUtils.hasText(request.getPhone())) {
@@ -156,7 +163,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             String cover = request.getCoverImage().trim();
             if (cover.isEmpty()) {
                 user.setCoverImage("");
-            } else if (SAFE_COVER_IMAGE.matcher(cover).matches()) {
+            } else if (SAFE_UPLOADED_IMAGE.matcher(cover).matches()) {
                 user.setCoverImage(cover);
             } else {
                 throw new BizException(400, "封面仅支持站内上传图片");
