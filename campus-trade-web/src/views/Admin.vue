@@ -113,11 +113,8 @@
               </template>
             </el-table-column>
             <el-table-column prop="createTime" :label="t('admin.userJoined')" width="170" />
-            <el-table-column :label="t('admin.userActions')" width="200" fixed="right">
+            <el-table-column label="" width="120" fixed="right">
               <template #default="{ row }">
-                <el-button size="small" @click="onEditPermissions(row)">
-                  {{ t('admin.userPermissions') }}
-                </el-button>
                 <el-button
                   v-if="row.status !== 1 && row.role !== 1"
                   size="small"
@@ -134,6 +131,7 @@
                 >
                   {{ t('admin.userUnban') }}
                 </el-button>
+                <span v-else class="muted-inline">—</span>
               </template>
             </el-table-column>
           </el-table>
@@ -270,39 +268,6 @@
       </template>
     </el-dialog>
 
-    <el-dialog
-      v-model="permDialogVisible"
-      :title="t('admin.userPermDialogTitle')"
-      width="480px"
-      destroy-on-close
-      @closed="resetPermForm"
-    >
-      <p v-if="permTarget" class="ban-target-hint">
-        {{ permTarget.nickname || permTarget.username }}
-        <span class="muted-inline">@{{ permTarget.username }}</span>
-      </p>
-      <p class="tab-desc">{{ t('admin.userPermDesc') }}</p>
-      <el-form label-position="top" class="admin-form perm-form">
-        <el-form-item :label="t('admin.userPermPost')">
-          <el-switch v-model="permForm.canPost" />
-        </el-form-item>
-        <el-form-item :label="t('admin.userPermComment')">
-          <el-switch v-model="permForm.canComment" />
-        </el-form-item>
-        <el-form-item :label="t('admin.userPermOrder')">
-          <el-switch v-model="permForm.canOrder" />
-        </el-form-item>
-        <el-form-item :label="t('admin.userPermBroadcast')">
-          <el-switch v-model="permForm.canBroadcast" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="permDialogVisible = false">{{ t('admin.cancel') }}</el-button>
-        <el-button type="primary" :loading="permSubmitting" @click="submitPermissions">
-          {{ t('admin.userPermSave') }}
-        </el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
