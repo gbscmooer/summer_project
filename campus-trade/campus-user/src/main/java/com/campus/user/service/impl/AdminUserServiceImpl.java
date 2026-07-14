@@ -2,14 +2,17 @@ package com.campus.user.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.campus.common.constant.UserCapability;
 import com.campus.common.constant.UserRole;
 import com.campus.common.constant.UserStatus;
+import com.campus.common.dto.UserPermissionsVO;
 import com.campus.common.exception.BizException;
 import com.campus.common.result.PageResult;
 import com.campus.common.result.ResultCode;
 import com.campus.common.util.PageParamUtil;
 import com.campus.user.dto.AdminUserVO;
 import com.campus.user.dto.BanUserRequest;
+import com.campus.user.dto.UpdateUserPermissionsRequest;
 import com.campus.user.entity.User;
 import com.campus.user.mapper.UserMapper;
 import com.campus.user.service.AdminUserService;
@@ -91,6 +94,32 @@ public class AdminUserServiceImpl implements AdminUserService {
             return;
         }
         clearBan(targetUserId);
+    }
+
+    @Override
+    public UserPermissionsVO updatePermissions(Long adminId, Long targetUserId, UpdateUserPermissionsRequest request) {
+        if (request == null
+                || request.getCanPost() == null
+                || request.getCanComment() == null
+                || request.getCanOrder() == null
+                || request.getCanBroadcast() == null) {
+            throw new BizException(ResultCode.BAD_REQUEST);
+        }
+        requireTarget(targetUserId);
+
+        User patch = new User();
+        patch.setId(targetUserId);
+        patch.setPermPost(UserCapability.toFlag(request.getCanPost()));
+        patch.setPermComment(UserCapability.toFlag(request.getCanComment()));
+        patch.setPermOrder(UserCapability.toFlag(request.getCanOrder()));
+        patch.setPermBroadcast(UserCapability.toFlag(request.getCanBroadcast()));
+        userMapper.updateById(patch);
+
+        return UserPermissionsVO.fromFlags(
+                patch.getPermPost(),
+                patch.getPermComment(),
+                patch.getPermOrder(),
+                patch.getPermBroadcast());
     }
 
     private User requireTarget(Long targetUserId) {

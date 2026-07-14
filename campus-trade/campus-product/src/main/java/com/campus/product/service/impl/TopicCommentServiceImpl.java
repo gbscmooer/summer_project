@@ -17,6 +17,7 @@ import com.campus.product.mapper.TopicCommentMapper;
 import com.campus.product.mapper.TopicCommentVoteMapper;
 import com.campus.product.mapper.TopicPostMapper;
 import com.campus.product.service.TopicCommentService;
+import com.campus.product.service.UserPermissionGuard;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -44,6 +45,7 @@ public class TopicCommentServiceImpl extends ServiceImpl<TopicCommentMapper, Top
     private final TopicPostMapper topicPostMapper;
     private final TopicCommentVoteMapper topicCommentVoteMapper;
     private final UserFeignClient userFeignClient;
+    private final UserPermissionGuard userPermissionGuard;
 
     @Override
     public List<TopicCommentVO> listByPost(Long postId, Long viewerUserId) {
@@ -66,6 +68,7 @@ public class TopicCommentServiceImpl extends ServiceImpl<TopicCommentMapper, Top
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long addComment(Long userId, Long postId, TopicCommentRequest request) {
+        userPermissionGuard.requireCanComment(userId);
         if (request == null || !StringUtils.hasText(request.getContent())) {
             throw new BizException(ResultCode.BAD_REQUEST.getCode(), "请填写评论内容");
         }

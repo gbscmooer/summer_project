@@ -90,8 +90,11 @@
               </template>
             </el-table-column>
             <el-table-column prop="createTime" :label="t('admin.userJoined')" width="170" />
-            <el-table-column label="" width="120" fixed="right">
+            <el-table-column :label="t('admin.userActions')" width="200" fixed="right">
               <template #default="{ row }">
+                <el-button size="small" @click="onEditPermissions(row)">
+                  {{ t('admin.userPermissions') }}
+                </el-button>
                 <el-button
                   v-if="row.status !== 1 && row.role !== 1"
                   size="small"
@@ -108,7 +111,6 @@
                 >
                   {{ t('admin.userUnban') }}
                 </el-button>
-                <span v-else class="muted-inline">—</span>
               </template>
             </el-table-column>
           </el-table>
@@ -206,6 +208,40 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <el-dialog
+      v-model="permDialogVisible"
+      :title="t('admin.userPermDialogTitle')"
+      width="480px"
+      destroy-on-close
+      @closed="resetPermForm"
+    >
+      <p v-if="permTarget" class="ban-target-hint">
+        {{ permTarget.nickname || permTarget.username }}
+        <span class="muted-inline">@{{ permTarget.username }}</span>
+      </p>
+      <p class="tab-desc">{{ t('admin.userPermDesc') }}</p>
+      <el-form label-position="top" class="admin-form perm-form">
+        <el-form-item :label="t('admin.userPermPost')">
+          <el-switch v-model="permForm.canPost" />
+        </el-form-item>
+        <el-form-item :label="t('admin.userPermComment')">
+          <el-switch v-model="permForm.canComment" />
+        </el-form-item>
+        <el-form-item :label="t('admin.userPermOrder')">
+          <el-switch v-model="permForm.canOrder" />
+        </el-form-item>
+        <el-form-item :label="t('admin.userPermBroadcast')">
+          <el-switch v-model="permForm.canBroadcast" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="permDialogVisible = false">{{ t('admin.cancel') }}</el-button>
+        <el-button type="primary" :loading="permSubmitting" @click="submitPermissions">
+          {{ t('admin.userPermSave') }}
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -220,7 +256,8 @@ import {
   rejectMerchantApplication,
   listAdminUsers,
   banUser,
-  unbanUser
+  unbanUser,
+  updateUserPermissions
 } from '@/api/admin'
 
 const { t } = useI18n()
@@ -250,6 +287,16 @@ const banTarget = ref(null)
 const banForm = reactive({
   reason: '',
   durationDays: 7
+})
+
+const permDialogVisible = ref(false)
+const permSubmitting = ref(false)
+const permTarget = ref(null)
+const permForm = reactive({
+  canPost: true,
+  canComment: true,
+  canOrder: true,
+  canBroadcast: true
 })
 
 onMounted(() => {
@@ -405,6 +452,42 @@ async function onUnbanUser(row) {
   } catch (_) { /* request 已提示 */ }
 }
 
+function resetPermForm() {
+  permTarget.value = null
+  permForm.canPost = true
+  permForm.canComment = true
+  permForm.canOrder = true
+  permForm.canBroadcast = true
+}
+
+function onEditPermissions(row) {
+  permTarget.value = row
+  permForm.canPost = row.canPost !== false
+  permForm.canComment = row.canComment !== false
+  permForm.canOrder = row.canOrder !== false
+  permForm.canBroadcast = row.canBroadcast !== false
+  permDialogVisible.value = true
+}
+
+async function submitPermissions() {
+  if (!permTarget.value) return
+  permSubmitting.value = true
+  try {
+    await updateUserPermissions(permTarget.value.userId, {
+      canPost: permForm.canPost,
+      canComment: permForm.canComment,
+      canOrder: permForm.canOrder,
+      canBroadcast: permForm.canBroadcast
+    })
+    ElMessage.success(t('admin.userPermDone'))
+    permDialogVisible.value = false
+    await loadUsers()
+  } catch (_) { /* request 已提示 */ }
+  finally {
+    permSubmitting.value = false
+  }
+}
+
 async function loadMerchantApplications() {
   merchantLoading.value = true
   try {
@@ -516,5 +599,13 @@ async function onRejectMerchant(row) {
   margin: 0 0 12px;
   font-size: 14px;
   color: var(--oa-text);
+}
+
+.perm-form :deep(.el-form-item) {
+  margin-bottom: 10px;
+}
+
+.perm-form :deep(.el-form-item__content) {
+  justify-content: flex-start;
 }
 </style>

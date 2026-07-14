@@ -1,5 +1,6 @@
 package com.campus.product.feign;
 
+import com.campus.common.dto.UserPermissionsVO;
 import com.campus.common.result.Result;
 import com.campus.product.feign.dto.PointsTransferRequest;
 import com.campus.product.feign.dto.UserBriefDTO;
@@ -22,6 +23,9 @@ public interface UserFeignClient {
 
     @GetMapping("/user/internal/role")
     Result<Integer> getUserRole(@RequestParam("userId") Long userId);
+
+    @GetMapping("/user/internal/permissions")
+    Result<UserPermissionsVO> getPermissions(@RequestParam("userId") Long userId);
 
     /** 话题帖点赞成功后计入每日点赞进度（按帖去重）。 */
     @PostMapping("/user/internal/events/record-like")

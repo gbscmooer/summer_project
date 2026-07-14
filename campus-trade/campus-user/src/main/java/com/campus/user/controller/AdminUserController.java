@@ -1,11 +1,13 @@
 package com.campus.user.controller;
 
+import com.campus.common.dto.UserPermissionsVO;
 import com.campus.common.exception.BizException;
 import com.campus.common.result.PageResult;
 import com.campus.common.result.Result;
 import com.campus.common.result.ResultCode;
 import com.campus.user.dto.AdminUserVO;
 import com.campus.user.dto.BanUserRequest;
+import com.campus.user.dto.UpdateUserPermissionsRequest;
 import com.campus.user.service.AdminAuthService;
 import com.campus.user.service.AdminUserService;
 import jakarta.validation.Valid;
@@ -13,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -54,6 +57,15 @@ public class AdminUserController {
         requireAdmin(userId);
         adminUserService.unbanUser(userId, id);
         return Result.success("用户已解封", null);
+    }
+
+    @PutMapping("/{id}/permissions")
+    public Result<UserPermissionsVO> updatePermissions(
+            @RequestHeader(value = "X-User-Id", required = false) Long userId,
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateUserPermissionsRequest request) {
+        requireAdmin(userId);
+        return Result.success("权限已更新", adminUserService.updatePermissions(userId, id, request));
     }
 
     private void requireAdmin(Long userId) {

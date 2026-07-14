@@ -1,5 +1,6 @@
 package com.campus.order.feign;
 
+import com.campus.common.dto.UserPermissionsVO;
 import com.campus.common.result.Result;
 import com.campus.order.feign.dto.ApplyRatingRequest;
 import com.campus.order.feign.dto.PointsTransferRequest;
@@ -28,6 +29,9 @@ public interface UserFeignClient {
 
     @GetMapping("/user/internal/role")
     Result<Integer> getUserRole(@RequestParam("userId") Long userId);
+
+    @GetMapping("/user/internal/permissions")
+    Result<UserPermissionsVO> getPermissions(@RequestParam("userId") Long userId);
 
     @GetMapping("/user/internal/all-ids")
     Result<List<Long>> listAllUserIds();
