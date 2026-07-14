@@ -18,6 +18,7 @@ import com.campus.user.mapper.MessageMapper;
 import com.campus.user.mapper.UserMapper;
 import com.campus.user.service.FriendService;
 import com.campus.user.service.MessageService;
+import com.campus.user.service.UserPermissionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,6 +42,7 @@ public class MessageServiceImpl
     private final ConversationMapper conversationMapper;
     private final UserMapper userMapper;
     private final FriendService friendService;
+    private final UserPermissionService userPermissionService;
 
     @Override
     public ConversationVO getOrCreateConversation(Long userId, Long peerUserId) {
@@ -109,6 +111,7 @@ public class MessageServiceImpl
     @Override
     @Transactional
     public MessageVO sendMessage(Long userId, Long conversationId, String content) {
+        userPermissionService.requireCanComment(userId);
         Conversation conversation = requireParticipant(userId, conversationId);
         String trimmed = content == null ? "" : content.trim();
         if (trimmed.isEmpty() || trimmed.length() > CONTENT_MAX) {

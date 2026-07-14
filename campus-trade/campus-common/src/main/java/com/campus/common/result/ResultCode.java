@@ -40,6 +40,10 @@ public enum ResultCode {
     FOLLOW_ALREADY(1026, "已关注该用户"),
     FOLLOW_NOT_FOUND(1027, "未关注该用户"),
     USER_NOT_FOUND(1028, "用户不存在"),
+    PERMISSION_DENIED_POST(1040, "当前账号已被禁止发帖"),
+    PERMISSION_DENIED_COMMENT(1041, "当前账号已被禁止发言留言"),
+    PERMISSION_DENIED_ORDER(1042, "当前账号已被禁止下单"),
+    PERMISSION_DENIED_BROADCAST(1043, "当前账号已被禁止广播通知"),
 
     // 商品业务码
     PRODUCT_NOT_FOUND(2001, "商品不存在"),

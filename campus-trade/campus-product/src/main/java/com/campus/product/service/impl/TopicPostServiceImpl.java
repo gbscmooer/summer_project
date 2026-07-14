@@ -30,6 +30,7 @@ import com.campus.product.mapper.TopicPostProductMapper;
 import com.campus.product.mapper.TopicPostVoteMapper;
 import com.campus.product.mapper.TopicTipReceiptMapper;
 import com.campus.product.service.TopicPostService;
+import com.campus.product.service.UserPermissionGuard;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -64,6 +65,7 @@ public class TopicPostServiceImpl extends ServiceImpl<TopicPostMapper, TopicPost
     private final TopicCommentMapper topicCommentMapper;
     private final ProductMapper productMapper;
     private final UserFeignClient userFeignClient;
+    private final UserPermissionGuard userPermissionGuard;
 
     @Override
     public PageResult<TopicPostVO> listPosts(Integer pageNum, Integer pageSize, String keyword) {
@@ -167,6 +169,7 @@ public class TopicPostServiceImpl extends ServiceImpl<TopicPostMapper, TopicPost
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createPost(Long userId, TopicPostRequest request) {
+        userPermissionGuard.requireCanPost(userId);
         if (request == null || !StringUtils.hasText(request.getTitle())) {
             throw new BizException(ResultCode.BAD_REQUEST.getCode(), "请填写标题");
         }

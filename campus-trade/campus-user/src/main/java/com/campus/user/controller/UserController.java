@@ -1,11 +1,13 @@
 package com.campus.user.controller;
 
+import com.campus.common.dto.UserPermissionsVO;
 import com.campus.common.exception.BizException;
 import com.campus.common.result.Result;
 import com.campus.common.result.ResultCode;
 import com.campus.common.security.InternalApiTokenValidator;
 import com.campus.user.dto.*;
 import com.campus.user.service.PasswordResetService;
+import com.campus.user.service.UserPermissionService;
 import com.campus.user.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +24,7 @@ public class UserController {
 
     private final UserService userService;
     private final PasswordResetService passwordResetService;
+    private final UserPermissionService userPermissionService;
     private final InternalApiTokenValidator internalApiTokenValidator;
 
     @PostMapping("/register")
@@ -135,6 +138,15 @@ public class UserController {
             @RequestParam Long userId) {
         internalApiTokenValidator.requireValid(internalToken);
         return Result.success(userService.getAccessStatus(userId));
+    }
+
+    /** 内部接口：查询用户细粒度权限（发帖/留言/下单/广播）。 */
+    @GetMapping("/internal/permissions")
+    public Result<UserPermissionsVO> getPermissions(
+            @RequestHeader(value = InternalApiTokenValidator.HEADER_NAME, required = false) String internalToken,
+            @RequestParam Long userId) {
+        internalApiTokenValidator.requireValid(internalToken);
+        return Result.success(userPermissionService.getPermissions(userId));
     }
 
     /** 内部接口：订单评价后增量更新卖家信誉分（reviewId 幂等）。 */

@@ -20,6 +20,7 @@ import com.campus.order.feign.dto.UserBriefDTO;
 import com.campus.order.mapper.OrderMapper;
 import com.campus.order.service.OrderService;
 import com.campus.order.service.StockCompensationService;
+import com.campus.order.service.UserPermissionGuard;
 import com.campus.order.util.OrderNoGenerator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -65,6 +66,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     private final RedisTemplate<String, Object> redisTemplate;
     private final StringRedisTemplate stringRedisTemplate;
     private final StockCompensationService stockCompensationService;
+    private final UserPermissionGuard userPermissionGuard;
 
     // ==================== 状态常量 ====================
     private static final int STATUS_UNPAID = 0;
@@ -75,6 +77,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     @Override
     @Transactional(rollbackFor = Exception.class)
     public CreateOrderVO createOrder(Long buyerId, Long productId) {
+        userPermissionGuard.requireCanOrder(buyerId);
         // 1. 查商品（透传 2001 商品不存在）
         ProductDTO product = unwrap(productFeign.getProduct(productId));
         if (product == null) {
@@ -446,6 +449,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
 
     @Override
     public String seckill(Long buyerId, Long productId) {
+        userPermissionGuard.requireCanOrder(buyerId);
         String stockKey = "seckill:stock:" + productId;
         String productKey = "seckill:product:" + productId;
         String resultKey = "seckill:result:" + productId + ":" + buyerId;
