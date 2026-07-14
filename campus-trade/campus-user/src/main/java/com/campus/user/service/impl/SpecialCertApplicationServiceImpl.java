@@ -119,20 +119,28 @@ public class SpecialCertApplicationServiceImpl
             throw new BizException(ResultCode.SPECIAL_CERT_NOT_ELIGIBLE);
         }
 
-        User rolePatch = new User();
-        rolePatch.setId(app.getUserId());
-        rolePatch.setRole(UserRole.OFFICIAL);
+        // CAS：仅当仍为个人账户时升级，防止与商家审核并发时互相覆盖 role
+        LambdaUpdateWrapper<User> roleUpdate = new LambdaUpdateWrapper<User>()
+                .eq(User::getId, app.getUserId())
+                .and(w -> w.eq(User::getRole, UserRole.USER).or().isNull(User::getRole))
+                .set(User::getRole, UserRole.OFFICIAL);
         if (app.getDisplayName() != null && !app.getDisplayName().isBlank()) {
-            rolePatch.setNickname(app.getDisplayName().trim());
+            roleUpdate.set(User::getNickname, app.getDisplayName().trim());
         }
-        userMapper.updateById(rolePatch);
+        if (userMapper.update(null, roleUpdate) == 0) {
+            throw new BizException(ResultCode.SPECIAL_CERT_NOT_ELIGIBLE);
+        }
 
-        SpecialCertApplication patch = new SpecialCertApplication();
-        patch.setId(applicationId);
-        patch.setStatus(STATUS_APPROVED);
-        patch.setAdminId(adminId);
-        patch.setAdminNote(adminNote);
-        updateById(patch);
+        // CAS：认领待审申请，避免与并发拒绝/另一路审核重复处理
+        boolean claimed = update(new LambdaUpdateWrapper<SpecialCertApplication>()
+                .eq(SpecialCertApplication::getId, applicationId)
+                .eq(SpecialCertApplication::getStatus, STATUS_PENDING)
+                .set(SpecialCertApplication::getStatus, STATUS_APPROVED)
+                .set(SpecialCertApplication::getAdminId, adminId)
+                .set(SpecialCertApplication::getAdminNote, adminNote));
+        if (!claimed) {
+            throw new BizException(ResultCode.SPECIAL_CERT_APPLICATION_REVIEWED);
+        }
 
         // 角色互斥：关闭仍待审的商家申请，避免后续误审覆盖 OFFICIAL
         cancelPendingMerchantApplications(app.getUserId(), adminId);

@@ -1,5 +1,6 @@
 package com.campus.user.service;
 
+import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.campus.common.constant.UserRole;
 import com.campus.common.exception.BizException;
 import com.campus.common.result.ResultCode;
@@ -15,6 +16,7 @@ import com.campus.user.service.impl.SpecialCertApplicationServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -22,6 +24,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -64,7 +67,7 @@ class RoleUpgradeMutualExclusionTest {
         BizException ex = assertThrows(BizException.class,
                 () -> specialCertService.approve(1L, 11L, null));
         assertEquals(ResultCode.SPECIAL_CERT_NOT_ELIGIBLE.getCode(), ex.getCode());
-        verify(userMapper, never()).updateById(any(User.class));
+        verify(userMapper, never()).update(isNull(), ArgumentMatchers.<Wrapper<User>>any());
     }
 
     @Test
@@ -76,7 +79,7 @@ class RoleUpgradeMutualExclusionTest {
         BizException ex = assertThrows(BizException.class,
                 () -> merchantService.approve(1L, 22L, null));
         assertEquals(ResultCode.MERCHANT_NOT_ELIGIBLE.getCode(), ex.getCode());
-        verify(userMapper, never()).updateById(any(User.class));
+        verify(userMapper, never()).update(isNull(), ArgumentMatchers.<Wrapper<User>>any());
     }
 
     @Test
@@ -87,6 +90,51 @@ class RoleUpgradeMutualExclusionTest {
                 () -> merchantService.apply(300L, request("店", "理由", "13800000000")));
         assertEquals(ResultCode.MERCHANT_NOT_ELIGIBLE.getCode(), ex.getCode());
         verify(merchantApplicationMapper, never()).insert(any(MerchantApplication.class));
+    }
+
+    @Test
+    void specialCertApprove_rejectsWhenConcurrentRoleCasLoses() {
+        SpecialCertApplication app = pendingSpecialCert(11L, 100L);
+        when(specialCertApplicationMapper.selectById(11L)).thenReturn(app);
+        when(userMapper.selectById(100L)).thenReturn(user(100L, UserRole.USER));
+        // 并发商家审核已抢先把 role 改成 MERCHANT，CAS 更新 0 行
+        when(userMapper.update(isNull(), ArgumentMatchers.<Wrapper<User>>any())).thenReturn(0);
+
+        BizException ex = assertThrows(BizException.class,
+                () -> specialCertService.approve(1L, 11L, null));
+        assertEquals(ResultCode.SPECIAL_CERT_NOT_ELIGIBLE.getCode(), ex.getCode());
+        verify(specialCertApplicationMapper, never()).update(isNull(), ArgumentMatchers.<Wrapper<SpecialCertApplication>>any());
+    }
+
+    @Test
+    void merchantApprove_rejectsWhenConcurrentRoleCasLoses() {
+        MerchantApplication app = pendingMerchant(22L, 200L);
+        when(merchantApplicationMapper.selectById(22L)).thenReturn(app);
+        when(userMapper.selectById(200L)).thenReturn(user(200L, UserRole.USER));
+        when(userMapper.update(isNull(), ArgumentMatchers.<Wrapper<User>>any())).thenReturn(0);
+
+        BizException ex = assertThrows(BizException.class,
+                () -> merchantService.approve(1L, 22L, null));
+        assertEquals(ResultCode.MERCHANT_NOT_ELIGIBLE.getCode(), ex.getCode());
+        verify(merchantApplicationMapper, never()).update(isNull(), ArgumentMatchers.<Wrapper<MerchantApplication>>any());
+    }
+
+    @Test
+    void specialCertApprove_usesCasThenCancelsPendingMerchant() {
+        SpecialCertApplication app = pendingSpecialCert(11L, 100L);
+        when(specialCertApplicationMapper.selectById(11L)).thenReturn(app);
+        when(userMapper.selectById(100L)).thenReturn(user(100L, UserRole.USER));
+        when(userMapper.update(isNull(), ArgumentMatchers.<Wrapper<User>>any())).thenReturn(1);
+        when(specialCertApplicationMapper.update(isNull(), ArgumentMatchers.<Wrapper<SpecialCertApplication>>any()))
+                .thenReturn(1);
+        when(merchantApplicationMapper.update(isNull(), ArgumentMatchers.<Wrapper<MerchantApplication>>any()))
+                .thenReturn(1);
+
+        specialCertService.approve(1L, 11L, "ok");
+
+        verify(userMapper).update(isNull(), ArgumentMatchers.<Wrapper<User>>any());
+        verify(specialCertApplicationMapper).update(isNull(), ArgumentMatchers.<Wrapper<SpecialCertApplication>>any());
+        verify(merchantApplicationMapper).update(isNull(), ArgumentMatchers.<Wrapper<MerchantApplication>>any());
     }
 
     private static User user(Long id, int role) {
