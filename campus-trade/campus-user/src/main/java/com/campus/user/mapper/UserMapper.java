@@ -22,4 +22,20 @@ public interface UserMapper extends BaseMapper<User> {
             WHERE id = #{sellerId}
             """)
     int applyRatingAtomic(@Param("sellerId") Long sellerId, @Param("rating") int rating);
+
+    /**
+     * 仅当当前仍为个人账户时升级角色，防止商家/特殊认证并发审核互相覆盖。
+     * {@code nickname} 为空时不改昵称。
+     */
+    @Update("""
+            UPDATE t_user
+            SET role = #{newRole},
+                nickname = IF(#{nickname} IS NULL OR #{nickname} = '', nickname, #{nickname})
+            WHERE id = #{userId}
+              AND (role = 0 OR role IS NULL)
+            """)
+    int upgradeRoleIfPersonal(
+            @Param("userId") Long userId,
+            @Param("newRole") int newRole,
+            @Param("nickname") String nickname);
 }

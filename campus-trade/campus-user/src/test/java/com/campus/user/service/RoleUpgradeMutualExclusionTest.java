@@ -24,7 +24,12 @@ import org.springframework.test.util.ReflectionTestUtils;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -67,7 +72,7 @@ class RoleUpgradeMutualExclusionTest {
         BizException ex = assertThrows(BizException.class,
                 () -> specialCertService.approve(1L, 11L, null));
         assertEquals(ResultCode.SPECIAL_CERT_NOT_ELIGIBLE.getCode(), ex.getCode());
-        verify(userMapper, never()).update(isNull(), ArgumentMatchers.<Wrapper<User>>any());
+        verify(userMapper, never()).upgradeRoleIfPersonal(anyLong(), anyInt(), nullable(String.class));
     }
 
     @Test
@@ -79,7 +84,7 @@ class RoleUpgradeMutualExclusionTest {
         BizException ex = assertThrows(BizException.class,
                 () -> merchantService.approve(1L, 22L, null));
         assertEquals(ResultCode.MERCHANT_NOT_ELIGIBLE.getCode(), ex.getCode());
-        verify(userMapper, never()).update(isNull(), ArgumentMatchers.<Wrapper<User>>any());
+        verify(userMapper, never()).upgradeRoleIfPersonal(anyLong(), anyInt(), nullable(String.class));
     }
 
     @Test
@@ -98,7 +103,7 @@ class RoleUpgradeMutualExclusionTest {
         when(specialCertApplicationMapper.selectById(11L)).thenReturn(app);
         when(userMapper.selectById(100L)).thenReturn(user(100L, UserRole.USER));
         // 并发商家审核已抢先把 role 改成 MERCHANT，CAS 更新 0 行
-        when(userMapper.update(isNull(), ArgumentMatchers.<Wrapper<User>>any())).thenReturn(0);
+        when(userMapper.upgradeRoleIfPersonal(eq(100L), eq(UserRole.OFFICIAL), anyString())).thenReturn(0);
 
         BizException ex = assertThrows(BizException.class,
                 () -> specialCertService.approve(1L, 11L, null));
@@ -111,7 +116,7 @@ class RoleUpgradeMutualExclusionTest {
         MerchantApplication app = pendingMerchant(22L, 200L);
         when(merchantApplicationMapper.selectById(22L)).thenReturn(app);
         when(userMapper.selectById(200L)).thenReturn(user(200L, UserRole.USER));
-        when(userMapper.update(isNull(), ArgumentMatchers.<Wrapper<User>>any())).thenReturn(0);
+        when(userMapper.upgradeRoleIfPersonal(eq(200L), eq(UserRole.MERCHANT), anyString())).thenReturn(0);
 
         BizException ex = assertThrows(BizException.class,
                 () -> merchantService.approve(1L, 22L, null));
@@ -124,7 +129,7 @@ class RoleUpgradeMutualExclusionTest {
         SpecialCertApplication app = pendingSpecialCert(11L, 100L);
         when(specialCertApplicationMapper.selectById(11L)).thenReturn(app);
         when(userMapper.selectById(100L)).thenReturn(user(100L, UserRole.USER));
-        when(userMapper.update(isNull(), ArgumentMatchers.<Wrapper<User>>any())).thenReturn(1);
+        when(userMapper.upgradeRoleIfPersonal(eq(100L), eq(UserRole.OFFICIAL), eq("校园集市官方"))).thenReturn(1);
         when(specialCertApplicationMapper.update(isNull(), ArgumentMatchers.<Wrapper<SpecialCertApplication>>any()))
                 .thenReturn(1);
         when(merchantApplicationMapper.update(isNull(), ArgumentMatchers.<Wrapper<MerchantApplication>>any()))
@@ -132,7 +137,7 @@ class RoleUpgradeMutualExclusionTest {
 
         specialCertService.approve(1L, 11L, "ok");
 
-        verify(userMapper).update(isNull(), ArgumentMatchers.<Wrapper<User>>any());
+        verify(userMapper).upgradeRoleIfPersonal(100L, UserRole.OFFICIAL, "校园集市官方");
         verify(specialCertApplicationMapper).update(isNull(), ArgumentMatchers.<Wrapper<SpecialCertApplication>>any());
         verify(merchantApplicationMapper).update(isNull(), ArgumentMatchers.<Wrapper<MerchantApplication>>any());
     }

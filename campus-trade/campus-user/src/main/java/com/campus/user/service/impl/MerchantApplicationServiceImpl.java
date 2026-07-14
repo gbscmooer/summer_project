@@ -1,6 +1,6 @@
 package com.campus.user.service.impl;
 
-import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.campus.common.constant.UserRole;
 import com.campus.common.exception.BizException;
@@ -121,25 +121,20 @@ public class MerchantApplicationServiceImpl
         }
 
         // CAS：仅当仍为个人账户时升级，防止与特殊认证审核并发时互相覆盖 role
-        LambdaUpdateWrapper<User> roleUpdate = new LambdaUpdateWrapper<User>()
-                .eq(User::getId, app.getUserId())
-                .and(w -> w.eq(User::getRole, UserRole.USER).or().isNull(User::getRole))
-                .set(User::getRole, UserRole.MERCHANT);
-        if (app.getShopName() != null && !app.getShopName().isBlank()) {
-            roleUpdate.set(User::getNickname, app.getShopName().trim());
-        }
-        if (userMapper.update(null, roleUpdate) == 0) {
+        String nickname = (app.getShopName() != null && !app.getShopName().isBlank())
+                ? app.getShopName().trim() : null;
+        if (userMapper.upgradeRoleIfPersonal(app.getUserId(), UserRole.MERCHANT, nickname) == 0) {
             throw new BizException(ResultCode.MERCHANT_NOT_ELIGIBLE);
         }
 
         // CAS：认领待审申请，避免与并发拒绝/另一路审核重复处理
-        boolean claimed = update(new LambdaUpdateWrapper<MerchantApplication>()
-                .eq(MerchantApplication::getId, applicationId)
-                .eq(MerchantApplication::getStatus, STATUS_PENDING)
-                .set(MerchantApplication::getStatus, STATUS_APPROVED)
-                .set(MerchantApplication::getAdminId, adminId)
-                .set(MerchantApplication::getAdminNote, adminNote));
-        if (!claimed) {
+        UpdateWrapper<MerchantApplication> claim = new UpdateWrapper<>();
+        claim.eq("id", applicationId)
+                .eq("status", STATUS_PENDING)
+                .set("status", STATUS_APPROVED)
+                .set("admin_id", adminId)
+                .set("admin_note", adminNote);
+        if (!update(claim)) {
             throw new BizException(ResultCode.MERCHANT_APPLICATION_REVIEWED);
         }
 
@@ -162,12 +157,12 @@ public class MerchantApplicationServiceImpl
     private void cancelPendingSpecialCertApplications(Long userId, Long adminId) {
         specialCertApplicationMapper.update(
                 null,
-                new LambdaUpdateWrapper<SpecialCertApplication>()
-                        .eq(SpecialCertApplication::getUserId, userId)
-                        .eq(SpecialCertApplication::getStatus, STATUS_PENDING)
-                        .set(SpecialCertApplication::getStatus, STATUS_REJECTED)
-                        .set(SpecialCertApplication::getAdminId, adminId)
-                        .set(SpecialCertApplication::getAdminNote, "已通过商家认证，自动关闭互斥的特殊认证申请"));
+                new UpdateWrapper<SpecialCertApplication>()
+                        .eq("user_id", userId)
+                        .eq("status", STATUS_PENDING)
+                        .set("status", STATUS_REJECTED)
+                        .set("admin_id", adminId)
+                        .set("admin_note", "已通过商家认证，自动关闭互斥的特殊认证申请"));
     }
 
     private MerchantApplication getAndCheckPending(Long applicationId) {
