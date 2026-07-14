@@ -51,7 +51,7 @@
 
 1. 立即在 AI 服务供应商后台吊销并轮换审计前本机 `.env` 中的 Key。该 Key 曾进入工具输出，不能继续使用。
 2. 用独立随机值填写 `.env.example` 列出的全部必填 Secret；不得复用 JWT、内部令牌、数据库密码和 AI 加密主密钥。将 `TRUSTED_PROXY_CIDR` 精确设置为 HTTPS 代理/LB 的源网段，禁止使用 `0.0.0.0/0`。
-3. 现有数据库卷先备份，再执行 `sql/migrate-ai-admin.sql`；确认订单 request ID、扣减/恢复流水、补偿任务表和 AI Key endpoint 绑定列已存在。启动后确认旧 AI Key 已为 `enc:v1:` 密文，并在管理员页重新提交轮换后的 Key（不得打印 Key）。
+3. 现有数据库卷先备份，再对照 `sql/init.sql` 确认订单 request ID、扣减/恢复流水、补偿任务表和 AI Key endpoint 绑定列已存在（缺则补齐或重建卷）。启动后确认旧 AI Key 已为 `enc:v1:` 密文，并在管理员页重新提交轮换后的 Key（不得打印 Key）。
 4. 同机 HTTPS 代理接入默认 `127.0.0.1:8080`；外部 LB 则将 `WEB_BIND_ADDRESS` 设为实例私网 IP，并用安全组限定 Web 端口仅允许 LB 源 CIDR。公网安全组仅开放 80/443。
 5. 禁止生产执行 `sql/seed-dev.sql`；管理员必须通过受控离线流程授权，不存在默认管理员密码。
 6. 重新构建并重启 Compose；当前正在运行的旧容器仍使用审计前配置且仍暴露多个端口。

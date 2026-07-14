@@ -1,4 +1,6 @@
--- 校园集市数据库初始化脚本
+-- 校园集市数据库初始化脚本（唯一 schema 权威）
+-- Docker Compose 挂载至 /docker-entrypoint-initdb.d/（仅空数据卷首次执行）
+-- 可选数据：seed-dev.sql（本地演示）、seed-perf.sql / seed-seckill-mega-stock.sql（压测）
 -- 数据库 campus_trade 已由 Docker 环境变量自动创建
 
 USE campus_trade;
