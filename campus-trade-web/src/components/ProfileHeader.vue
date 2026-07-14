@@ -62,9 +62,11 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { Camera, ArrowDown } from '@element-plus/icons-vue'
 import { useI18n } from '@/i18n'
+import { resolveAvatarSrc } from '@/utils/avatar'
+import { isSafeCoverUrl } from '@/utils/validateImage'
 
 const props = defineProps({
   profile: { type: Object, default: null },
@@ -88,7 +90,7 @@ const bioText = computed(() => (props.profile?.bio || '').trim())
 
 const avatarSrc = computed(() => {
   if (avatarErrored.value) return ''
-  return props.profile?.avatar || ''
+  return resolveAvatarSrc(props.profile?.avatar, displayName.value)
 })
 
 const avatarLetter = computed(() => displayName.value.charAt(0).toUpperCase() || 'U')
@@ -97,7 +99,7 @@ const defaultCover = 'linear-gradient(135deg, #6b8cce 0%, #8ea8e8 35%, #c4b5fd 7
 
 const coverStyle = computed(() => {
   const url = (props.profile?.coverImage || '').trim()
-  if (url) {
+  if (url && isSafeCoverUrl(url)) {
     return { backgroundImage: `url(${url})` }
   }
   return { backgroundImage: defaultCover }

@@ -13,9 +13,15 @@ const TYPE_BY_EXT = {
   '.webp': 'image/webp'
 }
 
+/** 站内上传图片路径（头像与封面共用，拒绝外链 / javascript: 等） */
 export function isSafeCoverUrl(url) {
   if (!url) return false
   return /^\/api\/product\/image\/[a-f0-9]{32}\.(jpg|png|webp)$/i.test(String(url).trim())
+}
+
+/** @alias isSafeCoverUrl */
+export function isSafeAvatarUrl(url) {
+  return isSafeCoverUrl(url)
 }
 
 function normalizeType(type) {
