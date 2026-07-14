@@ -5,8 +5,47 @@
   </div>
 
   <!-- OpenAI Platform 主布局 -->
-  <div v-else class="platform-layout" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
-    <aside class="sidebar" :class="{ 'sidebar--collapsed': sidebarCollapsed }">
+  <div
+    v-else
+    class="platform-layout"
+    :class="{
+      'sidebar-collapsed': sidebarCollapsed,
+      'mobile-nav-open': mobileMenuOpen
+    }"
+  >
+    <!-- 手机顶栏 -->
+    <header class="mobile-topbar">
+      <button type="button" class="mobile-icon-btn" aria-label="打开菜单" @click="openMobileMenu">
+        <el-icon :size="20"><Menu /></el-icon>
+      </button>
+      <div class="mobile-brand" @click="$router.push('/')">
+        <img src="/logo.png" alt="" class="mobile-brand-logo" />
+        <span class="mobile-brand-name">校园集市</span>
+      </div>
+      <button
+        type="button"
+        class="mobile-icon-btn mobile-icon-btn--badge"
+        aria-label="通知"
+        @click="$router.push('/notifications')"
+      >
+        <el-icon :size="20"><Bell /></el-icon>
+        <span v-if="unreadCount > 0" class="mobile-dot">{{ unreadCount > 99 ? '99+' : unreadCount }}</span>
+      </button>
+    </header>
+
+    <div
+      v-if="mobileMenuOpen"
+      class="mobile-backdrop"
+      @click="closeMobileMenu"
+    />
+
+    <aside
+      class="sidebar"
+      :class="{
+        'sidebar--collapsed': sidebarCollapsed,
+        'sidebar--mobile-open': mobileMenuOpen
+      }"
+    >
       <!-- 项目选择器 -->
       <div class="project-selector">
         <div class="project-icon">
@@ -15,7 +54,7 @@
         <span class="project-name">校园集市</span>
         <button
           type="button"
-          class="sidebar-toggle"
+          class="sidebar-toggle desktop-only"
           :title="sidebarCollapsed ? '展开侧栏' : '收起侧栏'"
           @click="toggleSidebar"
         >
@@ -23,6 +62,14 @@
             <Expand v-if="sidebarCollapsed" />
             <Fold v-else />
           </el-icon>
+        </button>
+        <button
+          type="button"
+          class="sidebar-toggle mobile-only"
+          title="关闭菜单"
+          @click="closeMobileMenu"
+        >
+          <el-icon><Close /></el-icon>
         </button>
       </div>
 
@@ -34,6 +81,7 @@
           :to="item.path"
           class="nav-item"
           :class="{ active: isActive(item.path) }"
+          @click="closeMobileMenu"
         >
           <el-icon class="nav-icon"><component :is="item.icon" /></el-icon>
           <span class="nav-label">{{ t(item.labelKey) }}</span>
@@ -55,13 +103,13 @@
       <!-- 底部引导卡片 -->
       <div v-if="!userStore.isLogin" class="sidebar-promo">
         <p class="promo-text">{{ t('common.promo') }}</p>
-        <button class="promo-btn" @click="$router.push('/login')">{{ t('common.login') }}</button>
+        <button class="promo-btn" @click="goLoginFromMobile">{{ t('common.login') }}</button>
       </div>
 
       <!-- 底部用户 -->
       <div class="sidebar-footer">
         <template v-if="userStore.isLogin">
-          <div class="points-row" @click="$router.push('/events')">
+          <div class="points-row" @click="goAndClose('/events')">
             <span class="points-label">{{ t('common.points') }}</span>
             <span class="points-value">{{ userStore.points }}</span>
           </div>
@@ -85,7 +133,7 @@
           </el-dropdown>
         </template>
         <template v-else>
-          <div class="user-block guest" @click="$router.push('/login')">
+          <div class="user-block guest" @click="goLoginFromMobile">
             <div class="user-avatar guest-avatar">?</div>
             <div class="user-info">
               <span class="user-name">{{ t('common.notLoggedIn') }}</span>
@@ -99,6 +147,26 @@
     <main class="main-content" :class="{ 'main-content--bleed': route.meta.fullBleed }">
       <router-view />
     </main>
+
+    <!-- 手机底部主导航 -->
+    <nav class="mobile-tabbar" aria-label="底部导航">
+      <router-link
+        v-for="item in mobileTabItems"
+        :key="item.path"
+        :to="item.path"
+        class="mobile-tab"
+        :class="{ active: isActive(item.path) }"
+      >
+        <span class="mobile-tab-icon-wrap">
+          <el-icon :size="20"><component :is="item.icon" /></el-icon>
+          <span
+            v-if="item.path === '/messages' && messageUnreadCount > 0"
+            class="mobile-dot mobile-dot--tab"
+          >{{ messageUnreadCount > 99 ? '99+' : messageUnreadCount }}</span>
+        </span>
+        <span class="mobile-tab-label">{{ t(item.labelKey) }}</span>
+      </router-link>
+    </nav>
   </div>
 </template>
 
@@ -121,7 +189,9 @@ import {
   Tools,
   Trophy,
   Fold,
-  Expand
+  Expand,
+  Menu,
+  Close
 } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/user'
 import { getUnreadCount } from '@/api/notification'
@@ -142,10 +212,29 @@ const SIDEBAR_KEY = 'campus-sidebar-collapsed'
 const sidebarCollapsed = ref(
   typeof localStorage !== 'undefined' && localStorage.getItem(SIDEBAR_KEY) === '1'
 )
+const mobileMenuOpen = ref(false)
 
 function toggleSidebar() {
   sidebarCollapsed.value = !sidebarCollapsed.value
   localStorage.setItem(SIDEBAR_KEY, sidebarCollapsed.value ? '1' : '0')
+}
+
+function openMobileMenu() {
+  mobileMenuOpen.value = true
+}
+
+function closeMobileMenu() {
+  mobileMenuOpen.value = false
+}
+
+function goAndClose(path) {
+  closeMobileMenu()
+  router.push(path)
+}
+
+function goLoginFromMobile() {
+  closeMobileMenu()
+  router.push('/login')
 }
 
 const isAuthPage = computed(() => ['/login', '/register', '/forgot-password', '/reset-password'].includes(route.path))
@@ -179,6 +268,19 @@ const navItems = computed(() => {
   }
   items.push({ path: '/settings', labelKey: 'nav.settings', icon: Setting })
   return items
+})
+
+const mobileTabItems = computed(() => {
+  const tabs = [
+    { path: '/', labelKey: 'nav.home', icon: House },
+    { path: '/topics', labelKey: 'nav.topics', icon: ChatDotRound },
+    { path: '/marketplace', labelKey: 'nav.marketplace', icon: ShoppingBag }
+  ]
+  if (userStore.isLogin) {
+    tabs.push({ path: '/messages', labelKey: 'nav.messages', icon: Message })
+  }
+  tabs.push({ path: '/my', labelKey: 'nav.profile', icon: User })
+  return tabs
 })
 
 const avatarLetter = computed(() => {
@@ -254,6 +356,7 @@ watch(
 watch(
   () => route.path,
   (path) => {
+    closeMobileMenu()
     if (path === '/notifications' || path === '/orders') refreshUnreadCount()
     if (path === '/messages') refreshMessageUnreadCount()
   }
@@ -275,6 +378,7 @@ onUnmounted(() => {
 })
 
 function handleCommand(command) {
+  closeMobileMenu()
   if (command === 'my') router.push('/my')
   else if (command === 'events') router.push('/events')
   else if (command === 'admin') router.push('/admin')
@@ -300,11 +404,24 @@ function handleCommand(command) {
   min-height: 100%;
   background: var(--oa-bg);
   --oa-sidebar-width: 240px;
+  --mobile-topbar-h: 52px;
+  --mobile-tabbar-h: 56px;
   transition: --oa-sidebar-width 0.2s ease;
 }
 
 .platform-layout.sidebar-collapsed {
   --oa-sidebar-width: 68px;
+}
+
+.mobile-topbar,
+.mobile-backdrop,
+.mobile-tabbar,
+.mobile-only {
+  display: none;
+}
+
+.desktop-only {
+  display: inline-flex;
 }
 
 /* ---- Sidebar ---- */
@@ -320,7 +437,7 @@ function handleCommand(command) {
   left: 0;
   bottom: 0;
   z-index: 100;
-  transition: width 0.2s ease;
+  transition: width 0.2s ease, transform 0.22s ease;
 }
 
 .project-selector {
@@ -378,19 +495,22 @@ function handleCommand(command) {
 
 .sidebar-nav {
   flex: 1;
-  padding: 4px 8px;
   overflow-y: auto;
+  padding: 4px 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .nav-item {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 12px;
-  margin-bottom: 2px;
+  padding: 9px 12px;
   border-radius: var(--oa-radius-sm);
   color: var(--oa-text-secondary);
-  font-size: 14px;
+  font-size: 13.5px;
+  font-weight: 450;
   transition: background 0.15s, color 0.15s;
   position: relative;
 }
@@ -555,6 +675,9 @@ function handleCommand(command) {
   min-height: 100vh;
   padding: 32px 40px 48px;
   transition: margin-left 0.2s ease;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 .main-content--bleed {
@@ -613,5 +736,207 @@ function handleCommand(command) {
   display: flex;
   flex-direction: column;
   align-items: center;
+}
+
+/* ---- Mobile shell ---- */
+@media (max-width: 768px) {
+  .desktop-only {
+    display: none !important;
+  }
+
+  .mobile-only {
+    display: inline-flex;
+  }
+
+  .mobile-topbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: calc(var(--mobile-topbar-h) + env(safe-area-inset-top, 0px));
+    padding: env(safe-area-inset-top, 0px) 10px 0;
+    background: var(--oa-bg-sidebar);
+    border-bottom: 1px solid var(--oa-border-subtle);
+    z-index: 90;
+  }
+
+  .mobile-icon-btn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border: none;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--oa-text);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .mobile-brand {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    cursor: pointer;
+  }
+
+  .mobile-brand-logo {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    object-fit: cover;
+  }
+
+  .mobile-brand-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--oa-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-dot {
+    position: absolute;
+    top: 4px;
+    right: 2px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 999px;
+    background: #ef4444;
+    color: #fff;
+    font-size: 10px;
+    line-height: 16px;
+    text-align: center;
+    font-weight: 600;
+  }
+
+  .mobile-dot--tab {
+    top: -4px;
+    right: -10px;
+  }
+
+  .mobile-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.42);
+    z-index: 110;
+  }
+
+  .sidebar {
+    width: min(82vw, 300px);
+    max-width: 300px;
+    transform: translateX(-105%);
+    z-index: 120;
+    border-right: 1px solid var(--oa-border-subtle);
+    box-shadow: none;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .sidebar--mobile-open {
+    transform: translateX(0);
+    box-shadow: 8px 0 28px rgba(0, 0, 0, 0.18);
+  }
+
+  /* 手机端忽略桌面折叠态，始终展示完整标签 */
+  .sidebar--collapsed .project-name,
+  .sidebar--collapsed .nav-label,
+  .sidebar--collapsed .sidebar-promo,
+  .sidebar--collapsed .points-row,
+  .sidebar--collapsed .user-info,
+  .sidebar--collapsed .nav-badge,
+  .sidebar--collapsed .project-icon {
+    display: initial;
+  }
+
+  .sidebar--collapsed .project-icon {
+    display: block;
+  }
+
+  .sidebar--collapsed .project-selector {
+    justify-content: flex-start;
+    padding: 12px 14px;
+    gap: 10px;
+  }
+
+  .sidebar--collapsed .nav-item {
+    justify-content: flex-start;
+    padding: 9px 12px;
+  }
+
+  .sidebar--collapsed .user-block {
+    justify-content: flex-start;
+    padding: 8px 10px;
+  }
+
+  .sidebar--collapsed .sidebar-footer {
+    align-items: stretch;
+  }
+
+  .main-content {
+    margin-left: 0;
+    min-height: 100%;
+    padding: calc(var(--mobile-topbar-h) + env(safe-area-inset-top, 0px) + 16px)
+      16px
+      calc(var(--mobile-tabbar-h) + env(safe-area-inset-bottom, 0px) + 20px);
+  }
+
+  .main-content--bleed {
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .mobile-tabbar {
+    display: flex;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: calc(var(--mobile-tabbar-h) + env(safe-area-inset-bottom, 0px));
+    padding: 0 4px env(safe-area-inset-bottom, 0px);
+    background: var(--oa-bg-sidebar);
+    border-top: 1px solid var(--oa-border-subtle);
+    z-index: 90;
+  }
+
+  .mobile-tab {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    color: var(--oa-text-muted);
+    text-decoration: none;
+    min-width: 0;
+    padding: 6px 2px;
+  }
+
+  .mobile-tab.active {
+    color: var(--oa-text);
+  }
+
+  .mobile-tab-icon-wrap {
+    position: relative;
+    display: inline-flex;
+  }
+
+  .mobile-tab-label {
+    font-size: 10px;
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+  }
 }
 </style>

@@ -4,7 +4,7 @@
       <h1 class="page-title">{{ t('messages.title') }}</h1>
     </div>
 
-    <div class="oa-panel messages-shell">
+    <div class="oa-panel messages-shell" :class="{ 'messages-shell--chat': mobileShowChat }">
       <aside class="messages-side">
         <div class="side-tabs">
           <button
@@ -102,6 +102,9 @@
       <section class="chat-pane">
         <template v-if="activeConv">
           <header class="chat-header">
+            <button type="button" class="chat-back" aria-label="返回会话列表" @click="backToList">
+              ←
+            </button>
             <div class="chat-peer">
               <div class="conv-avatar">{{ avatarLetter(activeConv.peerNickname) }}</div>
               <div>
@@ -217,10 +220,18 @@ const selectedId = ref(null)
 const friendStatus = ref(null)
 const draft = ref('')
 const msgListRef = ref(null)
+const mobileShowChat = ref(false)
 
 const activeConv = computed(() =>
   conversations.value.find((c) => c.conversationId === selectedId.value) || null
 )
+
+function backToList() {
+  mobileShowChat.value = false
+  selectedId.value = null
+  messages.value = []
+  friendStatus.value = null
+}
 
 const showAddFriend = computed(() => {
   const s = friendStatus.value
@@ -280,6 +291,7 @@ async function fetchFriendsData() {
 
 function switchToFriends() {
   mainTab.value = 'friends'
+  mobileShowChat.value = false
   fetchFriendsData()
 }
 
@@ -321,6 +333,7 @@ async function selectConversation(item, { skipRead } = {}) {
   if (!item) return
   mainTab.value = 'chat'
   selectedId.value = item.conversationId
+  mobileShowChat.value = true
   draft.value = ''
   await Promise.all([
     loadMessages(item.conversationId),
@@ -689,11 +702,24 @@ onUnmounted(() => {
   border-bottom: 1px solid var(--oa-border-subtle);
 }
 
+.chat-back {
+  display: none;
+  border: 0;
+  background: transparent;
+  color: var(--oa-text);
+  font-size: 18px;
+  line-height: 1;
+  padding: 4px 8px 4px 0;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
 .chat-peer {
   display: flex;
   align-items: center;
   gap: 12px;
   min-width: 0;
+  flex: 1;
 }
 
 .chat-peer-name {
@@ -792,17 +818,48 @@ onUnmounted(() => {
 @media (max-width: 900px) {
   .messages-shell {
     grid-template-columns: 1fr;
-    min-height: auto;
+    min-height: calc(100vh - 180px);
   }
 
   .messages-side {
     border-right: 0;
-    border-bottom: 1px solid var(--oa-border-subtle);
-    max-height: 360px;
+    border-bottom: 0;
+    max-height: none;
+  }
+
+  .chat-pane {
+    display: none;
+  }
+
+  .messages-shell--chat .messages-side {
+    display: none;
+  }
+
+  .messages-shell--chat .chat-pane {
+    display: flex;
+    min-height: calc(100vh - 180px);
+  }
+
+  .chat-back {
+    display: inline-flex;
+  }
+
+  .chat-placeholder {
+    display: none;
   }
 
   .chat-messages {
-    min-height: 320px;
+    min-height: 280px;
+  }
+}
+
+@media (max-width: 768px) {
+  .messages-shell {
+    min-height: calc(100vh - 160px);
+  }
+
+  .messages-shell--chat .chat-pane {
+    min-height: calc(100vh - 160px);
   }
 }
 </style>

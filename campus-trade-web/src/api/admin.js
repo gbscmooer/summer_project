@@ -116,7 +116,7 @@ export function unbanUser(userId) {
 export function updateUserPermissions(userId, data) {
   return request({
     url: `/user/admin/users/${userId}/permissions`,
-    method: 'put',
+    method: 'post',
     data
   })
 }

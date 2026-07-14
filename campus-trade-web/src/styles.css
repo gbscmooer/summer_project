@@ -645,3 +645,41 @@ html.reduce-motion *::after {
   animation-iteration-count: 1 !important;
   scroll-behavior: auto !important;
 }
+
+/* 手机端全局排版校准 */
+@media (max-width: 768px) {
+  html,
+  body {
+    overflow-x: hidden;
+  }
+
+  .page-header {
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .page-title {
+    font-size: 22px;
+  }
+
+  .oa-panel {
+    padding: 14px 14px;
+  }
+
+  .oa-card {
+    padding: 14px 14px;
+  }
+
+  .el-table {
+    width: 100%;
+  }
+
+  .el-dialog {
+    width: min(92vw, 520px) !important;
+  }
+
+  .el-message-box {
+    width: min(92vw, 420px) !important;
+  }
+}
