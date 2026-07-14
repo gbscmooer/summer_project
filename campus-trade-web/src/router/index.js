@@ -165,16 +165,6 @@ router.beforeEach(async (to, from, next) => {
     next({ path: '/login', query: { redirect: to.fullPath } })
     return
   }
-  if (to.meta && to.meta.requiresAdmin) {
-    if (userStore.isLogin && !userStore.isAdmin) {
-      await userStore.refreshProfile()
-    }
-    if (!userStore.isAdmin) {
-      ElMessage.warning('需要管理员权限才能访问管理后台')
-      next({ path: '/' })
-      return
-    }
-  }
   if (to.meta && to.meta.requiresNotifyAccess) {
     if (userStore.isLogin && !userStore.canSendNotification) {
       await userStore.refreshProfile()
