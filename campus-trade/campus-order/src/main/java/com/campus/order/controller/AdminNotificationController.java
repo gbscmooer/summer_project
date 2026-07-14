@@ -5,6 +5,7 @@ import com.campus.order.dto.AdminBroadcastRequest;
 import com.campus.order.dto.AdminBroadcastResult;
 import com.campus.order.service.AdminAuthService;
 import com.campus.order.service.NotificationService;
+import com.campus.order.service.UserPermissionGuard;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -20,13 +21,15 @@ public class AdminNotificationController {
 
     private final AdminAuthService adminAuthService;
     private final NotificationService notificationService;
+    private final UserPermissionGuard userPermissionGuard;
 
     @PostMapping("/broadcast")
     public Result<AdminBroadcastResult> broadcast(
             @RequestHeader("X-User-Id") Long userId,
             @Valid @RequestBody AdminBroadcastRequest request) {
-        // 本分支尚未合入颗粒化权限模块，仅按角色校验通知发送方。
+        // 管理员或特殊认证均可发通知；再按颗粒化权限校验 canBroadcast。
         adminAuthService.requireNotificationSender(userId);
+        userPermissionGuard.requireCanBroadcast(userId);
         AdminBroadcastResult result = notificationService.broadcast(userId, request);
         return Result.success("通知已发送", result);
     }

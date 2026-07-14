@@ -2,6 +2,7 @@ package com.campus.user.dto;
 
 import com.campus.common.constant.UserRole;
 import com.campus.common.constant.UserStatus;
+import com.campus.common.dto.UserPermissionsVO;
 import com.campus.user.entity.User;
 import lombok.Data;
 
@@ -19,6 +20,11 @@ public class AdminUserVO {
     private LocalDateTime banUntil;
     private LocalDateTime bannedAt;
     private LocalDateTime createTime;
+    /** 细粒度权限 */
+    private Boolean canPost;
+    private Boolean canComment;
+    private Boolean canOrder;
+    private Boolean canBroadcast;
 
     public static AdminUserVO from(User user) {
         AdminUserVO vo = new AdminUserVO();
@@ -37,6 +43,15 @@ public class AdminUserVO {
         vo.setBanUntil(user.getBanUntil());
         vo.setBannedAt(user.getBannedAt());
         vo.setCreateTime(user.getCreateTime());
+        UserPermissionsVO perms = UserPermissionsVO.fromFlags(
+                user.getPermPost(),
+                user.getPermComment(),
+                user.getPermOrder(),
+                user.getPermBroadcast());
+        vo.setCanPost(perms.isCanPost());
+        vo.setCanComment(perms.isCanComment());
+        vo.setCanOrder(perms.isCanOrder());
+        vo.setCanBroadcast(perms.isCanBroadcast());
         return vo;
     }
 

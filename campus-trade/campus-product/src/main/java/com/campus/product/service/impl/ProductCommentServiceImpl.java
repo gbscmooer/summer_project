@@ -16,6 +16,7 @@ import com.campus.product.feign.dto.UserBriefDTO;
 import com.campus.product.mapper.ProductCommentMapper;
 import com.campus.product.mapper.ProductMapper;
 import com.campus.product.service.ProductCommentService;
+import com.campus.product.service.UserPermissionGuard;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -34,6 +35,7 @@ public class ProductCommentServiceImpl extends ServiceImpl<ProductCommentMapper,
 
     private final ProductMapper productMapper;
     private final UserFeignClient userFeignClient;
+    private final UserPermissionGuard userPermissionGuard;
 
     @Override
     public PageResult<ProductCommentVO> listByProduct(Long productId, Integer pageNum, Integer pageSize) {
@@ -55,6 +57,7 @@ public class ProductCommentServiceImpl extends ServiceImpl<ProductCommentMapper,
 
     @Override
     public Long addComment(Long userId, Long productId, ProductCommentRequest request) {
+        userPermissionGuard.requireCanComment(userId);
         if (request == null || !StringUtils.hasText(request.getContent())) {
             throw new BizException(ResultCode.BAD_REQUEST.getCode(), "请填写留言内容");
         }

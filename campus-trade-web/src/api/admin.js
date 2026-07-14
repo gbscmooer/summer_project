@@ -111,3 +111,12 @@ export function unbanUser(userId) {
     method: 'post'
   })
 }
+
+// 管理员：更新用户细粒度权限
+export function updateUserPermissions(userId, data) {
+  return request({
+    url: `/user/admin/users/${userId}/permissions`,
+    method: 'put',
+    data
+  })
+}

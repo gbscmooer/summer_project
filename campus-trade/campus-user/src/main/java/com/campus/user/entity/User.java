@@ -37,6 +37,14 @@ public class User {
     private Long bannedBy;
     /** 封禁时间 */
     private LocalDateTime bannedAt;
+    /** 1-可发帖 0-禁止 */
+    private Integer permPost;
+    /** 1-可留言/评论/私信 0-禁止 */
+    private Integer permComment;
+    /** 1-可下单 0-禁止 */
+    private Integer permOrder;
+    /** 1-可广播系统通知 0-禁止 */
+    private Integer permBroadcast;
     /** 1-已完成新手教程（老用户或已毕业） */
     private Integer onboardingCompleted;
     /** 新手教程步骤标记 JSON */

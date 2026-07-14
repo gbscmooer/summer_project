@@ -46,6 +46,10 @@ public enum ResultCode {
     SPECIAL_CERT_APPLICATION_REVIEWED(1032, "该特殊认证申请已处理"),
     SPECIAL_CERT_NOT_ELIGIBLE(1033, "当前角色不可申请特殊认证"),
     MERCHANT_NOT_ELIGIBLE(1034, "当前角色不可申请或升级为商家"),
+    PERMISSION_DENIED_POST(1040, "当前账号已被禁止发帖"),
+    PERMISSION_DENIED_COMMENT(1041, "当前账号已被禁止发言留言"),
+    PERMISSION_DENIED_ORDER(1042, "当前账号已被禁止下单"),
+    PERMISSION_DENIED_BROADCAST(1043, "当前账号已被禁止广播通知"),
 
     // 商品业务码
     PRODUCT_NOT_FOUND(2001, "商品不存在"),
