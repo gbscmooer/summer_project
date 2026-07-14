@@ -605,8 +605,13 @@ async function onCropConfirmed(file) {
   } catch {
     ElMessage.error(isCover ? t('profile.coverUploadFail') : t('profile.avatarUploadFail'))
   } finally {
-    coverUploading.value = false
-    avatarUploading.value = false
+    // 头像与封面上传可交错进行（关一窗再开另一窗）；只清当前任务标志，
+    // 否则先完成的一侧会提前放开另一侧的保存按钮，导致丢图/清空。
+    if (isCover) {
+      coverUploading.value = false
+    } else {
+      avatarUploading.value = false
+    }
   }
 }
 
@@ -655,6 +660,10 @@ async function onSaveEdit() {
 }
 
 async function onSaveCover() {
+  if (coverUploading.value) {
+    ElMessage.warning(t('profile.coverUploading'))
+    return
+  }
   const value = (coverDraft.value || '').trim()
   if (value && !isSafeCoverUrl(value)) {
     ElMessage.warning(t('profile.coverUnsafe'))
