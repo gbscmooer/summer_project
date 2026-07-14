@@ -44,6 +44,14 @@ public final class UserRole {
         return role == ADMIN || role == OFFICIAL;
     }
 
+    /**
+     * 仅个人账户可升级为商家或特殊认证。
+     * 商家与特殊认证角色互斥；审核通过时若当前已非个人账户，不得覆盖写 role。
+     */
+    public static boolean canUpgradeRole(int role) {
+        return role == USER;
+    }
+
     /** @deprecated 使用 {@link #canPublish(int)} */
     public static boolean hasUnlimitedPublish(int role) {
         return canPublish(role);

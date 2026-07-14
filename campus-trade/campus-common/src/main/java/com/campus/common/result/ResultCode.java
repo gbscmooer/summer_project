@@ -45,6 +45,7 @@ public enum ResultCode {
     SPECIAL_CERT_APPLICATION_NOT_FOUND(1031, "特殊认证申请不存在"),
     SPECIAL_CERT_APPLICATION_REVIEWED(1032, "该特殊认证申请已处理"),
     SPECIAL_CERT_NOT_ELIGIBLE(1033, "当前角色不可申请特殊认证"),
+    MERCHANT_NOT_ELIGIBLE(1034, "当前角色不可申请或升级为商家"),
 
     // 商品业务码
     PRODUCT_NOT_FOUND(2001, "商品不存在"),

@@ -20,4 +20,12 @@ class UserRoleTest {
         assertFalse(UserRole.isOfficial(UserRole.ADMIN));
         assertFalse(UserRole.isOfficial(UserRole.USER));
     }
+
+    @Test
+    void canUpgradeRole_personalOnly_merchantAndOfficialMutuallyExclusive() {
+        assertTrue(UserRole.canUpgradeRole(UserRole.USER));
+        assertFalse(UserRole.canUpgradeRole(UserRole.ADMIN));
+        assertFalse(UserRole.canUpgradeRole(UserRole.MERCHANT));
+        assertFalse(UserRole.canUpgradeRole(UserRole.OFFICIAL));
+    }
 }

@@ -1,13 +1,16 @@
 package com.campus.user.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.campus.common.constant.UserRole;
 import com.campus.common.exception.BizException;
 import com.campus.common.result.ResultCode;
 import com.campus.user.dto.SpecialCertApplicationRequest;
 import com.campus.user.dto.SpecialCertApplicationVO;
+import com.campus.user.entity.MerchantApplication;
 import com.campus.user.entity.SpecialCertApplication;
 import com.campus.user.entity.User;
+import com.campus.user.mapper.MerchantApplicationMapper;
 import com.campus.user.mapper.SpecialCertApplicationMapper;
 import com.campus.user.mapper.UserMapper;
 import com.campus.user.service.SpecialCertApplicationService;
@@ -32,6 +35,7 @@ public class SpecialCertApplicationServiceImpl
 
     private final UserService userService;
     private final UserMapper userMapper;
+    private final MerchantApplicationMapper merchantApplicationMapper;
 
     @Override
     public void apply(Long userId, SpecialCertApplicationRequest request) {
@@ -106,8 +110,13 @@ public class SpecialCertApplicationServiceImpl
         if (user == null) {
             throw new BizException(ResultCode.NOT_FOUND);
         }
-        if (user.getRole() != null && user.getRole() == UserRole.OFFICIAL) {
+        int currentRole = user.getRole() == null ? UserRole.USER : user.getRole();
+        // 商家/管理员等非个人账户不得被覆盖为特殊认证，否则会丢掉原角色权限
+        if (currentRole == UserRole.OFFICIAL) {
             throw new BizException(ResultCode.SPECIAL_CERT_ALREADY);
+        }
+        if (!UserRole.canUpgradeRole(currentRole)) {
+            throw new BizException(ResultCode.SPECIAL_CERT_NOT_ELIGIBLE);
         }
 
         User rolePatch = new User();
@@ -124,6 +133,9 @@ public class SpecialCertApplicationServiceImpl
         patch.setAdminId(adminId);
         patch.setAdminNote(adminNote);
         updateById(patch);
+
+        // 角色互斥：关闭仍待审的商家申请，避免后续误审覆盖 OFFICIAL
+        cancelPendingMerchantApplications(app.getUserId(), adminId);
     }
 
     @Override
@@ -136,6 +148,17 @@ public class SpecialCertApplicationServiceImpl
         patch.setAdminId(adminId);
         patch.setAdminNote(adminNote);
         updateById(patch);
+    }
+
+    private void cancelPendingMerchantApplications(Long userId, Long adminId) {
+        merchantApplicationMapper.update(
+                null,
+                new LambdaUpdateWrapper<MerchantApplication>()
+                        .eq(MerchantApplication::getUserId, userId)
+                        .eq(MerchantApplication::getStatus, STATUS_PENDING)
+                        .set(MerchantApplication::getStatus, STATUS_REJECTED)
+                        .set(MerchantApplication::getAdminId, adminId)
+                        .set(MerchantApplication::getAdminNote, "已通过特殊认证，自动关闭互斥的商家申请"));
     }
 
     private SpecialCertApplication getAndCheckPending(Long applicationId) {

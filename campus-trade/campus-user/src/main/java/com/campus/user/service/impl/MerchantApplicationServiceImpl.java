@@ -1,5 +1,6 @@
 package com.campus.user.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.campus.common.constant.UserRole;
 import com.campus.common.exception.BizException;
@@ -7,8 +8,10 @@ import com.campus.common.result.ResultCode;
 import com.campus.user.dto.MerchantApplicationRequest;
 import com.campus.user.dto.MerchantApplicationVO;
 import com.campus.user.entity.MerchantApplication;
+import com.campus.user.entity.SpecialCertApplication;
 import com.campus.user.entity.User;
 import com.campus.user.mapper.MerchantApplicationMapper;
+import com.campus.user.mapper.SpecialCertApplicationMapper;
 import com.campus.user.mapper.UserMapper;
 import com.campus.user.service.MerchantApplicationService;
 import com.campus.user.service.UserService;
@@ -32,6 +35,7 @@ public class MerchantApplicationServiceImpl
 
     private final UserService userService;
     private final UserMapper userMapper;
+    private final SpecialCertApplicationMapper specialCertApplicationMapper;
 
     @Override
     public void apply(Long userId, MerchantApplicationRequest request) {
@@ -39,8 +43,9 @@ public class MerchantApplicationServiceImpl
         if (role == UserRole.MERCHANT) {
             throw new BizException(ResultCode.MERCHANT_ALREADY);
         }
-        if (role == UserRole.ADMIN) {
-            throw new BizException(ResultCode.MERCHANT_ALREADY);
+        // 管理员、特殊认证等与商家互斥，不可再申请商家（避免审核通过后覆盖 OFFICIAL 权限）
+        if (!UserRole.canUpgradeRole(role)) {
+            throw new BizException(ResultCode.MERCHANT_NOT_ELIGIBLE);
         }
         boolean pending = lambdaQuery()
                 .eq(MerchantApplication::getUserId, userId)
@@ -106,8 +111,13 @@ public class MerchantApplicationServiceImpl
         if (user == null) {
             throw new BizException(ResultCode.NOT_FOUND);
         }
-        if (user.getRole() != null && user.getRole() == UserRole.MERCHANT) {
+        int currentRole = user.getRole() == null ? UserRole.USER : user.getRole();
+        // 特殊认证/管理员等非个人账户不得被覆盖为商家，否则会丢掉通知发送等权限
+        if (currentRole == UserRole.MERCHANT) {
             throw new BizException(ResultCode.MERCHANT_ALREADY);
+        }
+        if (!UserRole.canUpgradeRole(currentRole)) {
+            throw new BizException(ResultCode.MERCHANT_NOT_ELIGIBLE);
         }
 
         User rolePatch = new User();
@@ -124,6 +134,9 @@ public class MerchantApplicationServiceImpl
         patch.setAdminId(adminId);
         patch.setAdminNote(adminNote);
         updateById(patch);
+
+        // 角色互斥：关闭仍待审的特殊认证申请，避免后续误审覆盖 MERCHANT
+        cancelPendingSpecialCertApplications(app.getUserId(), adminId);
     }
 
     @Override
@@ -136,6 +149,17 @@ public class MerchantApplicationServiceImpl
         patch.setAdminId(adminId);
         patch.setAdminNote(adminNote);
         updateById(patch);
+    }
+
+    private void cancelPendingSpecialCertApplications(Long userId, Long adminId) {
+        specialCertApplicationMapper.update(
+                null,
+                new LambdaUpdateWrapper<SpecialCertApplication>()
+                        .eq(SpecialCertApplication::getUserId, userId)
+                        .eq(SpecialCertApplication::getStatus, STATUS_PENDING)
+                        .set(SpecialCertApplication::getStatus, STATUS_REJECTED)
+                        .set(SpecialCertApplication::getAdminId, adminId)
+                        .set(SpecialCertApplication::getAdminNote, "已通过商家认证，自动关闭互斥的特殊认证申请"));
     }
 
     private MerchantApplication getAndCheckPending(Long applicationId) {
