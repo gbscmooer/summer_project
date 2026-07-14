@@ -15,7 +15,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -59,7 +58,7 @@ public class AdminUserController {
         return Result.success("用户已解封", null);
     }
 
-    @PutMapping("/{id}/permissions")
+    @PostMapping("/{id}/permissions")
     public Result<UserPermissionsVO> updatePermissions(
             @RequestHeader(value = "X-User-Id", required = false) Long userId,
             @PathVariable Long id,
