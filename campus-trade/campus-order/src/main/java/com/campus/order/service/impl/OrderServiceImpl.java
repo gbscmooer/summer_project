@@ -217,7 +217,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         // 已支付：幂等补齐积分划转后直接返回（崩溃自愈）
         if (order.getStatus() != null && order.getStatus() == STATUS_PAID) {
             if (needTransfer) {
-                unwrap(userFeign.transferPoints(transfer));
+                transferPointsOrRollback(orderId, transfer);
             }
             return;
         }
@@ -236,7 +236,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             if (latest != null && latest.getStatus() != null && latest.getStatus() == STATUS_PAID
                     && buyerId.equals(latest.getBuyerId())) {
                 if (needTransfer) {
-                    unwrap(userFeign.transferPoints(transfer));
+                    transferPointsOrRollback(orderId, transfer);
                 }
                 return;
             }
@@ -247,11 +247,20 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             return;
         }
 
+        transferPointsOrRollback(orderId, transfer);
+    }
+
+    /**
+     * 调用积分划转；若积分侧确认未划转（明确业务失败），将订单从 PAID 回滚为 UNPAID，
+     * 避免买家确认收货却未扣款、卖家丢货/丢积分。超时等未知结果保持 PAID 待幂等重试。
+     */
+    private void transferPointsOrRollback(Long orderId,
+                                          com.campus.order.feign.dto.PointsTransferRequest transfer) {
         try {
             unwrap(userFeign.transferPoints(transfer));
         } catch (BizException ex) {
             if (isDefinitivePayFailure(ex)) {
-                // 明确失败（如积分不足）：回滚订单状态，避免「已付款但未扣积分」
+                // 明确失败（积分不足/封禁/用户不存在等）：回滚订单状态
                 lambdaUpdate()
                         .eq(Order::getId, orderId)
                         .eq(Order::getStatus, STATUS_PAID)
@@ -270,13 +279,14 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         }
     }
 
-    /** 明确可回滚的支付失败：积分侧确认未划转。 */
-    private static boolean isDefinitivePayFailure(BizException exception) {
+    /** 明确可回滚的支付失败：积分侧确认未划转（事务已回滚，无流水）。 */
+    static boolean isDefinitivePayFailure(BizException exception) {
         int code = exception.getCode();
         return code == ResultCode.POINTS_INSUFFICIENT.getCode()
                 || code == ResultCode.BAD_REQUEST.getCode()
                 || code == ResultCode.USER_NOT_FOUND.getCode()
-                || code == ResultCode.NOT_FOUND.getCode();
+                || code == ResultCode.NOT_FOUND.getCode()
+                || code == ResultCode.USER_BANNED.getCode();
     }
 
     /** 将订单成交积分（DECIMAL）转为整数积分。 */
