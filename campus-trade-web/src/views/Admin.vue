@@ -2,50 +2,73 @@
   <div class="page-container admin-page">
     <div class="page-header">
       <h1 class="page-title">{{ t('admin.title') }}</h1>
-      <p class="page-subtitle">{{ t('admin.subtitle') }}</p>
+      <p class="page-subtitle">{{ pageSubtitle }}</p>
     </div>
 
     <div class="oa-panel admin-panel">
       <el-tabs v-model="activeTab" class="admin-tabs">
-        <!-- 发送通知 -->
+        <!-- 发送通知（管理员与特殊认证均可） -->
         <el-tab-pane :label="t('admin.tabNotify')" name="notify">
           <p class="tab-desc">{{ t('admin.notifyDesc') }}</p>
-          <el-form label-position="top" class="admin-form" @submit.prevent>
-            <el-form-item :label="t('admin.notifyTitle')">
-              <el-input v-model="notifyForm.title" maxlength="100" show-word-limit />
-            </el-form-item>
-            <el-form-item :label="t('admin.notifyContent')">
-              <el-input
-                v-model="notifyForm.content"
-                type="textarea"
-                :rows="4"
-                maxlength="500"
-                show-word-limit
-              />
-            </el-form-item>
-            <el-form-item :label="t('admin.notifyTarget')">
-              <el-radio-group v-model="notifyForm.targetType">
-                <el-radio-button value="ALL">{{ t('admin.notifyTargetAll') }}</el-radio-button>
-                <el-radio-button value="SPECIFIC">{{ t('admin.notifyTargetSpecific') }}</el-radio-button>
-              </el-radio-group>
-            </el-form-item>
-            <el-form-item v-if="notifyForm.targetType === 'SPECIFIC'" :label="t('admin.notifyUsernames')">
-              <el-input
-                v-model="notifyForm.usernames"
-                type="textarea"
-                :rows="2"
-                placeholder="user01,user02"
-              />
-              <p class="setting-hint">{{ t('admin.notifyUsernamesHint') }}</p>
-            </el-form-item>
-            <el-button type="primary" :loading="notifySending" @click="sendNotification">
-              {{ t('admin.notifySend') }}
-            </el-button>
-          </el-form>
+          <div class="notify-layout">
+            <el-form label-position="top" class="admin-form notify-form" @submit.prevent>
+              <el-form-item :label="t('admin.notifyTitle')">
+                <el-input
+                  v-model="notifyForm.title"
+                  maxlength="100"
+                  show-word-limit
+                  :placeholder="t('admin.notifyTitlePlaceholder')"
+                />
+              </el-form-item>
+              <el-form-item :label="t('admin.notifyContent')">
+                <el-input
+                  v-model="notifyForm.content"
+                  type="textarea"
+                  :rows="5"
+                  maxlength="500"
+                  show-word-limit
+                  :placeholder="t('admin.notifyContentPlaceholder')"
+                />
+              </el-form-item>
+              <el-form-item :label="t('admin.notifyTarget')">
+                <el-radio-group v-model="notifyForm.targetType">
+                  <el-radio-button value="ALL">{{ t('admin.notifyTargetAll') }}</el-radio-button>
+                  <el-radio-button value="SPECIFIC">{{ t('admin.notifyTargetSpecific') }}</el-radio-button>
+                </el-radio-group>
+              </el-form-item>
+              <el-form-item v-if="notifyForm.targetType === 'SPECIFIC'" :label="t('admin.notifyUsernames')">
+                <el-input
+                  v-model="notifyForm.usernames"
+                  type="textarea"
+                  :rows="2"
+                  placeholder="user01,user02"
+                />
+                <p class="setting-hint">{{ t('admin.notifyUsernamesHint') }}</p>
+              </el-form-item>
+              <el-button type="primary" :loading="notifySending" @click="sendNotification">
+                {{ t('admin.notifySend') }}
+              </el-button>
+            </el-form>
+
+            <aside class="notify-preview" aria-label="preview">
+              <p class="preview-label">{{ t('admin.notifyPreview') }}</p>
+              <div class="preview-card">
+                <div class="preview-title">{{ notifyForm.title.trim() || t('admin.notifyPreviewEmptyTitle') }}</div>
+                <p class="preview-body">{{ notifyForm.content.trim() || t('admin.notifyPreviewEmptyContent') }}</p>
+                <p class="preview-meta">
+                  {{
+                    notifyForm.targetType === 'ALL'
+                      ? t('admin.notifyTargetAll')
+                      : t('admin.notifyTargetSpecific')
+                  }}
+                </p>
+              </div>
+            </aside>
+          </div>
         </el-tab-pane>
 
-        <!-- 用户管理 -->
-        <el-tab-pane :label="t('admin.tabUsers')" name="users">
+        <!-- 用户管理（仅管理员） -->
+        <el-tab-pane v-if="userStore.isAdmin" :label="t('admin.tabUsers')" name="users">
           <div class="tab-toolbar">
             <el-input
               v-model="userKeyword"
@@ -65,7 +88,7 @@
                 <span class="muted-inline">@{{ row.username }}</span>
               </template>
             </el-table-column>
-            <el-table-column :label="t('admin.userRole')" width="100">
+            <el-table-column :label="t('admin.userRole')" width="110">
               <template #default="{ row }">
                 <el-tag size="small" :type="roleTagType(row.role)">{{ row.roleLabel }}</el-tag>
               </template>
@@ -129,8 +152,8 @@
           </div>
         </el-tab-pane>
 
-        <!-- 商家审核 -->
-        <el-tab-pane :label="t('admin.tabMerchant')" name="merchant">
+        <!-- 商家审核（仅管理员） -->
+        <el-tab-pane v-if="userStore.isAdmin" :label="t('admin.tabMerchant')" name="merchant">
           <div class="tab-toolbar">
             <p class="tab-desc">{{ t('admin.merchantDesc') }}</p>
             <el-button size="small" :loading="merchantLoading" @click="loadMerchantApplications">
@@ -160,6 +183,44 @@
                   </el-button>
                   <el-button size="small" type="danger" @click="onRejectMerchant(row)">
                     {{ t('admin.merchantReject') }}
+                  </el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+        </el-tab-pane>
+
+        <!-- 特殊认证审核（仅管理员） -->
+        <el-tab-pane v-if="userStore.isAdmin" :label="t('admin.tabSpecialCert')" name="specialCert">
+          <div class="tab-toolbar">
+            <p class="tab-desc">{{ t('admin.specialCertDesc') }}</p>
+            <el-button size="small" :loading="specialCertLoading" @click="loadSpecialCertApplications">
+              {{ t('admin.specialCertRefresh') }}
+            </el-button>
+          </div>
+
+          <div v-loading="specialCertLoading">
+            <div v-if="!specialCertLoading && specialCertApps.length === 0" class="oa-empty-state">
+              <p>{{ t('admin.specialCertNoPending') }}</p>
+            </div>
+            <el-table v-else :data="specialCertApps" style="width: 100%">
+              <el-table-column prop="displayName" :label="t('admin.specialCertDisplayName')" min-width="140" />
+              <el-table-column :label="t('admin.specialCertApplicant')" min-width="140">
+                <template #default="{ row }">
+                  {{ row.nickname || row.username }}
+                  <span class="muted-inline">@{{ row.username }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="reason" :label="t('admin.specialCertReason')" min-width="180" show-overflow-tooltip />
+              <el-table-column prop="contactPhone" :label="t('admin.specialCertContact')" width="120" />
+              <el-table-column prop="createTime" :label="t('admin.specialCertAppliedAt')" width="170" />
+              <el-table-column label="" width="180" fixed="right">
+                <template #default="{ row }">
+                  <el-button size="small" type="success" @click="onApproveSpecialCert(row)">
+                    {{ t('admin.specialCertApprove') }}
+                  </el-button>
+                  <el-button size="small" type="danger" @click="onRejectSpecialCert(row)">
+                    {{ t('admin.specialCertReject') }}
                   </el-button>
                 </template>
               </el-table-column>
@@ -246,14 +307,18 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useI18n } from '@/i18n'
+import { useUserStore } from '@/store/user'
 import {
   sendAdminNotification,
   listMerchantApplications,
   approveMerchantApplication,
   rejectMerchantApplication,
+  listSpecialCertApplications,
+  approveSpecialCertApplication,
+  rejectSpecialCertApplication,
   listAdminUsers,
   banUser,
   unbanUser,
@@ -261,6 +326,11 @@ import {
 } from '@/api/admin'
 
 const { t } = useI18n()
+const userStore = useUserStore()
+
+const pageSubtitle = computed(() =>
+  userStore.isAdmin ? t('admin.subtitle') : t('admin.subtitleOfficial')
+)
 
 const activeTab = ref('notify')
 const notifySending = ref(false)
@@ -281,6 +351,9 @@ const userKeyword = ref('')
 const merchantLoading = ref(false)
 const merchantApps = ref([])
 
+const specialCertLoading = ref(false)
+const specialCertApps = ref([])
+
 const banDialogVisible = ref(false)
 const banSubmitting = ref(false)
 const banTarget = ref(null)
@@ -300,22 +373,30 @@ const permForm = reactive({
 })
 
 onMounted(() => {
-  loadUsers()
-  loadMerchantApplications()
+  if (userStore.isAdmin) {
+    loadUsers()
+    loadMerchantApplications()
+    loadSpecialCertApplications()
+  }
 })
 
 watch(activeTab, (tab) => {
+  if (!userStore.isAdmin) return
   if (tab === 'users' && userList.value.length === 0) {
     loadUsers()
   }
   if (tab === 'merchant' && merchantApps.value.length === 0) {
     loadMerchantApplications()
   }
+  if (tab === 'specialCert' && specialCertApps.value.length === 0) {
+    loadSpecialCertApplications()
+  }
 })
 
 function roleTagType(role) {
   if (role === 1) return 'danger'
   if (role === 2) return 'warning'
+  if (role === 3) return 'success'
   return 'info'
 }
 
@@ -535,6 +616,56 @@ async function onRejectMerchant(row) {
     await loadMerchantApplications()
   } catch (_) { /* request 已提示 */ }
 }
+
+async function loadSpecialCertApplications() {
+  specialCertLoading.value = true
+  try {
+    const res = await listSpecialCertApplications()
+    specialCertApps.value = res.data || []
+  } catch {
+    specialCertApps.value = []
+  } finally {
+    specialCertLoading.value = false
+  }
+}
+
+async function onApproveSpecialCert(row) {
+  try {
+    await ElMessageBox.confirm(
+      t('admin.specialCertApproveConfirm')
+        .replace('{name}', row.displayName)
+        .replace('{user}', row.username),
+      t('admin.tip'),
+      { confirmButtonText: t('admin.confirm'), cancelButtonText: t('admin.cancel'), type: 'info' }
+    )
+  } catch {
+    return
+  }
+  try {
+    await approveSpecialCertApplication(row.id)
+    ElMessage.success(t('admin.specialCertApproveDone'))
+    await loadSpecialCertApplications()
+  } catch (_) { /* request 已提示 */ }
+}
+
+async function onRejectSpecialCert(row) {
+  let adminNote = ''
+  try {
+    const { value } = await ElMessageBox.prompt(
+      t('admin.specialCertRejectNote'),
+      t('admin.specialCertReject'),
+      { confirmButtonText: t('admin.confirm'), cancelButtonText: t('admin.cancel'), inputType: 'textarea' }
+    )
+    adminNote = value || ''
+  } catch {
+    return
+  }
+  try {
+    await rejectSpecialCertApplication(row.id, { adminNote })
+    ElMessage.success(t('admin.specialCertRejectDone'))
+    await loadSpecialCertApplications()
+  } catch (_) { /* request 已提示 */ }
+}
 </script>
 
 <style scoped>
@@ -575,6 +706,64 @@ async function onRejectMerchant(row) {
 
 .admin-form :deep(.el-form-item) {
   margin-bottom: 14px;
+}
+
+.notify-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
+  gap: 24px;
+  align-items: start;
+}
+
+@media (max-width: 800px) {
+  .notify-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.notify-preview {
+  padding: 14px 16px;
+  border: 1px solid var(--oa-border, #e5e7eb);
+  border-radius: 10px;
+  background: var(--oa-surface-muted, #f8fafc);
+}
+
+.preview-label {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--oa-text-muted);
+  letter-spacing: 0.02em;
+}
+
+.preview-card {
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid var(--oa-border, #e5e7eb);
+}
+
+.preview-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--oa-text);
+  margin-bottom: 8px;
+  word-break: break-word;
+}
+
+.preview-body {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--oa-text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  min-height: 3.2em;
+}
+
+.preview-meta {
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: var(--oa-text-muted);
 }
 
 .setting-hint {

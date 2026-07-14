@@ -21,7 +21,7 @@ export const useUserStore = defineStore('user', {
   getters: {
     // 是否已登录
     isLogin: (state) => !!state.token,
-    // 0-个人账户 1-管理员 2-商家
+    // 0-个人账户 1-管理员 2-商家 3-特殊认证/官方
     role: (state) => (state.userInfo && state.userInfo.role != null ? Number(state.userInfo.role) : 0),
     isAdmin: (state) => {
       const role = state.userInfo && state.userInfo.role != null ? Number(state.userInfo.role) : 0
@@ -31,6 +31,10 @@ export const useUserStore = defineStore('user', {
       const role = state.userInfo && state.userInfo.role != null ? Number(state.userInfo.role) : 0
       return role === 2
     },
+    isOfficial: (state) => {
+      const role = state.userInfo && state.userInfo.role != null ? Number(state.userInfo.role) : 0
+      return role === 3
+    },
     isPersonal: (state) => {
       const role = state.userInfo && state.userInfo.role != null ? Number(state.userInfo.role) : 0
       return role === 0
@@ -39,10 +43,16 @@ export const useUserStore = defineStore('user', {
       const role = state.userInfo && state.userInfo.role != null ? Number(state.userInfo.role) : 0
       return role === 1 || role === 2
     },
+    /** 管理员或特殊认证可发送系统通知 */
+    canSendNotification: (state) => {
+      const role = state.userInfo && state.userInfo.role != null ? Number(state.userInfo.role) : 0
+      return role === 1 || role === 3
+    },
     roleLabel: (state) => {
       const role = state.userInfo && state.userInfo.role != null ? Number(state.userInfo.role) : 0
       if (role === 1) return '管理员'
       if (role === 2) return '商家'
+      if (role === 3) return '特殊认证'
       return '个人账户'
     },
     // 顶部导航展示用昵称，兜底用户名

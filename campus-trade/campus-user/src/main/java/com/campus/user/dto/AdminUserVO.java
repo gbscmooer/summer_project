@@ -62,6 +62,9 @@ public class AdminUserVO {
         if (role == UserRole.MERCHANT) {
             return "商家";
         }
+        if (role == UserRole.OFFICIAL) {
+            return "特殊认证";
+        }
         return "个人账户";
     }
 }

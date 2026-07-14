@@ -78,7 +78,7 @@
                 <div class="dropdown-email">{{ userStore.displayName }}</div>
                 <el-dropdown-item command="my">{{ t('common.profile') }}</el-dropdown-item>
                 <el-dropdown-item command="events">{{ t('nav.events') }}</el-dropdown-item>
-                <el-dropdown-item v-if="userStore.isAdmin" command="admin">{{ t('nav.admin') }}</el-dropdown-item>
+                <el-dropdown-item v-if="userStore.canSendNotification" command="admin">{{ t('nav.admin') }}</el-dropdown-item>
                 <el-dropdown-item command="logout" divided>{{ t('common.logout') }}</el-dropdown-item>
               </el-dropdown-menu>
             </template>
@@ -173,8 +173,8 @@ const navItems = computed(() => {
     { path: '/events', labelKey: 'nav.events', icon: Trophy },
     { path: '/my', labelKey: 'nav.profile', icon: User }
   )
-  if (userStore.isAdmin) {
-    // 管理员入口靠前，避免侧栏过长时被挤到下方
+  if (userStore.isAdmin || userStore.isOfficial) {
+    // 管理员 / 特殊认证入口靠前，避免侧栏过长时被挤到下方
     items.splice(3, 0, { path: '/admin', labelKey: 'nav.admin', icon: Tools })
   }
   items.push({ path: '/settings', labelKey: 'nav.settings', icon: Setting })

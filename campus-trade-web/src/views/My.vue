@@ -168,6 +168,66 @@
       </div>
     </section>
 
+    <!-- 特殊认证申请（无边框折叠区） -->
+    <section v-if="userStore.isPersonal" class="merchant-section">
+      <button type="button" class="section-toggle" @click="specialCertOpen = !specialCertOpen">
+        <div>
+          <h3 class="section-heading">{{ t('specialCert.applyTitle') }}</h3>
+          <p class="section-desc">{{ t('specialCert.applyDesc') }}</p>
+        </div>
+        <el-icon class="chevron" :class="{ open: specialCertOpen }"><ArrowDown /></el-icon>
+      </button>
+      <div v-show="specialCertOpen" class="merchant-body">
+        <div v-if="specialCertApp && specialCertApp.status === 0" class="apply-status">
+          <el-alert :title="t('specialCert.statusPending')" type="warning" :closable="false" show-icon>
+            <template #default>
+              <p>{{ specialCertApp.displayName }} · {{ specialCertApp.createTime }}</p>
+            </template>
+          </el-alert>
+        </div>
+        <div v-else-if="specialCertApp && specialCertApp.status === 1" class="apply-status">
+          <el-alert :title="t('specialCert.statusApproved')" type="success" :closable="false" show-icon>
+            <template #default>
+              <p>{{ specialCertApp.displayName }} · {{ t('specialCert.approvedRefresh') }}</p>
+            </template>
+          </el-alert>
+        </div>
+        <div v-else-if="specialCertApp && specialCertApp.status === 2" class="apply-status">
+          <el-alert :title="t('specialCert.statusRejected')" type="error" :closable="false" show-icon>
+            <template #default>
+              <p v-if="specialCertApp.adminNote">{{ specialCertApp.adminNote }}</p>
+            </template>
+          </el-alert>
+        </div>
+        <el-form
+          v-if="!specialCertApp || specialCertApp.status === 2"
+          ref="specialCertFormRef"
+          :model="specialCertForm"
+          :rules="specialCertRules"
+          label-position="top"
+          class="apply-form"
+        >
+          <el-form-item :label="t('specialCert.displayName')" prop="displayName">
+            <el-input
+              v-model="specialCertForm.displayName"
+              maxlength="100"
+              show-word-limit
+              :placeholder="t('specialCert.displayNamePlaceholder')"
+            />
+          </el-form-item>
+          <el-form-item :label="t('specialCert.reason')" prop="reason">
+            <el-input v-model="specialCertForm.reason" type="textarea" :rows="3" maxlength="500" show-word-limit />
+          </el-form-item>
+          <el-form-item :label="t('specialCert.contactPhone')" prop="contactPhone">
+            <el-input v-model="specialCertForm.contactPhone" />
+          </el-form-item>
+          <el-button type="primary" :loading="specialCertApplying" @click="onApplySpecialCert">
+            {{ t('specialCert.submitApply') }}
+          </el-button>
+        </el-form>
+      </div>
+    </section>
+
     <!-- 编辑资料 -->
     <el-dialog v-model="editVisible" :title="t('profile.editProfile')" width="480px">
       <el-form ref="editFormRef" :model="editForm" :rules="editRules" label-position="top">
@@ -277,7 +337,7 @@ import { ElMessage } from 'element-plus'
 import { ArrowDown } from '@element-plus/icons-vue'
 import ProfileHeader from '@/components/ProfileHeader.vue'
 import ImageCropDialog from '@/components/ImageCropDialog.vue'
-import { getUserInfo, updateUserInfo, applyMerchant, getMyMerchantApplication } from '@/api/user'
+import { getUserInfo, updateUserInfo, applyMerchant, getMyMerchantApplication, applySpecialCert, getMySpecialCertApplication } from '@/api/user'
 import { uploadProductImages } from '@/api/product'
 import { getPublicProfile } from '@/api/profile'
 import { listPostsByUser } from '@/api/topic'
@@ -322,9 +382,24 @@ const applyRules = {
   ]
 }
 
+const specialCertOpen = ref(false)
+const specialCertApp = ref(null)
+const specialCertApplying = ref(false)
+const specialCertFormRef = ref(null)
+const specialCertForm = reactive({ displayName: '', reason: '', contactPhone: '' })
+const specialCertRules = {
+  displayName: [{ required: true, message: '请填写认证展示名称', trigger: 'blur' }],
+  reason: [{ required: true, message: '请填写申请说明', trigger: 'blur' }],
+  contactPhone: [
+    { required: true, message: '请填写联系电话', trigger: 'blur' },
+    { pattern: /^1[3-9]\d{9}$/, message: '手机号格式不正确', trigger: 'blur' }
+  ]
+}
+
 const roleTagType = computed(() => {
   if (userStore.isAdmin) return 'danger'
-  if (userStore.isMerchant) return 'success'
+  if (userStore.isOfficial) return 'success'
+  if (userStore.isMerchant) return 'warning'
   return 'info'
 })
 
@@ -418,6 +493,40 @@ async function onApplyMerchant() {
     await fetchMerchantApplication()
   } finally {
     applying.value = false
+  }
+}
+
+async function fetchSpecialCertApplication() {
+  if (!userStore.isPersonal) return
+  try {
+    const res = await getMySpecialCertApplication()
+    specialCertApp.value = res.data
+    if (res.data && res.data.status === 1) {
+      await fetchInfo()
+    }
+  } catch {
+    specialCertApp.value = null
+  }
+}
+
+async function onApplySpecialCert() {
+  if (!specialCertFormRef.value) return
+  try {
+    await specialCertFormRef.value.validate()
+  } catch {
+    return
+  }
+  specialCertApplying.value = true
+  try {
+    await applySpecialCert({
+      displayName: specialCertForm.displayName.trim(),
+      reason: specialCertForm.reason.trim(),
+      contactPhone: specialCertForm.contactPhone.trim()
+    })
+    ElMessage.success(t('specialCert.applySuccess'))
+    await fetchSpecialCertApplication()
+  } finally {
+    specialCertApplying.value = false
   }
 }
 
@@ -682,6 +791,9 @@ function syncPanelFromQuery() {
   if (route.query.panel === 'merchant' && userStore.isPersonal) {
     merchantOpen.value = true
   }
+  if (route.query.panel === 'special-cert' && userStore.isPersonal) {
+    specialCertOpen.value = true
+  }
 }
 
 watch(() => route.query.panel, syncPanelFromQuery)
@@ -693,6 +805,7 @@ watch(cropVisible, (visible) => {
 onMounted(async () => {
   await fetchInfo()
   await fetchMerchantApplication()
+  await fetchSpecialCertApplication()
   syncPanelFromQuery()
   userStore.refreshPoints()
 })

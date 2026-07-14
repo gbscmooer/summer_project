@@ -27,7 +27,8 @@ public class AdminNotificationController {
     public Result<AdminBroadcastResult> broadcast(
             @RequestHeader("X-User-Id") Long userId,
             @Valid @RequestBody AdminBroadcastRequest request) {
-        adminAuthService.requireAdmin(userId);
+        // 管理员或特殊认证均可发通知；再按颗粒化权限校验 canBroadcast。
+        adminAuthService.requireNotificationSender(userId);
         userPermissionGuard.requireCanBroadcast(userId);
         AdminBroadcastResult result = notificationService.broadcast(userId, request);
         return Result.success("通知已发送", result);

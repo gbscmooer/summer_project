@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS t_user (
     phone       VARCHAR(20)  COMMENT '联系方式',
     email       VARCHAR(120) NULL COMMENT '绑定邮箱',
     email_verified TINYINT NOT NULL DEFAULT 0 COMMENT '0-未验证 1-已验证',
-    role        TINYINT      NOT NULL DEFAULT 0 COMMENT '0-个人账户 1-管理员 2-商家',
+    role        TINYINT      NOT NULL DEFAULT 0 COMMENT '0-个人账户 1-管理员 2-商家 3-特殊认证/官方',
     status      TINYINT      NOT NULL DEFAULT 0 COMMENT '0-正常 1-已封禁',
     ban_reason  VARCHAR(500) COMMENT '封禁原因',
     ban_until   DATETIME     COMMENT '封禁截止时间，NULL 表示永久',
@@ -319,6 +319,24 @@ CREATE TABLE IF NOT EXISTS t_merchant_application (
     INDEX idx_user_id (user_id),
     INDEX idx_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='商家入驻申请表';
+
+-- ============================================================
+-- 特殊认证申请表（校园集市官方等，campus-user 服务使用）
+-- ============================================================
+CREATE TABLE IF NOT EXISTS t_special_cert_application (
+    id            BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '申请ID',
+    user_id       BIGINT       NOT NULL COMMENT '申请人用户ID',
+    display_name  VARCHAR(100) NOT NULL COMMENT '认证展示名称（如校园集市官方）',
+    reason        VARCHAR(500) NOT NULL COMMENT '申请说明',
+    contact_phone VARCHAR(20)  NOT NULL COMMENT '联系电话',
+    status        TINYINT      NOT NULL DEFAULT 0 COMMENT '0-待审核 1-已通过 2-已拒绝',
+    admin_id      BIGINT       NULL COMMENT '审核管理员ID',
+    admin_note    VARCHAR(255) NULL COMMENT '审核备注',
+    create_time   DATETIME DEFAULT CURRENT_TIMESTAMP,
+    update_time   DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_user_id (user_id),
+    INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='特殊认证申请表';
 
 -- ============================================================
 -- 积分流水 / 签到 / 每日点赞任务（campus-user 服务使用）

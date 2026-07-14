@@ -79,6 +79,23 @@ export function getMyMerchantApplication() {
   })
 }
 
+// 申请特殊认证（校园集市官方等）
+export function applySpecialCert(data) {
+  return request({
+    url: '/user/special-cert/apply',
+    method: 'post',
+    data
+  })
+}
+
+// 查询我的特殊认证申请状态
+export function getMySpecialCertApplication() {
+  return request({
+    url: '/user/special-cert/application',
+    method: 'get'
+  })
+}
+
 // 忘记密码：按用户名发重置邮件
 export function forgotPassword(data) {
   return request({
