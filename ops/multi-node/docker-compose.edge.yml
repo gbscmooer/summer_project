@@ -1,0 +1,54 @@
+# Edge node: Nginx (SPA) + Spring Cloud Gateway
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  campus-gateway:
+    logging: *default-logging
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    build: ../../campus-trade/campus-gateway
+    image: campus-gateway:multi-node
+    container_name: campus-gateway
+    environment:
+      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR=${MW_HOST:?MW_HOST is required}:${NACOS_PORT:-8848}
+      - SPRING_CLOUD_NACOS_DISCOVERY_IP=${HOST_IP:?HOST_IP is required}
+      - SPRING_CLOUD_INETUTILS_PREFERRED_NETWORKS=${SPRING_CLOUD_INETUTILS_PREFERRED_NETWORKS:-10.0}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
+      - JWT_EXPIRATION_MINUTES=${JWT_EXPIRATION_MINUTES:-120}
+      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN:?INTERNAL_API_TOKEN is required}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-}
+      - JAVA_OPTS=${JAVA_OPTS_GATEWAY:--Xms256m -Xmx256m}
+    # 不映射宿主机端口：由 campus-web 反代到容器名 campus-gateway:8080
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 8080 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  campus-web:
+    logging: *default-logging
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx:uid=101,gid=101,mode=0755
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    build: ../../campus-trade-web
+    image: campus-web:multi-node
+    container_name: campus-web
+    environment:
+      TRUSTED_PROXY_CIDR: ${TRUSTED_PROXY_CIDR:?TRUSTED_PROXY_CIDR is required}
+    ports:
+      - "${WEB_BIND_ADDRESS:-0.0.0.0}:${WEB_PORT:-8080}:8080"
+    depends_on:
+      campus-gateway:
+        condition: service_healthy
+    restart: unless-stopped
