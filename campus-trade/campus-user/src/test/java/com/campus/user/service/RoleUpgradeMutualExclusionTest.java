@@ -142,6 +142,44 @@ class RoleUpgradeMutualExclusionTest {
         verify(merchantApplicationMapper).update(isNull(), ArgumentMatchers.<Wrapper<MerchantApplication>>any());
     }
 
+    @Test
+    void merchantReject_failsWhenConcurrentApproveAlreadyClaimed() {
+        MerchantApplication app = pendingMerchant(22L, 200L);
+        when(merchantApplicationMapper.selectById(22L)).thenReturn(app);
+        // 并发 approve 已把 status 改为 APPROVED，拒绝 CAS 更新 0 行
+        when(merchantApplicationMapper.update(isNull(), ArgumentMatchers.<Wrapper<MerchantApplication>>any()))
+                .thenReturn(0);
+
+        BizException ex = assertThrows(BizException.class,
+                () -> merchantService.reject(1L, 22L, "不通过"));
+        assertEquals(ResultCode.MERCHANT_APPLICATION_REVIEWED.getCode(), ex.getCode());
+    }
+
+    @Test
+    void specialCertReject_failsWhenConcurrentApproveAlreadyClaimed() {
+        SpecialCertApplication app = pendingSpecialCert(11L, 100L);
+        when(specialCertApplicationMapper.selectById(11L)).thenReturn(app);
+        when(specialCertApplicationMapper.update(isNull(), ArgumentMatchers.<Wrapper<SpecialCertApplication>>any()))
+                .thenReturn(0);
+
+        BizException ex = assertThrows(BizException.class,
+                () -> specialCertService.reject(1L, 11L, "不通过"));
+        assertEquals(ResultCode.SPECIAL_CERT_APPLICATION_REVIEWED.getCode(), ex.getCode());
+    }
+
+    @Test
+    void merchantReject_usesCasOnPending() {
+        MerchantApplication app = pendingMerchant(22L, 200L);
+        when(merchantApplicationMapper.selectById(22L)).thenReturn(app);
+        when(merchantApplicationMapper.update(isNull(), ArgumentMatchers.<Wrapper<MerchantApplication>>any()))
+                .thenReturn(1);
+
+        merchantService.reject(1L, 22L, "材料不全");
+
+        verify(merchantApplicationMapper).update(isNull(), ArgumentMatchers.<Wrapper<MerchantApplication>>any());
+        verify(merchantApplicationMapper, never()).updateById(any(MerchantApplication.class));
+    }
+
     private static User user(Long id, int role) {
         User u = new User();
         u.setId(id);

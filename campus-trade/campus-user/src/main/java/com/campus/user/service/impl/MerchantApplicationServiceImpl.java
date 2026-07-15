@@ -146,12 +146,16 @@ public class MerchantApplicationServiceImpl
     @Transactional
     public void reject(Long adminId, Long applicationId, String adminNote) {
         getAndCheckPending(applicationId);
-        MerchantApplication patch = new MerchantApplication();
-        patch.setId(applicationId);
-        patch.setStatus(STATUS_REJECTED);
-        patch.setAdminId(adminId);
-        patch.setAdminNote(adminNote);
-        updateById(patch);
+        // CAS：仅当仍待审时拒绝，避免并发通过后把 APPROVED 覆盖成 REJECTED 却留下 MERCHANT 角色
+        UpdateWrapper<MerchantApplication> claim = new UpdateWrapper<>();
+        claim.eq("id", applicationId)
+                .eq("status", STATUS_PENDING)
+                .set("status", STATUS_REJECTED)
+                .set("admin_id", adminId)
+                .set("admin_note", adminNote);
+        if (!update(claim)) {
+            throw new BizException(ResultCode.MERCHANT_APPLICATION_REVIEWED);
+        }
     }
 
     private void cancelPendingSpecialCertApplications(Long userId, Long adminId) {
