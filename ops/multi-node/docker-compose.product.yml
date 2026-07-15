@@ -1,0 +1,66 @@
+# Product service node — scale by starting this compose on multiple ECS with different HOST_IP
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  product-images-init:
+    image: amazoncorretto:17-alpine@sha256:223ebda8690566648f5cc77a69d661ecf7c35a9f977fd7cbf0d19545491ad1c6
+    logging: *default-logging
+    user: "0:0"
+    entrypoint: ["/bin/chown", "-R", "10001:10001", "/data/product-images"]
+    network_mode: none
+    read_only: true
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    cap_add: [CHOWN]
+    volumes:
+      - ${PRODUCT_IMAGE_HOST_DIR:-/data/product-images}:/data/product-images
+    restart: "no"
+
+  campus-product:
+    logging: *default-logging
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    build: ../../campus-trade/campus-product
+    image: campus-product:multi-node
+    container_name: campus-product
+    environment:
+      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR=${MW_HOST:?MW_HOST is required}:${NACOS_PORT:-8848}
+      - SPRING_CLOUD_NACOS_DISCOVERY_IP=${HOST_IP:?HOST_IP is required}
+      - SPRING_CLOUD_INETUTILS_PREFERRED_NETWORKS=${SPRING_CLOUD_INETUTILS_PREFERRED_NETWORKS:-10.0}
+      - SPRING_DATASOURCE_URL=jdbc:mysql://${MW_HOST}:${MYSQL_PORT:-3306}/campus_trade?useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci&serverTimezone=Asia/Shanghai
+      - SPRING_DATASOURCE_USERNAME=campus
+      - SPRING_DATASOURCE_PASSWORD=${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}
+      - SPRING_DATA_REDIS_HOST=${MW_HOST}
+      - SPRING_DATA_REDIS_PORT=${REDIS_PORT:-6379}
+      - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+      - SPRING_ELASTICSEARCH_URIS=http://${MW_HOST}:${ES_PORT:-9200}
+      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN:?INTERNAL_API_TOKEN is required}
+      - AI_API_KEY=${AI_API_KEY:-}
+      - AI_BASE_URL=${AI_BASE_URL:-https://api.openai.com/v1}
+      - AI_MODEL=${AI_MODEL:-gpt-4.1-mini}
+      - AI_SUPPORTS_VISION=${AI_SUPPORTS_VISION:-true}
+      - AI_TIMEOUT_SECONDS=${AI_TIMEOUT_SECONDS:-60}
+      - AI_CONFIG_ENCRYPTION_KEY=${AI_CONFIG_ENCRYPTION_KEY:?AI_CONFIG_ENCRYPTION_KEY is required}
+      - PRODUCT_IMAGE_DIR=/data/product-images
+      - PRODUCT_REINDEX_ON_STARTUP=false
+      - JAVA_OPTS=${JAVA_OPTS_PRODUCT:--Xms512m -Xmx512m}
+    ports:
+      - "8082:8082"
+    volumes:
+      - ${PRODUCT_IMAGE_HOST_DIR:-/data/product-images}:/data/product-images
+    depends_on:
+      product-images-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 8082 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 25s

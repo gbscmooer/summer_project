@@ -32,3 +32,6 @@ dist/
 .env
 .env.*
 !.env.example
+
+# multi-node local secrets
+ops/multi-node/.env

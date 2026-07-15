@@ -1,5 +1,7 @@
 # 启动与安装
 
+多机部署（3 台验证 → 扩到 10 台）、故障演练与 Nacos 跨机注册说明见 [`ops/multi-node/README.md`](ops/multi-node/README.md)。
+
 ## 环境
 
 - JDK 17

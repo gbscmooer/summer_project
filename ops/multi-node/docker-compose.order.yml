@@ -1,0 +1,42 @@
+# Order service node — can run 1–2 ECS replicas
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  campus-order:
+    logging: *default-logging
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    build: ../../campus-trade/campus-order
+    image: campus-order:multi-node
+    container_name: campus-order
+    environment:
+      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR=${MW_HOST:?MW_HOST is required}:${NACOS_PORT:-8848}
+      - SPRING_CLOUD_NACOS_DISCOVERY_IP=${HOST_IP:?HOST_IP is required}
+      - SPRING_CLOUD_INETUTILS_PREFERRED_NETWORKS=${SPRING_CLOUD_INETUTILS_PREFERRED_NETWORKS:-10.0}
+      - SPRING_DATASOURCE_URL=jdbc:mysql://${MW_HOST}:${MYSQL_PORT:-3306}/campus_trade?useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci&serverTimezone=Asia/Shanghai
+      - SPRING_DATASOURCE_USERNAME=campus
+      - SPRING_DATASOURCE_PASSWORD=${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}
+      - SPRING_DATA_REDIS_HOST=${MW_HOST}
+      - SPRING_DATA_REDIS_PORT=${REDIS_PORT:-6379}
+      - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+      - SPRING_RABBITMQ_HOST=${MW_HOST}
+      - SPRING_RABBITMQ_PORT=${RABBITMQ_PORT:-5672}
+      - SPRING_RABBITMQ_USERNAME=${RABBITMQ_USERNAME:?RABBITMQ_USERNAME is required}
+      - SPRING_RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}
+      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN:?INTERNAL_API_TOKEN is required}
+      - JAVA_OPTS=${JAVA_OPTS_ORDER:--Xms256m -Xmx256m}
+    ports:
+      - "8083:8083"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 8083 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 25s
