@@ -253,12 +253,13 @@ cd ops/multi-node
 
 **禁止**先停止旧主或断网。
 
-1. 在旧主 **Data-Main** 上先停止业务写入，并执行：
+1. 在旧主 **Data-Main** 上先停止业务写入，再**持久化**只读围栏（必须用 `SET PERSIST`，不要用 `SET GLOBAL`）：
 
-   ```sql
-   SET GLOBAL read_only=ON;
-   SET GLOBAL super_read_only=ON;
+   ```bash
+   ./scripts/fence-mysql-primary.sh
    ```
+
+   `SET GLOBAL` 在 `campus-mysql-primary` 容器重启（OOM / `restart: unless-stopped`）后会丢失；切流窗口内旧主会重新可写，与新主形成双主分叉。`fence-mysql-primary.sh` 使用 `SET PERSIST`，写入 datadir 的 `mysqld-auto.cnf`，重启后仍只读。若尚未 promote 需撤销：`./scripts/unfence-mysql-primary.sh`。
 
 2. 保持旧主在线和复制连接正常。
 3. 等待 **Data-Sub** 满足：
@@ -274,7 +275,7 @@ cd ops/multi-node
    OLD_PRIMARY_FENCED=yes ./scripts/promote-mysql.sh
    ```
 
-5. 新主开放写入后，**保持旧主只读**，并将各 App `.env` 的 `MYSQL_HOST` 切换到新主私网 IP，滚动重启 App 节点。
+5. 新主开放写入后，**保持旧主只读（PERSIST 围栏不要撤）**，并将各 App `.env` 的 `MYSQL_HOST` 切换到新主私网 IP，滚动重启 App 节点。
 
 #### 故障切换（旧主不可用）
 

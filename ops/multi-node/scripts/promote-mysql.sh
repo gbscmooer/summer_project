@@ -18,7 +18,7 @@ CONTAINER="${REPLICA_CONTAINER:-campus-mysql-replica}"
 
 if [[ "${OLD_PRIMARY_FENCED:-}" != "yes" ]]; then
   echo "ERROR: OLD_PRIMARY_FENCED=yes is required before any promote write." >&2
-  echo "       Planned switch: set read_only/super_read_only on old primary first." >&2
+  echo "       Planned switch: run ./scripts/fence-mysql-primary.sh on Data-Main (SET PERSIST, not SET GLOBAL)." >&2
   echo "       Failure switch: confirm old primary is powered off, network cut, or SG isolated." >&2
   exit 1
 fi
@@ -84,7 +84,7 @@ if [[ "$failure_promote" -eq 1 ]]; then
   echo "    OLD_PRIMARY_FENCED=yes: old primary confirmed powered off / network cut / SG isolated."
   echo "    WARNING: RPO data loss is possible for transactions not yet received by this replica."
 else
-  echo "    OLD_PRIMARY_FENCED=yes: old primary confirmed read-only (super_read_only) and still online."
+  echo "    OLD_PRIMARY_FENCED=yes: old primary confirmed persistently read-only (SET PERSIST) and still online."
   echo "    Replication caught up (Seconds_Behind_Source=0)."
 fi
 echo ""
