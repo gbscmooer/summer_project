@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 在 Node7（数据主）上：创建复制账号，供 Node8 setup-replication.sh 使用。
+# 在 Data-Main 上：创建复制账号，供 Data-Sub setup-replication.sh 使用。
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -9,8 +9,8 @@ cd "$ROOT"
 set -a; source .env; set +a
 
 MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASSWORD:?required}"
-REPL_USER="${MYSQL_REPL_USER:-repl}"
-REPL_PASSWORD="${MYSQL_REPL_PASSWORD:-$MYSQL_ROOT_PASSWORD}"
+REPL_USER="${MYSQL_REPLICATION_USER:-repl}"
+REPL_PASSWORD="${MYSQL_REPLICATION_PASSWORD:?MYSQL_REPLICATION_PASSWORD is required}"
 
 echo "==> Wait for campus-mysql-primary healthy"
 for i in $(seq 1 60); do

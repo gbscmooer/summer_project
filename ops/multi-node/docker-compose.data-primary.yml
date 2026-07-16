@@ -60,7 +60,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # Sentinel 第三票在 Node3；本机为哨兵 #1。业务应用仍直连 Redis Master。
+  # Sentinel-1（Data-Main）。当前仅 2 个 Sentinel，应用仍直连 Redis Master，未接入 Sentinel。
   redis-sentinel-1:
     logging: *default-logging
     image: redis:7.2

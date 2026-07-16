@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# 在 Data-Sub 执行：配置本机 MySQL 为 GTID 从库。
-# 不修改 Data-Main；仅用 repl 账号连主库。
+# 在 Data-Sub 执行：配置本机 MySQL 为 GTID 从库（可安全重跑）。
+# 不修改 Data-Main；仅用复制账号连主库。
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -19,7 +19,21 @@ fi
 
 MYSQL_PORT="${MYSQL_PORT:-3306}"
 MYSQL_REPLICATION_USER="${MYSQL_REPLICATION_USER:-repl}"
-REPLICA_CONTAINER="${REPLICA_CONTAINER:-campus-mysql-replica}"
+REPLICA_CONTAINER="campus-mysql-replica"
+
+mysql_exec() {
+  docker exec -i "$REPLICA_CONTAINER" mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -N -e "$1"
+}
+
+mysql_exec_multi() {
+  docker exec -i "$REPLICA_CONTAINER" mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$@"
+}
+
+echo "==> target container: ${REPLICA_CONTAINER}"
+if ! docker ps --format '{{.Names}}' | grep -qx "$REPLICA_CONTAINER"; then
+  echo "ERROR: container ${REPLICA_CONTAINER} is not running" >&2
+  exit 1
+fi
 
 echo "==> waiting for local mysql-replica..."
 for i in $(seq 1 60); do
@@ -33,7 +47,38 @@ for i in $(seq 1 60); do
   fi
 done
 
-echo "==> probing primary via repl@${MYSQL_PRIMARY_HOST}:${MYSQL_PORT}..."
+server_id="$(mysql_exec "SELECT @@server_id;")"
+if [[ "$server_id" != "2" ]]; then
+  echo "ERROR: expected @@server_id=2 on ${REPLICA_CONTAINER}, got ${server_id}" >&2
+  exit 1
+fi
+echo "==> server_id=${server_id} OK"
+
+io_running="$(mysql_exec "SHOW REPLICA STATUS\\G" 2>/dev/null | awk -F': ' '/Replica_IO_Running:/{gsub(/ /,"",$2); print $2}' || true)"
+sql_running="$(mysql_exec "SHOW REPLICA STATUS\\G" 2>/dev/null | awk -F': ' '/Replica_SQL_Running:/{gsub(/ /,"",$2); print $2}' || true)"
+
+if [[ "$io_running" == "Yes" && "$sql_running" == "Yes" ]]; then
+  echo "==> replication already running (IO=Yes SQL=Yes); skip RESET"
+  mysql_exec_multi -e "SHOW REPLICA STATUS\\G" 2>/dev/null \
+    | grep -E 'Replica_IO_Running:|Replica_SQL_Running:|Seconds_Behind_Source:|Source_Host:' || true
+  exit 0
+fi
+
+table_count="$(mysql_exec "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='campus_trade';" 2>/dev/null || echo 0)"
+if [[ "${table_count:-0}" -gt 0 ]]; then
+  if [[ "${FORCE_REPLICA_RESET:-0}" != "1" ]]; then
+    echo "ERROR: campus_trade has ${table_count} table(s) but replication is not healthy." >&2
+    echo "       Refusing RESET. Set FORCE_REPLICA_RESET=1 to override." >&2
+    mysql_exec_multi -e "SHOW REPLICA STATUS\\G" 2>/dev/null \
+      | grep -E 'Replica_IO_Running:|Replica_SQL_Running:|Last_IO_Error:|Last_SQL_Error:' || true
+    exit 1
+  fi
+  echo "==> FORCE_REPLICA_RESET=1: resetting existing replica data channel"
+else
+  echo "==> empty replica (campus_trade tables=0): initializing replication channel"
+fi
+
+echo "==> probing primary via ${MYSQL_REPLICATION_USER}@${MYSQL_PRIMARY_HOST}:${MYSQL_PORT}..."
 for i in $(seq 1 60); do
   if docker run --rm --network host mysql:8.0 \
     mysql -h "$MYSQL_PRIMARY_HOST" -P "$MYSQL_PORT" \
@@ -48,10 +93,8 @@ for i in $(seq 1 60); do
   fi
 done
 
-echo "==> reset local GTID & start replica channel (no changes on primary)..."
-# 临时关闭 super_read_only 以便 RESET / CHANGE SOURCE
-# MySQL 8.0.46 用 RESET MASTER（RESET BINARY LOGS AND GTIDS 在部分镜像入口/客户端组合下会报语法错）
-docker exec -i "$REPLICA_CONTAINER" mysql -uroot -p"$MYSQL_ROOT_PASSWORD" <<EOSQL
+echo "==> RESET REPLICA / RESET MASTER / CHANGE REPLICATION SOURCE..."
+mysql_exec_multi <<EOSQL
 SET GLOBAL super_read_only=OFF;
 SET GLOBAL read_only=OFF;
 STOP REPLICA;
@@ -67,9 +110,21 @@ CHANGE REPLICATION SOURCE TO
 START REPLICA;
 EOSQL
 
-echo "==> restore read_only..."
-"$ROOT_DIR/scripts/enable-mysql-readonly.sh"
+echo "==> waiting for replication IO/SQL=Yes..."
+for i in $(seq 1 60); do
+  io_running="$(mysql_exec "SHOW REPLICA STATUS\\G" 2>/dev/null | awk -F': ' '/Replica_IO_Running:/{gsub(/ /,"",$2); print $2}' || true)"
+  sql_running="$(mysql_exec "SHOW REPLICA STATUS\\G" 2>/dev/null | awk -F': ' '/Replica_SQL_Running:/{gsub(/ /,"",$2); print $2}' || true)"
+  if [[ "$io_running" == "Yes" && "$sql_running" == "Yes" ]]; then
+    echo "==> replication healthy"
+    "$ROOT_DIR/scripts/enable-mysql-readonly.sh"
+    mysql_exec_multi -e "SHOW REPLICA STATUS\\G" 2>/dev/null \
+      | grep -E 'Replica_IO_Running:|Replica_SQL_Running:|Seconds_Behind_Source:|Source_Host:' || true
+    exit 0
+  fi
+  sleep 2
+done
 
-echo "==> replica status summary"
-docker exec "$REPLICA_CONTAINER" mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "SHOW REPLICA STATUS\G" 2>/dev/null \
-  | grep -E 'Replica_IO_Running:|Replica_SQL_Running:|Seconds_Behind_Source:|Last_IO_Error:|Last_SQL_Error:|Source_Host:'
+echo "ERROR: replication failed to reach IO=Yes SQL=Yes" >&2
+mysql_exec_multi -e "SHOW REPLICA STATUS\\G" 2>/dev/null \
+  | grep -E 'Replica_IO_Running:|Replica_SQL_Running:|Last_IO_Error:|Last_SQL_Error:' || true
+exit 1

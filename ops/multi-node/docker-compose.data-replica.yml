@@ -65,11 +65,13 @@ services:
       retries: 5
       start_period: 20s
 
+  # Sentinel-2（Data-Sub）。监控展示用；应用未接入 Sentinel，故障后需人工改 REDIS_HOST。
   redis-sentinel-2:
     logging: *default-logging
     image: redis:7.2
     container_name: campus-redis-sentinel-2
     environment:
+      HOST_IP: ${HOST_IP:?HOST_IP is required}
       REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
       REDIS_PRIMARY_HOST: ${REDIS_PRIMARY_HOST:?REDIS_PRIMARY_HOST is required}
       REDIS_SENTINEL_MASTER_NAME: ${REDIS_SENTINEL_MASTER_NAME:-campus-redis}
@@ -86,6 +88,8 @@ services:
         sentinel down-after-milliseconds $$REDIS_SENTINEL_MASTER_NAME 5000
         sentinel failover-timeout $$REDIS_SENTINEL_MASTER_NAME 60000
         sentinel parallel-syncs $$REDIS_SENTINEL_MASTER_NAME 1
+        sentinel announce-ip $${HOST_IP}
+        sentinel announce-port 26379
         EOF
         exec redis-sentinel /tmp/sentinel.conf
     ports:
