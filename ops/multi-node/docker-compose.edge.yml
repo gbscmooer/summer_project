@@ -23,9 +23,8 @@ services:
       TRUSTED_PROXY_CIDR: ${TRUSTED_PROXY_CIDR:?TRUSTED_PROXY_CIDR is required}
       # 集群：http://<内网SLB_VIP>:8080；3 台同机验证可改回 http://campus-gateway:8080
       GATEWAY_UPSTREAM: ${GATEWAY_UPSTREAM:-http://campus-gateway:8080}
-    # 仅本机回环，供同机 Caddy 反代；公网只暴露 Caddy 80/443
-    ports:
-      - "${WEB_BIND_ADDRESS:-127.0.0.1}:${WEB_PORT:-8080}:8080"
+    networks:
+      - edge-net
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/ >/dev/null || exit 1"]
@@ -38,18 +37,27 @@ services:
     logging: *default-logging
     image: caddy:2.9-alpine
     container_name: campus-caddy
-    # host 网络：与 deploy/Caddyfile 一致，反代 127.0.0.1:8080；便于 ACME 与真实客户端 IP
-    network_mode: host
     environment:
       DOMAIN: ${DOMAIN:-summer.huangzixuan.asia}
+    ports:
+      - "80:80"
+      - "443:443"
     volumes:
       - ./Caddyfile.cluster:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
+    networks:
+      - edge-net
     depends_on:
       campus-web:
         condition: service_healthy
     restart: unless-stopped
+
+networks:
+  edge-net:
+    ipam:
+      config:
+        - subnet: 192.168.250.0/24
 
 volumes:
   caddy_data:

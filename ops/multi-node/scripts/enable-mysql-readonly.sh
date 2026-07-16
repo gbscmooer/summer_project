@@ -13,7 +13,7 @@ fi
 CONTAINER="${REPLICA_CONTAINER:-campus-mysql-replica}"
 
 docker exec -i "$CONTAINER" mysql -uroot -p"$MYSQL_ROOT_PASSWORD" <<'EOSQL'
-SET GLOBAL read_only=ON;
-SET GLOBAL super_read_only=ON;
+SET PERSIST read_only=ON;
+SET PERSIST super_read_only=ON;
 SELECT @@server_id AS server_id, @@read_only AS read_only, @@super_read_only AS super_read_only;
 EOSQL

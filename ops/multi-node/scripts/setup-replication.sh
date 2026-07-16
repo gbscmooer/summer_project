@@ -29,6 +29,39 @@ mysql_exec_multi() {
   docker exec -i "$REPLICA_CONTAINER" mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$@"
 }
 
+read_replica_field() {
+  local field="$1"
+  mysql_exec "SHOW REPLICA STATUS\\G" 2>/dev/null \
+    | awk -F': ' -v f="$field" '$1 ~ f {gsub(/^[ \t]+/, "", $2); print $2; exit}'
+}
+
+replica_channel_exists() {
+  local source_host
+  source_host="$(read_replica_field 'Source_Host' || true)"
+  [[ -n "${source_host}" ]]
+}
+
+wait_replication_healthy() {
+  local label="${1:-replication}"
+  echo "==> waiting for ${label} IO/SQL=Yes..."
+  for i in $(seq 1 60); do
+    io_running="$(read_replica_field 'Replica_IO_Running')"
+    sql_running="$(read_replica_field 'Replica_SQL_Running')"
+    if [[ "$io_running" == "Yes" && "$sql_running" == "Yes" ]]; then
+      echo "==> replication healthy"
+      "$ROOT_DIR/scripts/enable-mysql-readonly.sh"
+      mysql_exec_multi -e "SHOW REPLICA STATUS\\G" 2>/dev/null \
+        | grep -E 'Replica_IO_Running:|Replica_SQL_Running:|Seconds_Behind_Source:|Source_Host:' || true
+      return 0
+    fi
+    sleep 2
+  done
+  echo "ERROR: ${label} failed to reach IO=Yes SQL=Yes" >&2
+  mysql_exec_multi -e "SHOW REPLICA STATUS\\G" 2>/dev/null \
+    | grep -E 'Replica_IO_Running:|Replica_SQL_Running:|Last_IO_Error:|Last_SQL_Error:' || true
+  return 1
+}
+
 echo "==> target container: ${REPLICA_CONTAINER}"
 if ! docker ps --format '{{.Names}}' | grep -qx "$REPLICA_CONTAINER"; then
   echo "ERROR: container ${REPLICA_CONTAINER} is not running" >&2
@@ -54,29 +87,34 @@ if [[ "$server_id" != "2" ]]; then
 fi
 echo "==> server_id=${server_id} OK"
 
-io_running="$(mysql_exec "SHOW REPLICA STATUS\\G" 2>/dev/null | awk -F': ' '/Replica_IO_Running:/{gsub(/ /,"",$2); print $2}' || true)"
-sql_running="$(mysql_exec "SHOW REPLICA STATUS\\G" 2>/dev/null | awk -F': ' '/Replica_SQL_Running:/{gsub(/ /,"",$2); print $2}' || true)"
+table_count="$(mysql_exec "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='campus_trade';" 2>/dev/null || echo 0)"
 
-if [[ "$io_running" == "Yes" && "$sql_running" == "Yes" ]]; then
-  echo "==> replication already running (IO=Yes SQL=Yes); skip RESET"
-  mysql_exec_multi -e "SHOW REPLICA STATUS\\G" 2>/dev/null \
-    | grep -E 'Replica_IO_Running:|Replica_SQL_Running:|Seconds_Behind_Source:|Source_Host:' || true
+if replica_channel_exists; then
+  io_running="$(read_replica_field 'Replica_IO_Running')"
+  sql_running="$(read_replica_field 'Replica_SQL_Running')"
+
+  if [[ "$io_running" == "Yes" && "$sql_running" == "Yes" ]]; then
+    echo "==> replication channel exists and IO/SQL=Yes; ensuring read-only"
+    "$ROOT_DIR/scripts/enable-mysql-readonly.sh"
+    mysql_exec_multi -e "SHOW REPLICA STATUS\\G" 2>/dev/null \
+      | grep -E 'Replica_IO_Running:|Replica_SQL_Running:|Seconds_Behind_Source:|Source_Host:' || true
+    exit 0
+  fi
+
+  echo "==> replication channel exists but IO/SQL not running; attempting START REPLICA"
+  mysql_exec_multi -e "START REPLICA;" 2>/dev/null || true
+  wait_replication_healthy "existing replication channel recovery" || exit 1
   exit 0
 fi
 
-table_count="$(mysql_exec "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='campus_trade';" 2>/dev/null || echo 0)"
 if [[ "${table_count:-0}" -gt 0 ]]; then
-  if [[ "${FORCE_REPLICA_RESET:-0}" != "1" ]]; then
-    echo "ERROR: campus_trade has ${table_count} table(s) but replication is not healthy." >&2
-    echo "       Refusing RESET. Set FORCE_REPLICA_RESET=1 to override." >&2
-    mysql_exec_multi -e "SHOW REPLICA STATUS\\G" 2>/dev/null \
-      | grep -E 'Replica_IO_Running:|Replica_SQL_Running:|Last_IO_Error:|Last_SQL_Error:' || true
-    exit 1
-  fi
-  echo "==> FORCE_REPLICA_RESET=1: resetting existing replica data channel"
-else
-  echo "==> empty replica (campus_trade tables=0): initializing replication channel"
+  echo "ERROR: campus_trade has ${table_count} table(s) but no replication channel." >&2
+  echo "       Refusing RESET. Back up if needed, then recreate an empty Data-Sub data directory" >&2
+  echo "       (${DATA_MYSQL_DIR:-/data/mysql}) and run up-role.sh data-replica again." >&2
+  exit 1
 fi
+
+echo "==> empty replica (no channel, campus_trade tables=0): initializing replication channel"
 
 echo "==> probing primary via ${MYSQL_REPLICATION_USER}@${MYSQL_PRIMARY_HOST}:${MYSQL_PORT}..."
 for i in $(seq 1 60); do
@@ -110,21 +148,4 @@ CHANGE REPLICATION SOURCE TO
 START REPLICA;
 EOSQL
 
-echo "==> waiting for replication IO/SQL=Yes..."
-for i in $(seq 1 60); do
-  io_running="$(mysql_exec "SHOW REPLICA STATUS\\G" 2>/dev/null | awk -F': ' '/Replica_IO_Running:/{gsub(/ /,"",$2); print $2}' || true)"
-  sql_running="$(mysql_exec "SHOW REPLICA STATUS\\G" 2>/dev/null | awk -F': ' '/Replica_SQL_Running:/{gsub(/ /,"",$2); print $2}' || true)"
-  if [[ "$io_running" == "Yes" && "$sql_running" == "Yes" ]]; then
-    echo "==> replication healthy"
-    "$ROOT_DIR/scripts/enable-mysql-readonly.sh"
-    mysql_exec_multi -e "SHOW REPLICA STATUS\\G" 2>/dev/null \
-      | grep -E 'Replica_IO_Running:|Replica_SQL_Running:|Seconds_Behind_Source:|Source_Host:' || true
-    exit 0
-  fi
-  sleep 2
-done
-
-echo "ERROR: replication failed to reach IO=Yes SQL=Yes" >&2
-mysql_exec_multi -e "SHOW REPLICA STATUS\\G" 2>/dev/null \
-  | grep -E 'Replica_IO_Running:|Replica_SQL_Running:|Last_IO_Error:|Last_SQL_Error:' || true
-exit 1
+wait_replication_healthy "new replication channel" || exit 1

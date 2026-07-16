@@ -7,7 +7,6 @@ binlog_format=ROW
 binlog_expire_logs_seconds=604800
 relay_log=relay-bin
 relay_log_recovery=ON
-skip_replica_start=ON
 character-set-server=utf8mb4
 collation-server=utf8mb4_unicode_ci
 default-authentication-plugin=mysql_native_password
