@@ -31,7 +31,7 @@ VPC 网段：**172.17.176.0/20**
 | App-A | 172.17.178.189 | 47.76.254.89 | Gateway + User + Product |
 | App-B | 172.17.178.197 | 8.218.45.65 | Gateway + Order + Product |
 | App-C | 172.17.178.192 | 8.210.53.78 | User + Order |
-| Middleware | 172.17.178.193 | 47.242.124.102 | Nacos / ES / RabbitMQ |
+| Middleware | 172.17.178.193 | 47.76.201.91 | Nacos / ES / RabbitMQ |
 | Data-Sub | 172.17.178.194 | 8.218.2.200 | MySQL 从 + Redis 从 |
 | Data-Main | 172.17.178.195 | 47.242.51.82 | MySQL 主 + Redis 主 |
 | 内网 CLB | **172.17.178.198** | — | Gateway 后端池 VIP |
@@ -160,12 +160,14 @@ TRUSTED_PROXY_CIDR=192.168.250.0/24
 
 1. 公网 CLB 的 HTTP/HTTPS **先只回源 Edge-A**
 2. Edge-A 上 Caddy 完成 Let's Encrypt 申请
-3. 将 HTTP 临时切到 **Edge-B**，Edge-B 获取证书
+3. 将 HTTP/HTTPS 两个服务器组临时切到 **Edge-B**，Edge-B 获取证书
 4. 最后将 **Edge-A 与 Edge-B** 都加入公网 CLB 服务器组
 
 DNS 须指向公网 CLB；安全组放行 80/443。
 
-**续期**：证书到期前约 30 天，须按上述相同方式**逐台切流**完成续期，不能依赖双节点自动协调 ACME。
+**续期**：证书到期前约 30 天，须按上述相同方式将 **80/443 同时逐台切流**
+完成续期，确保 HTTP-01 与 TLS-ALPN-01 都命中正在续期的节点；不能依赖双节点
+自动协调 ACME。
 
 ---
 
@@ -173,7 +175,7 @@ DNS 须指向公网 CLB；安全组放行 80/443。
 
 | CLB | 后端 | 检查方式 |
 |-----|------|----------|
-| **公网 CLB** | Edge-A/B `:443` | TCP 443 |
+| **公网 CLB** | Edge-A/B `:80/:443` | TCP 80 / TCP 443 |
 | **内网 CLB** | App-A/B `:8080` | **TCP 8080** |
 
 > Gateway **无** Actuator；HTTP `/actuator/health` 不可用。
@@ -195,23 +197,24 @@ DNS 须指向公网 CLB；安全组放行 80/443。
 
 | 方向 | 端口 | 放行 |
 |------|------|------|
-| 公网 → Edge | 80 / 443 | 仅 Edge-A/B |
+| 公网 → 公网 CLB | 80 / 443 | 唯一业务入口 |
+| 公网 CLB → Edge | 80 / 443 | Edge 安全组仅允许 CLB/VPC 回源，不向公网直接开放 |
 | VPC → MW | 8848,9848,9200,5672 | App / Edge |
 | VPC → Data | 3306,6379 | App / MW |
 | VPC → Sentinel | **26379** | Data-Main ↔ Data-Sub（Sentinel 节点互访） |
 | VPC → App Gateway | 8080 | 内网 CLB、Edge |
 | VPC → App 服务 | **8081,8082,8083** | VPC 内互通（排障/Nacos 直连） |
-| 禁止 | 8081～8083、3306、6379 对公网 | — |
+| 禁止 | 8080～8083、3306、6379、8848、9848、9200、5672、15672、26379 对公网 | — |
 
 ---
 
 ## 7. Redis Sentinel 说明（答辩口径）
 
-- 当前仅 **Sentinel-1（Data-Main）** 与 **Sentinel-2（Data-Sub）**，**无第三个 Sentinel**
-- Sentinel **仅用于状态监控与答辩展示**
+- 当前仅 **Sentinel-1（Data-Main）** 与 **Sentinel-2（Data-Sub）**，**无第三个 Sentinel**，quorum 为 2
+- 仅 Redis Master 进程故障且两个 Sentinel 都在线时可能完成选举；Data-Main 整机故障时只剩一个 Sentinel，无法达到 quorum
 - **应用未接入 Sentinel**，业务仍直连 `REDIS_HOST`（Data-Main Master）
-- Redis 主故障后需 **人工修改各 App `REDIS_HOST` 并滚动重启**
-- **不宣称** Redis 自动业务故障转移
+- 即使 Sentinel 已提升副本，也需人工确认新主可写，再修改各 App `REDIS_HOST` 并滚动重启
+- 当前仓库未提供承诺可用于生产的 Redis 人工提升脚本；**不宣称** Redis 自动业务故障转移
 
 ---
 
@@ -237,10 +240,10 @@ cd ops/multi-node
 | 演练 | 操作 | 预期 |
 |------|------|------|
 | Gateway 单点 | 停 App-A Gateway | 内网 CLB TCP 摘除；站点仍可用 |
-| Product 单点 | stop 一台 product | Nacos 摘除；详情仍可用 |
+| Product 单点 | stop 一台 product | Nacos 摘除；DB 支撑的商品列表仍可用，图片路径不在保障范围 |
 | Edge 单点 | 停一台 Edge | 公网 CLB 摘除；站点仍可用 |
 | App-C 整机 | 停 172.17.178.192 | User/Order 仍有另一实例 |
-| MW 整机 | 停 Middleware | **全站不可用**（单点边界） |
+| MW 整机 | 停 Middleware | 注册发现、搜索与 MQ 受影响；客户端缓存可能让部分既有调用短暂继续，但不具备 HA |
 
 ```bash
 ./scripts/chaos-stop.sh product
@@ -294,7 +297,9 @@ OLD_PRIMARY_FENCED=yes FORCE_PROMOTE=1 ./scripts/promote-mysql.sh
 
 ## 10. 图片多实例
 
-Product 多机时本地盘不共享。答辩推荐：**仅 App-A product 接上传**，列表/详情走双实例。
+Product 多机时本地盘不共享，Gateway 也没有按图片路径固定实例。答辩若演示上传，
+应临时只保留一个 Product 实例处理全部 Product 请求；需要双实例同时提供图片时，
+必须先将 `PRODUCT_IMAGE_HOST_DIR` 迁移到 OSS/NFS 等共享存储。
 
 ---
 
