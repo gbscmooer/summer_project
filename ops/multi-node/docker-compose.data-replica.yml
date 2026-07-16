@@ -43,6 +43,8 @@ services:
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
       REDIS_PRIMARY_HOST: ${REDIS_PRIMARY_HOST:?REDIS_PRIMARY_HOST is required}
+      # 必须通告 ECS 私网 IP；否则 Sentinel failover 后主地址变成 Docker 桥接 IP，业务不可达
+      HOST_IP: ${HOST_IP:?HOST_IP is required}
     command:
       - sh
       - -c
@@ -52,7 +54,9 @@ services:
           --requirepass "$$REDIS_PASSWORD" \
           --masterauth "$$REDIS_PASSWORD" \
           --replicaof "$$REDIS_PRIMARY_HOST" 6379 \
-          --replica-read-only yes
+          --replica-read-only yes \
+          --replica-announce-ip "$$HOST_IP" \
+          --replica-announce-port 6379
     ports:
       - "${REDIS_PORT:-6379}:6379"
     volumes:
@@ -73,6 +77,7 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
       REDIS_PRIMARY_HOST: ${REDIS_PRIMARY_HOST:?REDIS_PRIMARY_HOST is required}
       REDIS_SENTINEL_MASTER_NAME: ${REDIS_SENTINEL_MASTER_NAME:-campus-redis}
+      HOST_IP: ${HOST_IP:?HOST_IP is required}
     command:
       - sh
       - -c
@@ -86,10 +91,12 @@ services:
         sentinel down-after-milliseconds $$REDIS_SENTINEL_MASTER_NAME 5000
         sentinel failover-timeout $$REDIS_SENTINEL_MASTER_NAME 60000
         sentinel parallel-syncs $$REDIS_SENTINEL_MASTER_NAME 1
+        sentinel announce-ip $$HOST_IP
+        sentinel announce-port 26379
         EOF
         exec redis-sentinel /tmp/sentinel.conf
     ports:
-      - "26379:26379"
+      - "${REDIS_SENTINEL_PORT:-26379}:26379"
     depends_on:
       redis-replica:
         condition: service_started
