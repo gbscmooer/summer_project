@@ -1,7 +1,10 @@
 # 多机部署动作手册（答辩 / 运维）
 
-面向：先 **3 台验证**，再按量扩到 **10 台业务 + 1 台压测**。  
-**不改业务 Java/Vue 逻辑**；靠 Compose、环境变量、Nacos 注册 IP、安全组完成。
+面向：**3 台验证** → **8 台集群答辩落地**。
+**不改业务 Java/Vue 逻辑**；靠 Compose、环境变量、Nacos 注册 IP、CLB、安全组完成。
+
+公网入口：**47.86.103.153**（公网 CLB）→ 域名 **summer.huangzixuan.asia**
+VPC 网段：**172.17.176.0/20**
 
 ---
 
@@ -15,181 +18,300 @@
 | 各机 `/etc/hosts` 或 PrivateZone | **要配** |
 | Nacos 注册 IP（`SPRING_CLOUD_NACOS_DISCOVERY_IP`） | **必须配**（否则注册成 Docker 桥接 IP） |
 
+> **说明**：当前 Spring Boot 服务**未引入 Actuator**，CLB 健康检查请使用 **TCP 端口探测**（见 §4），勿配置 HTTP `/actuator/health`。
+
 ---
 
-## 1. 角色与 3→10 映射
+## 1. 八台节点映射
 
-### 阶段 A：3 台验证
+| 角色 | 私网 IP | 公网 IP | 说明 |
+|------|---------|---------|------|
+| Edge-A | 172.17.178.190 | 8.218.58.199 | Caddy + campus-web |
+| Edge-B | 172.17.178.191 | 47.243.210.172 | Caddy + campus-web |
+| App-A | 172.17.178.189 | 47.76.254.89 | Gateway + User + Product |
+| App-B | 172.17.178.197 | 8.218.45.65 | Gateway + Order + Product |
+| App-C | 172.17.178.192 | 8.210.53.78 | User + Order |
+| Middleware | 172.17.178.193 | 47.242.124.102 | Nacos / ES / RabbitMQ |
+| Data-Sub | 172.17.178.194 | 8.218.2.200 | MySQL 从 + Redis 从 |
+| Data-Main | 172.17.178.195 | 47.242.51.82 | MySQL 主 + Redis 主 |
+| 内网 CLB | **172.17.178.198** | — | Gateway 后端池 VIP |
 
-| 主机名建议 | 角色 | 启动命令 |
-|------------|------|----------|
+hosts 示例见 `hosts.example`；环境变量模板见 `.env.cluster.example`。
+
+---
+
+## 2. 架构概览
+
+```text
+用户 → 公网 CLB (47.86.103.153) → Edge-A/B (:443)
+              │
+              │  /api/* → 内网 CLB VIP
+              ▼
+         内网 CLB (172.17.178.198:8080)
+              │
+              ├─► App-A Gateway :8080
+              └─► App-B Gateway :8080
+                        │
+         ┌──────────────┼──────────────┐
+         ▼              ▼              ▼
+      App-C         Middleware      Data-Main / Data-Sub
+   User+Order    Nacos/ES/MQ      MySQL + Redis
+```
+
+---
+
+## 3. 干净机器完整流程（从仓库根目录执行）
+
+以下命令均在 **仓库根目录** `/path/to/summer_project` 执行。
+
+### 3.1 系统准备
+
+1. Ubuntu 22.04 / Alibaba Cloud Linux 3 + Docker + Compose 插件
+2. 将仓库同步到各 ECS（同一 Git commit）
+3. 安全组、CLB、PrivateZone 按 §6 配置
+
+**构建节点（Edge / App）** 还需：
+
+- JDK 17
+- Maven 3.9+
+- Node.js 18+
+- npm
+- Docker / Compose
+
+**Middleware / Data 节点** 只需 Docker / Compose，无需 JDK/Maven/Node。
+
+### 3.2 构建（每 Edge/App 节点本地构建）
+
+> **镜像策略**：答辩方案在 **每个 Edge/App 节点** 从同一 Git commit **本地 build**；Middleware/Data 使用 **官方镜像**；**不会**自动分发业务镜像，需各节点自行构建或自行推送到 ACR 后拉取。
+
+```bash
+(cd campus-trade && mvn -q package -DskipTests)
+(cd campus-trade-web && npm ci && npm run build)
+
+docker compose -f ops/multi-node/docker-compose.edge.yml build
+docker compose -f ops/multi-node/docker-compose.app-a.yml build
+docker compose -f ops/multi-node/docker-compose.app-b.yml build
+docker compose -f ops/multi-node/docker-compose.app-c.yml build
+```
+
+### 3.3 各机 `.env`
+
+```bash
+cd ops/multi-node
+cp .env.cluster.example .env
+# 改 HOST_IP 为本机私网 IP；填写 Secret（勿提交 Git）
+```
+
+统一连接地址（`.env.cluster.example` 已给出）：
+
+```bash
+MW_HOST=172.17.178.193
+NACOS_HOST=172.17.178.193
+ES_HOST=172.17.178.193
+RABBITMQ_HOST=172.17.178.193
+MYSQL_HOST=172.17.178.195
+MYSQL_PRIMARY_HOST=172.17.178.195
+REDIS_HOST=172.17.178.195
+REDIS_PRIMARY_HOST=172.17.178.195
+GATEWAY_UPSTREAM=http://172.17.178.198:8080
+```
+
+Edge 额外注意：
+
+```bash
+TRUSTED_PROXY_CIDR=192.168.250.0/24
+```
+
+**固定为 edge-net 子网**（`docker-compose.edge.yml` 中 `192.168.250.0/24`），供 campus-web nginx 识别 Caddy 反代来源。**不要填写公网 CLB 回源网段**。
+
+**campus-web 不映射宿主机 8080**，公网/本机访问只能经同机 Caddy `:80/:443` → `campus-web:8080`（edge-net）。
+
+### 3.4 启动顺序与命令
+
+```text
+① Data-Main → prepare-primary-repl.sh
+② Data-Sub  → setup-replication.sh
+③ Middleware
+④ App-A → App-B → App-C
+⑤ 内网 CLB 后端：App-A:8080、App-B:8080（TCP 健康检查）
+⑥ Edge-A / Edge-B + 公网 CLB + DNS
+⑦ 端到端验收
+```
+
+各节点在 `ops/multi-node` 目录执行：
+
+| 节点 | 命令 |
+|------|------|
+| Data-Main | `./scripts/up-role.sh data-primary` → `./scripts/prepare-primary-repl.sh` |
+| Data-Sub | `./scripts/up-role.sh data-replica` → `./scripts/setup-replication.sh` |
+| Middleware | `./scripts/up-role.sh mw` |
+| App-A | `./scripts/up-role.sh app-a` |
+| App-B | `./scripts/up-role.sh app-b` |
+| App-C | `./scripts/up-role.sh app-c` |
+| Edge-A/B | `./scripts/up-role.sh edge` |
+
+`setup-replication.sh` 可安全重跑：复制通道已存在且 IO/SQL=Yes 时仅确保只读；通道存在但未运行时尝试 `START REPLICA` 恢复；**禁止**对已有业务数据的从库执行 RESET。若已有 `campus_trade` 表但无复制通道，需备份后清空 Data-Sub 数据目录（`${DATA_MYSQL_DIR:-/data/mysql}`）再重建。
+
+**Data-Sub 数据目录**：`docker-compose.data-replica.yml` 使用 `${DATA_MYSQL_DIR:-/data/mysql}`、`${DATA_REDIS_DIR:-/data/redis}` 绑定宿主机路径。若节点曾用 named volume 运行，**不能直接切换目录**，需先迁移数据；本配置面向干净部署。
+
+### 3.5 公网 Caddy 证书初始化（双 Edge）
+
+每台 Edge 的 Caddy 使用**独立证书存储**（本机 `caddy_data` volume），**不会**在双节点间自动协调 ACME。
+
+1. 公网 CLB 的 HTTP/HTTPS **先只回源 Edge-A**
+2. Edge-A 上 Caddy 完成 Let's Encrypt 申请
+3. 将 HTTP 临时切到 **Edge-B**，Edge-B 获取证书
+4. 最后将 **Edge-A 与 Edge-B** 都加入公网 CLB 服务器组
+
+DNS 须指向公网 CLB；安全组放行 80/443。
+
+**续期**：证书到期前约 30 天，须按上述相同方式**逐台切流**完成续期，不能依赖双节点自动协调 ACME。
+
+---
+
+## 4. CLB 健康检查（TCP）
+
+| CLB | 后端 | 检查方式 |
+|-----|------|----------|
+| **公网 CLB** | Edge-A/B `:443` | TCP 443 |
+| **内网 CLB** | App-A/B `:8080` | **TCP 8080** |
+
+> Gateway **无** Actuator；HTTP `/actuator/health` 不可用。
+> Nacos 控制台：`http://172.17.178.193:8848/nacos/`
+
+---
+
+## 5. 阶段 A：3 台验证（冒烟）
+
+| 主机 | 角色 | 启动 |
+|------|------|------|
 | `campus-mw` | 中间件 | `docker compose -f docker-compose.mw.yml --env-file .env up -d` |
-| `campus-edge` | Nginx + Gateway + user | `docker compose -f docker-compose.edge.yml -f docker-compose.user.yml --env-file .env up -d` |
+| `campus-edge` | Edge + user | `./scripts/up-role.sh edge-legacy` |
 | `campus-app` | product + order | `docker compose -f docker-compose.product.yml -f docker-compose.order.yml --env-file .env up -d` |
 
-### 阶段 B：10 台业务（答辩临时）
-
-| # | 角色 | Compose |
-|---|------|---------|
-| 1 | MW | `docker-compose.mw.yml` |
-| 2 | EDGE-A（Nginx+Gateway） | `docker-compose.edge.yml` |
-| 3 | EDGE-B（可选热备） | 同上 |
-| 4～5 | user ×2 | `docker-compose.user.yml` |
-| 6～8 | product ×3 | `docker-compose.product.yml` |
-| 9～10 | order ×2 | `docker-compose.order.yml` |
-| 11 | 压测机 | 只装 JMeter，不跑业务 |
-
 ---
 
-## 2. 一次性准备（所有机器）
-
-1. 系统：Alibaba Cloud Linux 3 或 Ubuntu 22.04 + Docker + Compose 插件  
-2. 把本仓库拷到各机（或自定义镜像里打好）  
-3. 在 **一台构建机** 上：
-
-```bash
-cd campus-trade && mvn -q package -DskipTests
-cd ../campus-trade-web && npm ci && npm run build
-```
-
-4. 构建并保存镜像（或推到阿里云 ACR）：
-
-```bash
-docker compose -f ops/multi-node/docker-compose.edge.yml build
-docker compose -f ops/multi-node/docker-compose.user.yml build
-docker compose -f ops/multi-node/docker-compose.product.yml build
-docker compose -f ops/multi-node/docker-compose.order.yml build
-# mw 用官方镜像，无需 build
-```
-
-5. 复制 `ops/multi-node/.env.example` → 各机 `.env`，填 Secret；**按角色删掉不需要的变量**（见文件内注释）。  
-6. 每台设置本机私网 IP：
-
-```bash
-export HOST_IP=$(hostname -I | awk '{print $1}')
-# 写入 .env：HOST_IP=10.0.1.x
-```
-
-7. 配置 hosts（或云解析 PrivateZone），见 `hosts.example`。
-
----
-
-## 3. 安全组（同 VPC）
+## 6. 安全组（同 VPC 172.17.176.0/20）
 
 | 方向 | 端口 | 放行 |
 |------|------|------|
-| 公网 → EDGE | 80/443 或 8080 | 仅入口 |
-| APP/EDGE → MW | 3306,6379,9200,5672,8848,9848 | 仅 VPC 网段 |
-| 压测 → EDGE | 8080/443 | 压测机 IP |
-| 禁止 | 8081～8083 对公网 | — |
+| 公网 → Edge | 80 / 443 | 仅 Edge-A/B |
+| VPC → MW | 8848,9848,9200,5672 | App / Edge |
+| VPC → Data | 3306,6379 | App / MW |
+| VPC → Sentinel | **26379** | Data-Main ↔ Data-Sub（Sentinel 节点互访） |
+| VPC → App Gateway | 8080 | 内网 CLB、Edge |
+| VPC → App 服务 | **8081,8082,8083** | VPC 内互通（排障/Nacos 直连） |
+| 禁止 | 8081～8083、3306、6379 对公网 | — |
 
 ---
 
-## 4. 启动顺序（动作清单）
+## 7. Redis Sentinel 说明（答辩口径）
 
-```text
-① MW 健康
-② EDGE（Gateway 能连上 Nacos）
-③ user / product / order（Nacos 出现多 IP 实例）
-④ 浏览器打开 EDGE:8080 走通注册登录
-⑤ 压测机开打
-```
+- 当前仅 **Sentinel-1（Data-Main）** 与 **Sentinel-2（Data-Sub）**，**无第三个 Sentinel**
+- Sentinel **仅用于状态监控与答辩展示**
+- **应用未接入 Sentinel**，业务仍直连 `REDIS_HOST`（Data-Main Master）
+- Redis 主故障后需 **人工修改各 App `REDIS_HOST` 并滚动重启**
+- **不宣称** Redis 自动业务故障转移
 
-### 4.1 启动 MW
+---
 
-```bash
-cd /path/to/repo/ops/multi-node
-cp .env.example .env   # 首次
-# 编辑 MW_HOST、密码等
-docker compose -f docker-compose.mw.yml --env-file .env up -d
-docker compose -f docker-compose.mw.yml ps
-```
-
-### 4.2 启动 EDGE
+## 8. 验收
 
 ```bash
-# .env 中 MW_HOST=10.0.1.11  HOST_IP=本机私网IP
-docker compose -f docker-compose.edge.yml --env-file .env up -d
-# 3 台验证阶段可同机再起 user：
-docker compose -f docker-compose.user.yml --env-file .env up -d
-```
-
-### 4.3 启动 APP
-
-```bash
-docker compose -f docker-compose.product.yml --env-file .env up -d
-docker compose -f docker-compose.order.yml --env-file .env up -d
-```
-
-### 4.4 验收 Nacos
-
-浏览器：`http://MW_HOST:8848/nacos`（若未暴露公网，用 SSH 隧道）  
-应看到 `campus-gateway/user/product/order`，实例 IP = 各 ECS 私网 IP。
-
-```bash
+cd ops/multi-node
 ./scripts/check-nacos.sh
+./scripts/health-check.sh edge      # 必须传入角色
+./scripts/health-check.sh mw
+./scripts/health-check.sh app-a
+./scripts/health-check.sh data-primary
+./scripts/health-check.sh data-replica
+# 角色：edge | mw | app-a | app-b | app-c | data-primary | data-replica
 ```
+
+浏览器：`https://summer.huangzixuan.asia`
 
 ---
 
-## 5. 扩到 10 台（只加副本）
-
-对新 ECS（已导入镜像 + `.env` 中 `HOST_IP` 改成本机）：
-
-```bash
-# 例：第 2、3 台 product
-docker compose -f docker-compose.product.yml --env-file .env up -d
-```
-
-Nacos 中 `campus-product` 出现多个不同 IP 即负载均衡生效。  
-Gateway / Feign **不用改代码**，已是 `lb://`。
-
----
-
-## 6. 高可用 / 容灾演练动作
-
-```bash
-# 杀掉本机 product（模拟实例故障）
-./scripts/chaos-stop.sh product
-
-# 随机停一个业务容器（排除中间件）
-./scripts/chaos-random-app.sh
-
-# 恢复
-./scripts/chaos-start.sh product
-```
+## 9. 高可用演练（已真机验证）
 
 | 演练 | 操作 | 预期 |
 |------|------|------|
-| 实例故障 | stop 一台 product | Nacos 摘除；详情仍可用 |
-| 滚动更新 | 逐台 `compose up -d --build` | 不全站中断 |
-| 整机故障 | 停掉一台 APP ECS | 其余实例承接 |
-| MW 故障 | 停 MW | 全站不可用（演示单点，勿当成功容灾） |
+| Gateway 单点 | 停 App-A Gateway | 内网 CLB TCP 摘除；站点仍可用 |
+| Product 单点 | stop 一台 product | Nacos 摘除；详情仍可用 |
+| Edge 单点 | 停一台 Edge | 公网 CLB 摘除；站点仍可用 |
+| App-C 整机 | 停 172.17.178.192 | User/Order 仍有另一实例 |
+| MW 整机 | 停 Middleware | **全站不可用**（单点边界） |
+
+```bash
+./scripts/chaos-stop.sh product
+./scripts/chaos-start.sh product
+```
+
+### MySQL 提升（Data-Sub 执行 `./scripts/promote-mysql.sh`）
+
+#### 计划切换（旧主仍在线）
+
+**禁止**先停止旧主或断网。
+
+1. 在旧主 **Data-Main** 上先停止业务写入，再**持久化**只读围栏（必须用 `SET PERSIST`，不要用 `SET GLOBAL`）：
+
+   ```bash
+   ./scripts/fence-mysql-primary.sh
+   ```
+
+   `SET GLOBAL` 在 `campus-mysql-primary` 容器重启（OOM / `restart: unless-stopped`）后会丢失；切流窗口内旧主会重新可写，与新主形成双主分叉。`fence-mysql-primary.sh` 使用 `SET PERSIST`，写入 datadir 的 `mysqld-auto.cnf`，重启后仍只读。若尚未 promote 需撤销：`./scripts/unfence-mysql-primary.sh`。
+
+2. 保持旧主在线和复制连接正常。
+3. 等待 **Data-Sub** 满足：
+
+   - `Replica_IO_Running=Yes`
+   - `Replica_SQL_Running=Yes`
+   - `Seconds_Behind_Source=0`
+   - 无复制错误
+
+4. 确认旧主已只读后，在 Data-Sub 执行（`.env` 需有可达的
+   `MYSQL_PRIMARY_HOST` 及 `MYSQL_REPLICATION_USER/PASSWORD`；不开放远程 root）：
+
+   ```bash
+   OLD_PRIMARY_FENCED=yes ./scripts/promote-mysql.sh
+   ```
+
+   脚本会读取旧主 `@@GLOBAL.gtid_executed`，并用 `WAIT_FOR_EXECUTED_GTID_SET` 等到本从库**接收并应用**完整集合后才 `RESET`。仅 `Seconds_Behind_Source=0` 不够：该值只表示 SQL 已追上**已接收**的 relay，IO 仍可能落后于源库 binlog，此时 promote 会丢掉「已在旧主提交但尚未拉取」的事务。
+
+5. 新主开放写入后，**保持旧主只读（PERSIST 围栏不要撤）**，并将各 App `.env` 的 `MYSQL_HOST` 切换到新主私网 IP，滚动重启 App 节点。
+
+#### 故障切换（旧主不可用）
+
+旧主故障时，必须先确认旧主已**关机、断网或被安全组隔离**，然后在 Data-Sub 执行：
+
+```bash
+OLD_PRIMARY_FENCED=yes FORCE_PROMOTE=1 ./scripts/promote-mysql.sh
+```
+
+`FORCE_PROMOTE=1` 允许 `Replica_IO_Running=No`；`Replica_SQL_Running` 须为 Yes 且无 SQL 复制错误。脚本在 `RESET REPLICA ALL` 前会等待 SQL 线程应用完**已接收**的 GTID（`WAIT_FOR_EXECUTED_GTID_SET`），避免误删 relay 中未回放事务。**仍可能存在 RPO 损失**（主库已提交但从未到达本从库的事务），脚本会明确提示。
 
 ---
 
-## 7. 压测 / 类 DDoS
+## 10. 图片多实例
 
-- 高并发：打详情 / 秒杀（见仓库根目录 `campus_trade_performance.jmx`）  
-- 防刷：打登录 → 预期大量 **429**（单压测 IP 会触顶，属正常）  
-- 多源 CC：2～3 台压测机不同 IP 同时打  
-
-将压测机 IP 写入 EDGE 的 Nginx 豁免：改 `campus-trade-web/nginx.conf` 里 `geo` 段中的 IP，或重建 web 镜像前替换为 `BENCH_IP`。
+Product 多机时本地盘不共享。答辩推荐：**仅 App-A product 接上传**，列表/详情走双实例。
 
 ---
 
-## 8. 图片多实例说明
-
-`product` 多机时本地磁盘不共享。答辩可选：
-
-1. 只用 **一台** product 接上传，其余只读流量；或  
-2. 多台挂载同一 NFS 到 `/data/product-images`。
-
----
-
-## 9. 回滚 / 省钱
+## 11. 回滚 / 省钱
 
 ```bash
 docker compose -f <角色yml> --env-file .env down
-# 答辩结束：释放按量 ECS；保留自定义镜像
 ```
+
+---
+
+## 12. 明确不做（本阶段）
+
+- Nacos 三节点 Raft 集群
+- 应用侧 MySQL 读写分离
+- 应用绑定 Redis Sentinel 自动切换
+- Spring Actuator 健康端点
+- K8s
+
+列为后续演进即可。

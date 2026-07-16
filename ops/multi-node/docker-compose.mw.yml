@@ -1,4 +1,5 @@
 # Middleware node only. Bind to all interfaces; restrict with VPC security group.
+# MySQL / Redis run on data nodes (not this host).
 x-logging: &default-logging
   driver: json-file
   options:
@@ -27,51 +28,6 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
-
-  mysql:
-    logging: *default-logging
-    image: mysql:8.0
-    container_name: campus-mysql
-    environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
-      MYSQL_DATABASE: campus_trade
-      MYSQL_USER: campus
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}
-      TZ: Asia/Shanghai
-    ports:
-      - "${MYSQL_PORT:-3306}:3306"
-    volumes:
-      - mysql-data:/var/lib/mysql
-      - ../../sql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-    command: >
-      --character-set-server=utf8mb4
-      --collation-server=utf8mb4_unicode_ci
-      --default-authentication-plugin=mysql_native_password
-      --innodb-buffer-pool-size=2G
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_ROOT_PASSWORD mysqladmin ping -h localhost -uroot --silent"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-
-  redis:
-    logging: *default-logging
-    image: redis:7.2
-    container_name: campus-redis
-    command: ["sh", "-c", "exec redis-server --appendonly yes --requirepass \"$$REDIS_PASSWORD\""]
-    environment:
-      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
-    volumes:
-      - redis-data:/data
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
   elasticsearch:
     logging: *default-logging
@@ -115,7 +71,5 @@ services:
 
 volumes:
   nacos-data:
-  mysql-data:
-  redis-data:
   es-data:
   rabbitmq-data:

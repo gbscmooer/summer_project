@@ -1,5 +1,21 @@
 # 写入各 ECS 的 /etc/hosts（或改用阿里云 PrivateZone）
-# 把 IP 换成你的 MW / EDGE 私网地址
+# VPC 网段：172.17.176.0/20
 
-10.0.1.11  mysql.campus.internal redis.campus.internal es.campus.internal mq.campus.internal nacos.campus.internal mw.campus.internal
-10.0.1.12  api.campus.internal edge.campus.internal
+# 数据层
+172.17.178.195  mysql.campus.internal redis.campus.internal data.campus.internal data-main.campus.internal
+172.17.178.194  data-sub.campus.internal mysql-replica.campus.internal
+
+# 中间件
+172.17.178.193  nacos.campus.internal es.campus.internal mq.campus.internal mw.campus.internal
+
+# 内网 CLB（Gateway）
+172.17.178.198  api.campus.internal gateway.campus.internal clb-internal.campus.internal
+
+# 应用
+172.17.178.189  app-a.campus.internal
+172.17.178.197  app-b.campus.internal
+172.17.178.192  app-c.campus.internal
+
+# 边缘
+172.17.178.190  edge-a.campus.internal
+172.17.178.191  edge-b.campus.internal
