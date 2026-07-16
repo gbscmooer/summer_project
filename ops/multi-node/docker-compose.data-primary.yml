@@ -62,6 +62,8 @@ services:
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
       HOST_IP: ${HOST_IP:?HOST_IP is required}
+      # Must match data-replica sentinel (default mymaster); quorum=2 needs a shared name.
+      REDIS_SENTINEL_MASTER_NAME: ${REDIS_SENTINEL_MASTER_NAME:-mymaster}
     command:
       - sh
       - -c
@@ -70,11 +72,11 @@ services:
         port 26379
         dir /tmp
         sentinel resolve-hostnames yes
-        sentinel monitor mymaster $$HOST_IP 6379 2
-        sentinel auth-pass mymaster $$REDIS_PASSWORD
-        sentinel down-after-milliseconds mymaster 5000
-        sentinel failover-timeout mymaster 60000
-        sentinel parallel-syncs mymaster 1
+        sentinel monitor $$REDIS_SENTINEL_MASTER_NAME $$HOST_IP 6379 2
+        sentinel auth-pass $$REDIS_SENTINEL_MASTER_NAME $$REDIS_PASSWORD
+        sentinel down-after-milliseconds $$REDIS_SENTINEL_MASTER_NAME 5000
+        sentinel failover-timeout $$REDIS_SENTINEL_MASTER_NAME 60000
+        sentinel parallel-syncs $$REDIS_SENTINEL_MASTER_NAME 1
         EOF
         exec redis-sentinel /tmp/sentinel.conf
     ports:
