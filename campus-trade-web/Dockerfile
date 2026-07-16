@@ -4,4 +4,5 @@ COPY nginx.conf /etc/nginx/nginx.conf.template
 EXPOSE 8080
 USER nginx
 ENTRYPOINT []
-CMD ["sh", "-c", "case \"$TRUSTED_PROXY_CIDR\" in ''|'0.0.0.0/0'|'::/0') echo 'TRUSTED_PROXY_CIDR must be a restricted proxy network' >&2; exit 1;; esac; envsubst '$TRUSTED_PROXY_CIDR' < /etc/nginx/nginx.conf.template > /tmp/nginx.conf && exec nginx -c /tmp/nginx.conf -g 'daemon off;'"]
+# GATEWAY_UPSTREAM 默认同机 Gateway；集群边缘改为内网 SLB VIP（见 ops/multi-node）
+CMD ["sh", "-c", "case \"$TRUSTED_PROXY_CIDR\" in ''|'0.0.0.0/0'|'::/0') echo 'TRUSTED_PROXY_CIDR must be a restricted proxy network' >&2; exit 1;; esac; export GATEWAY_UPSTREAM=\"${GATEWAY_UPSTREAM:-http://campus-gateway:8080}\"; envsubst '$TRUSTED_PROXY_CIDR $GATEWAY_UPSTREAM' < /etc/nginx/nginx.conf.template > /tmp/nginx.conf && exec nginx -c /tmp/nginx.conf -g 'daemon off;'"]
