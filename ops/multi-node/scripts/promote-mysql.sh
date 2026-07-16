@@ -85,19 +85,59 @@ if [[ "$failure_promote" -eq 1 ]]; then
   echo "    WARNING: RPO data loss is possible for transactions not yet received by this replica."
 else
   echo "    OLD_PRIMARY_FENCED=yes: old primary confirmed persistently read-only (SET PERSIST) and still online."
-  echo "    Replication caught up (Seconds_Behind_Source=0)."
+  echo "    Will wait until this replica has executed the old primary's @@GLOBAL.gtid_executed"
+  echo "    (Seconds_Behind_Source=0 alone is not enough: IO may still be fetching)."
 fi
 echo ""
 
-# CRITICAL: always drain already-received relay events before RESET REPLICA ALL.
-# FORCE_PROMOTE allows IO=No (transactions never received → unavoidable RPO), but must
-# NOT discard transactions that arrived in the relay log and are still being applied.
 drain_timeout="${PROMOTE_DRAIN_TIMEOUT_SEC:-600}"
 if ! [[ "$drain_timeout" =~ ^[0-9]+$ ]]; then
   echo "ERROR: PROMOTE_DRAIN_TIMEOUT_SEC must be an integer, got: ${drain_timeout}" >&2
   exit 1
 fi
 
+# Planned switch: Seconds_Behind_Source=0 only means SQL caught up to *already received*
+# relay events. IO can still be behind the source binlog after fencing. Fetch the old
+# primary's gtid_executed and WAIT_FOR_EXECUTED_GTID_SET so promote cannot drop
+# committed-but-not-yet-fetched transactions.
+if [[ "$failure_promote" -eq 0 ]]; then
+  : "${MYSQL_PRIMARY_HOST:?MYSQL_PRIMARY_HOST is required for planned promote (old primary still online)}"
+  MYSQL_PORT="${MYSQL_PORT:-3306}"
+
+  echo "==> reading @@GLOBAL.gtid_executed from old primary ${MYSQL_PRIMARY_HOST}:${MYSQL_PORT}..."
+  primary_gtids="$(docker run --rm --network host mysql:8.0 \
+    mysql -h "$MYSQL_PRIMARY_HOST" -P "$MYSQL_PORT" \
+    -uroot -p"$MYSQL_ROOT_PASSWORD" -N -e "SELECT @@GLOBAL.gtid_executed" \
+    --connect-timeout=5 2>/dev/null || true)"
+  primary_gtids="$(echo "${primary_gtids:-}" | tr -d '\r' | tr -d '\n' | tr -d ' ')"
+  if [[ -z "${primary_gtids}" ]]; then
+    echo "ERROR: could not read @@GLOBAL.gtid_executed from ${MYSQL_PRIMARY_HOST}." >&2
+    echo "       Planned switch requires the fenced old primary to be reachable from Data-Sub." >&2
+    echo "       For failure switch (old primary unreachable), use FORCE_PROMOTE=1." >&2
+    exit 1
+  fi
+  if ! [[ "$primary_gtids" =~ ^[0-9A-Fa-f:,-]+$ ]]; then
+    echo "ERROR: unexpected gtid_executed from primary: ${primary_gtids}" >&2
+    exit 1
+  fi
+
+  echo "==> waiting up to ${drain_timeout}s for replica to execute primary gtid_executed..."
+  wait_rc="$(docker exec -i "$CONTAINER" mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -N <<EOSQL
+SELECT WAIT_FOR_EXECUTED_GTID_SET('${primary_gtids}', ${drain_timeout});
+EOSQL
+)"
+  wait_rc="$(echo "$wait_rc" | tr -d '\r' | awk 'NF{print; exit}')"
+  if [[ "${wait_rc}" != "0" ]]; then
+    echo "ERROR: WAIT_FOR_EXECUTED_GTID_SET(primary gtid_executed) returned ${wait_rc:-<empty>} (want 0)." >&2
+    echo "       Refusing planned promote: replica has not fully caught up to the fenced primary." >&2
+    exit 1
+  fi
+  echo "==> replica has executed old primary gtid_executed"
+fi
+
+# Always drain already-received relay events before RESET REPLICA ALL.
+# FORCE_PROMOTE allows IO=No (transactions never received → unavoidable RPO), but must
+# NOT discard transactions that arrived in the relay log and are still being applied.
 echo "==> waiting up to ${drain_timeout}s for SQL thread to apply all received GTIDs..."
 wait_rc="$(docker exec -i "$CONTAINER" mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -N <<EOSQL
 SET @recv = (SELECT RECEIVED_TRANSACTION_SET FROM performance_schema.replication_connection_status WHERE CHANNEL_NAME='' LIMIT 1);
