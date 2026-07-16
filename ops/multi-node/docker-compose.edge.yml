@@ -20,12 +20,16 @@ services:
     image: campus-web:multi-node
     container_name: campus-web
     environment:
+      # Must include the Docker bridge that hosts the Caddy→web hop (see nginx
+      # set_real_ip_from 172.16.0.0/12). VPC CIDR alone is not enough.
       TRUSTED_PROXY_CIDR: ${TRUSTED_PROXY_CIDR:?TRUSTED_PROXY_CIDR is required}
-      # 集群：http://<内网SLB_VIP>:8080；3 台同机验证可改回 http://campus-gateway:8080
-      GATEWAY_UPSTREAM: ${GATEWAY_UPSTREAM:-http://campus-gateway:8080}
-    # 仅本机回环，供同机 Caddy 反代；公网只暴露 Caddy 80/443
+      # Required: edge no longer runs campus-gateway. Use internal CLB VIP, e.g.
+      # http://172.17.x.x:8080 — a missing value yields site-wide /api 502s.
+      GATEWAY_UPSTREAM: ${GATEWAY_UPSTREAM:?GATEWAY_UPSTREAM is required}
+    # Hard-bind loopback so only host Caddy can reach nginx (keeps bridge
+    # real_ip trust from becoming an XFF spoof path on the VPC).
     ports:
-      - "${WEB_BIND_ADDRESS:-127.0.0.1}:${WEB_PORT:-8080}:8080"
+      - "127.0.0.1:${WEB_PORT:-8080}:8080"
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/ >/dev/null || exit 1"]

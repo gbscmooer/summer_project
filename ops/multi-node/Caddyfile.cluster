@@ -2,14 +2,15 @@
 # /api/* 由 web 内 nginx 按 GATEWAY_UPSTREAM 反代到内网 SLB（保留限流）
 #
 # 证书策略：
-# - 默认 tls internal（自签），保证 443 可起、SLB TCP 健康检查可通过
-# - DNS 已指到公网 SLB/本机 EIP 且安全组放行 80/443 后：删掉下一行 tls internal，
-#   改由 Caddy 自动申请 Let's Encrypt
+# - 默认由 Caddy 自动申请 Let's Encrypt（需 DNS 指向本机/公网 SLB 且放行 80/443）
+# - 若仅需先起 443 做 SLB TCP 健康检查：在站点块内加 `tls internal`
 
 {$DOMAIN:summer.huangzixuan.asia} {
 	encode zstd gzip
 
 	reverse_proxy 127.0.0.1:8080 {
+		header_up X-Forwarded-Proto {scheme}
+		header_up X-Forwarded-Host {host}
 		header_up X-Real-IP {remote_host}
 	}
 }
@@ -17,6 +18,8 @@
 # 无 Host / IP 直访问与 ACME http-01（切回公网证书时仍需要 :80）
 :80 {
 	reverse_proxy 127.0.0.1:8080 {
+		header_up X-Forwarded-Proto {scheme}
+		header_up X-Forwarded-Host {host}
 		header_up X-Real-IP {remote_host}
 	}
 }
