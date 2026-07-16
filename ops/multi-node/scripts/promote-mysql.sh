@@ -102,12 +102,15 @@ fi
 # committed-but-not-yet-fetched transactions.
 if [[ "$failure_promote" -eq 0 ]]; then
   : "${MYSQL_PRIMARY_HOST:?MYSQL_PRIMARY_HOST is required for planned promote (old primary still online)}"
+  : "${MYSQL_REPLICATION_PASSWORD:?MYSQL_REPLICATION_PASSWORD is required for planned promote}"
   MYSQL_PORT="${MYSQL_PORT:-3306}"
+  MYSQL_REPLICATION_USER="${MYSQL_REPLICATION_USER:-repl}"
 
   echo "==> reading @@GLOBAL.gtid_executed from old primary ${MYSQL_PRIMARY_HOST}:${MYSQL_PORT}..."
   primary_gtids="$(docker run --rm --network host mysql:8.0 \
     mysql -h "$MYSQL_PRIMARY_HOST" -P "$MYSQL_PORT" \
-    -uroot -p"$MYSQL_ROOT_PASSWORD" -N -e "SELECT @@GLOBAL.gtid_executed" \
+    -u"$MYSQL_REPLICATION_USER" -p"$MYSQL_REPLICATION_PASSWORD" \
+    -N -e "SELECT @@GLOBAL.gtid_executed" \
     --connect-timeout=5 2>/dev/null || true)"
   primary_gtids="$(echo "${primary_gtids:-}" | tr -d '\r' | tr -d '\n' | tr -d ' ')"
   if [[ -z "${primary_gtids}" ]]; then

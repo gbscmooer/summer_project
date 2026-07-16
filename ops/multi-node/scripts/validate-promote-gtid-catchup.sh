@@ -20,6 +20,13 @@ else
   fail "planned promote must SELECT @@GLOBAL.gtid_executed from MYSQL_PRIMARY_HOST and WAIT_FOR_EXECUTED_GTID_SET"
 fi
 
+if grep -q "MYSQL_REPLICATION_USER" "$PROMOTE" \
+  && grep -q "MYSQL_REPLICATION_PASSWORD" "$PROMOTE"; then
+  ok "planned promote reads primary GTIDs with replication credentials"
+else
+  fail "planned promote must not require remote root access"
+fi
+
 if grep -q "RECEIVED_TRANSACTION_SET" "$PROMOTE"; then
   ok "still drains RECEIVED_TRANSACTION_SET before RESET (failure path)"
 else

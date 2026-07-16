@@ -269,7 +269,8 @@ cd ops/multi-node
    - `Seconds_Behind_Source=0`
    - 无复制错误
 
-4. 确认旧主已只读后，在 Data-Sub 执行（`.env` 需有可达的 `MYSQL_PRIMARY_HOST`）：
+4. 确认旧主已只读后，在 Data-Sub 执行（`.env` 需有可达的
+   `MYSQL_PRIMARY_HOST` 及 `MYSQL_REPLICATION_USER/PASSWORD`；不开放远程 root）：
 
    ```bash
    OLD_PRIMARY_FENCED=yes ./scripts/promote-mysql.sh
