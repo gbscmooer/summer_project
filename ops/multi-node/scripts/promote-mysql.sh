@@ -15,8 +15,12 @@ fi
 
 : "${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}"
 CONTAINER="${REPLICA_CONTAINER:-campus-mysql-replica}"
+READONLY_MARKER="${READONLY_MARKER:-/var/lib/mysql/.campus-super-read-only}"
 
 echo "==> promoting ${CONTAINER} to writable primary..."
+# Drop restart-persistent read-only marker before unlocking writes.
+docker exec "$CONTAINER" sh -c "rm -f '${READONLY_MARKER}'"
+
 docker exec -i "$CONTAINER" mysql -uroot -p"$MYSQL_ROOT_PASSWORD" <<'EOSQL'
 STOP REPLICA;
 RESET REPLICA ALL;

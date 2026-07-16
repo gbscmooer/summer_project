@@ -22,12 +22,22 @@ services:
     volumes:
       - mysql-replica-data:/var/lib/mysql
       - ./mysql/replica.cnf:/etc/mysql/conf.d/replica.cnf:ro
-    # 首次初始化勿带 read_only（官方 entrypoint 临时实例也会吃 command，导致无法设 root 密码）。
-    # 只读在容器就绪后由 scripts/enable-mysql-readonly.sh / setup-replication.sh 打开。
-    command: >
-      --character-set-server=utf8mb4
-      --collation-server=utf8mb4_unicode_ci
-      --default-authentication-plugin=mysql_native_password
+    # 首次初始化不能带 read_only（官方 entrypoint 临时实例也会吃到，导致无法设 root 密码）。
+    # 已初始化且存在 .campus-super-read-only 标记时，对最终 mysqld 打开只读，避免重启后可写分叉。
+    entrypoint:
+      - /bin/bash
+      - -ec
+      - |
+        args=(
+          mysqld
+          --character-set-server=utf8mb4
+          --collation-server=utf8mb4_unicode_ci
+          --default-authentication-plugin=mysql_native_password
+        )
+        if [ -d /var/lib/mysql/mysql ] && [ -f /var/lib/mysql/.campus-super-read-only ]; then
+          args+=(--read-only=ON --super-read-only=ON)
+        fi
+        exec /usr/local/bin/docker-entrypoint.sh "$${args[@]}"
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_ROOT_PASSWORD mysqladmin ping -h localhost -uroot --silent"]
@@ -72,7 +82,8 @@ services:
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
       REDIS_PRIMARY_HOST: ${REDIS_PRIMARY_HOST:?REDIS_PRIMARY_HOST is required}
-      REDIS_SENTINEL_MASTER_NAME: ${REDIS_SENTINEL_MASTER_NAME:-campus-redis}
+      # Must match data-primary sentinel (default mymaster); quorum=2 needs a shared name.
+      REDIS_SENTINEL_MASTER_NAME: ${REDIS_SENTINEL_MASTER_NAME:-mymaster}
     command:
       - sh
       - -c
