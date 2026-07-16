@@ -284,7 +284,7 @@ cd ops/multi-node
 OLD_PRIMARY_FENCED=yes FORCE_PROMOTE=1 ./scripts/promote-mysql.sh
 ```
 
-`FORCE_PROMOTE=1` 允许 `Replica_IO_Running=No`；`Replica_SQL_Running` 须为 Yes 且无 SQL 复制错误。**可能存在 RPO 数据损失**，脚本会明确提示。
+`FORCE_PROMOTE=1` 允许 `Replica_IO_Running=No`；`Replica_SQL_Running` 须为 Yes 且无 SQL 复制错误。脚本在 `RESET REPLICA ALL` 前会等待 SQL 线程应用完**已接收**的 GTID（`WAIT_FOR_EXECUTED_GTID_SET`），避免误删 relay 中未回放事务。**仍可能存在 RPO 损失**（主库已提交但从未到达本从库的事务），脚本会明确提示。
 
 ---
 
