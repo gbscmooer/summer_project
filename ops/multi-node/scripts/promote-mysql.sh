@@ -82,12 +82,35 @@ echo ""
 echo "==> pre-promote confirmation (before opening new primary for writes)"
 if [[ "$failure_promote" -eq 1 ]]; then
   echo "    OLD_PRIMARY_FENCED=yes: old primary confirmed powered off / network cut / SG isolated."
-  echo "    WARNING: RPO data loss is possible."
+  echo "    WARNING: RPO data loss is possible for transactions not yet received by this replica."
 else
   echo "    OLD_PRIMARY_FENCED=yes: old primary confirmed read-only (super_read_only) and still online."
   echo "    Replication caught up (Seconds_Behind_Source=0)."
 fi
 echo ""
+
+# CRITICAL: always drain already-received relay events before RESET REPLICA ALL.
+# FORCE_PROMOTE allows IO=No (transactions never received → unavoidable RPO), but must
+# NOT discard transactions that arrived in the relay log and are still being applied.
+drain_timeout="${PROMOTE_DRAIN_TIMEOUT_SEC:-600}"
+if ! [[ "$drain_timeout" =~ ^[0-9]+$ ]]; then
+  echo "ERROR: PROMOTE_DRAIN_TIMEOUT_SEC must be an integer, got: ${drain_timeout}" >&2
+  exit 1
+fi
+
+echo "==> waiting up to ${drain_timeout}s for SQL thread to apply all received GTIDs..."
+wait_rc="$(docker exec -i "$CONTAINER" mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -N <<EOSQL
+SET @recv = (SELECT RECEIVED_TRANSACTION_SET FROM performance_schema.replication_connection_status WHERE CHANNEL_NAME='' LIMIT 1);
+SELECT WAIT_FOR_EXECUTED_GTID_SET(IFNULL(@recv, ''), ${drain_timeout});
+EOSQL
+)"
+wait_rc="$(echo "$wait_rc" | tr -d '\r' | awk 'NF{print; exit}')"
+if [[ "${wait_rc}" != "0" ]]; then
+  echo "ERROR: WAIT_FOR_EXECUTED_GTID_SET returned ${wait_rc:-<empty>} (want 0)." >&2
+  echo "       Refusing promote: RESET REPLICA ALL would discard unapplied relay events." >&2
+  exit 1
+fi
+echo "==> all received transactions applied (or none pending)"
 
 echo "==> promoting ${CONTAINER} to writable primary..."
 docker exec -i "$CONTAINER" mysql -uroot -p"$MYSQL_ROOT_PASSWORD" <<'EOSQL'
