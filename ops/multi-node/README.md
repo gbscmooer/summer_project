@@ -247,7 +247,44 @@ cd ops/multi-node
 ./scripts/chaos-start.sh product
 ```
 
-MySQL 提升：先隔离旧主（停 `campus-mysql-primary` 或断网），再执行 `OLD_PRIMARY_ISOLATED=yes ./scripts/promote-mysql.sh`。计划切换要求 IO/SQL=Yes、无复制错误、滞后 ≤5s；故障切换需同时 `FORCE_PROMOTE=1` 与 `OLD_PRIMARY_ISOLATED=yes`（允许 IO=No，但 SQL 须无错误，可能存在 RPO 损失）。
+### MySQL 提升（Data-Sub 执行 `./scripts/promote-mysql.sh`）
+
+#### 计划切换（旧主仍在线）
+
+**禁止**先停止旧主或断网。
+
+1. 在旧主 **Data-Main** 上先停止业务写入，并执行：
+
+   ```sql
+   SET GLOBAL read_only=ON;
+   SET GLOBAL super_read_only=ON;
+   ```
+
+2. 保持旧主在线和复制连接正常。
+3. 等待 **Data-Sub** 满足：
+
+   - `Replica_IO_Running=Yes`
+   - `Replica_SQL_Running=Yes`
+   - `Seconds_Behind_Source=0`
+   - 无复制错误
+
+4. 确认旧主已只读后，在 Data-Sub 执行：
+
+   ```bash
+   OLD_PRIMARY_FENCED=yes ./scripts/promote-mysql.sh
+   ```
+
+5. 新主开放写入后，**保持旧主只读**，并将各 App `.env` 的 `MYSQL_HOST` 切换到新主私网 IP，滚动重启 App 节点。
+
+#### 故障切换（旧主不可用）
+
+旧主故障时，必须先确认旧主已**关机、断网或被安全组隔离**，然后在 Data-Sub 执行：
+
+```bash
+OLD_PRIMARY_FENCED=yes FORCE_PROMOTE=1 ./scripts/promote-mysql.sh
+```
+
+`FORCE_PROMOTE=1` 允许 `Replica_IO_Running=No`；`Replica_SQL_Running` 须为 Yes 且无 SQL 复制错误。**可能存在 RPO 数据损失**，脚本会明确提示。
 
 ---
 

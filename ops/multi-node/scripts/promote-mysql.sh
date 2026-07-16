@@ -16,9 +16,10 @@ fi
 : "${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}"
 CONTAINER="${REPLICA_CONTAINER:-campus-mysql-replica}"
 
-if [[ "${OLD_PRIMARY_ISOLATED:-}" != "yes" ]]; then
-  echo "ERROR: OLD_PRIMARY_ISOLATED=yes is required before any promote write." >&2
-  echo "       Stop campus-mysql-primary or cut network to the old primary first." >&2
+if [[ "${OLD_PRIMARY_FENCED:-}" != "yes" ]]; then
+  echo "ERROR: OLD_PRIMARY_FENCED=yes is required before any promote write." >&2
+  echo "       Planned switch: set read_only/super_read_only on old primary first." >&2
+  echo "       Failure switch: confirm old primary is powered off, network cut, or SG isolated." >&2
   exit 1
 fi
 
@@ -47,7 +48,7 @@ if [[ "$sql_running" != "Yes" ]]; then
 fi
 
 if [[ -n "${last_sql_err}" ]]; then
-  echo "ERROR: Last_SQL_Error=${last_sql_err} (must be empty)" >&2
+  echo "ERROR: Last_SQL_Error=${last_sql_err} (must be empty, even with FORCE_PROMOTE=1)" >&2
   exit 1
 fi
 
@@ -58,7 +59,7 @@ if [[ "$io_running" != "Yes" ]]; then
     echo "WARN: RPO data loss is possible when promoting with IO=No." >&2
   else
     echo "ERROR: Replica_IO_Running=${io_running:-<empty>} (expected Yes for planned switch)" >&2
-    echo "       For failure switch with IO=No, set FORCE_PROMOTE=1 and OLD_PRIMARY_ISOLATED=yes." >&2
+    echo "       For failure switch with IO=No, set FORCE_PROMOTE=1 and OLD_PRIMARY_FENCED=yes." >&2
     exit 1
   fi
 fi
@@ -68,14 +69,25 @@ if [[ "$failure_promote" -eq 0 ]]; then
     echo "ERROR: Last_IO_Error=${last_io_err} (planned switch requires no replication errors)" >&2
     exit 1
   fi
-  if [[ -n "${lag}" && "${lag}" != "NULL" ]] && [[ "${lag}" -gt 5 ]]; then
-    echo "ERROR: Seconds_Behind_Source=${lag} (planned switch requires lag <= 5)" >&2
+  if [[ "${lag:-}" != "0" ]]; then
+    echo "ERROR: Seconds_Behind_Source=${lag:-<empty>} (planned switch requires lag = 0)" >&2
     exit 1
   fi
-  echo "==> planned switch: IO/SQL=Yes, no replication errors, lag <= 5s"
+  echo "==> planned switch: IO/SQL=Yes, Seconds_Behind_Source=0, no replication errors"
 else
-  echo "==> failure switch: old primary already isolated; promoting with possible RPO data loss"
+  echo "==> failure switch: old primary fenced; promoting with possible RPO data loss"
 fi
+
+echo ""
+echo "==> pre-promote confirmation (before opening new primary for writes)"
+if [[ "$failure_promote" -eq 1 ]]; then
+  echo "    OLD_PRIMARY_FENCED=yes: old primary confirmed powered off / network cut / SG isolated."
+  echo "    WARNING: RPO data loss is possible."
+else
+  echo "    OLD_PRIMARY_FENCED=yes: old primary confirmed read-only (super_read_only) and still online."
+  echo "    Replication caught up (Seconds_Behind_Source=0)."
+fi
+echo ""
 
 echo "==> promoting ${CONTAINER} to writable primary..."
 docker exec -i "$CONTAINER" mysql -uroot -p"$MYSQL_ROOT_PASSWORD" <<'EOSQL'
@@ -89,7 +101,7 @@ EOSQL
 cat <<'EOF'
 
 ==> PROMOTED. Manual steps required:
-  1) 确认旧主已隔离（OLD_PRIMARY_ISOLATED=yes 已满足）
+  1) 保持旧主只读（计划切换）或保持旧主隔离（故障切换）
   2) 更新所有 App 节点 .env: MYSQL_HOST=<新主私网 IP>
   3) 滚动重启 App-A / App-B / App-C（Gateway/User/Product/Order）
   4) 视情况将旧主改造成新从库（需人工规划 GTID）
