@@ -1,5 +1,7 @@
 # 写入各 ECS 的 /etc/hosts（或改用阿里云 PrivateZone）
-# 把 IP 换成你的 MW / EDGE 私网地址
+# 按控制台实际私网 IP 调整
 
-10.0.1.11  mysql.campus.internal redis.campus.internal es.campus.internal mq.campus.internal nacos.campus.internal mw.campus.internal
-10.0.1.12  api.campus.internal edge.campus.internal
+172.17.178.195  mysql.campus.internal redis.campus.internal data-p.campus.internal
+172.17.178.194  data-r.campus.internal
+# 10.0.1.11  es.campus.internal mq.campus.internal nacos.campus.internal mw.campus.internal
+# 10.0.1.12  api.campus.internal edge.campus.internal

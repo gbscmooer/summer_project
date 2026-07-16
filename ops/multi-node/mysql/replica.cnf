@@ -1,0 +1,17 @@
+[mysqld]
+server-id=2
+gtid_mode=ON
+enforce_gtid_consistency=ON
+log_bin=mysql-bin
+binlog_format=ROW
+binlog_expire_logs_seconds=604800
+relay_log=relay-bin
+relay_log_recovery=ON
+skip_replica_start=ON
+character-set-server=utf8mb4
+collation-server=utf8mb4_unicode_ci
+default-authentication-plugin=mysql_native_password
+innodb_buffer_pool_size=2G
+# 注意：read_only / super_read_only 不要放这里。
+# 官方入口在初始化阶段会改 root 密码；conf.d 里开 super_read_only 会导致密码设置失败、root 变空。
+# 只读开关放在 compose command（仅最终进程生效），见 docker-compose.data-replica.yml。
