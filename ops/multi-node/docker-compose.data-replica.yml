@@ -41,6 +41,7 @@ services:
     image: redis:7.2
     container_name: campus-redis-replica
     environment:
+      HOST_IP: ${HOST_IP:?HOST_IP is required}
       REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
       REDIS_PRIMARY_HOST: ${REDIS_PRIMARY_HOST:?REDIS_PRIMARY_HOST is required}
     command:
@@ -52,6 +53,8 @@ services:
           --requirepass "$$REDIS_PASSWORD" \
           --masterauth "$$REDIS_PASSWORD" \
           --replicaof "$$REDIS_PRIMARY_HOST" 6379 \
+          --replica-announce-ip "$$HOST_IP" \
+          --replica-announce-port 6379 \
           --replica-read-only yes
     ports:
       - "${REDIS_PORT:-6379}:6379"
