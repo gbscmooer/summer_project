@@ -145,12 +145,16 @@ public class SpecialCertApplicationServiceImpl
     @Transactional
     public void reject(Long adminId, Long applicationId, String adminNote) {
         getAndCheckPending(applicationId);
-        SpecialCertApplication patch = new SpecialCertApplication();
-        patch.setId(applicationId);
-        patch.setStatus(STATUS_REJECTED);
-        patch.setAdminId(adminId);
-        patch.setAdminNote(adminNote);
-        updateById(patch);
+        // CAS：仅当仍待审时拒绝，避免并发通过后把 APPROVED 覆盖成 REJECTED 却留下 OFFICIAL 角色
+        UpdateWrapper<SpecialCertApplication> claim = new UpdateWrapper<>();
+        claim.eq("id", applicationId)
+                .eq("status", STATUS_PENDING)
+                .set("status", STATUS_REJECTED)
+                .set("admin_id", adminId)
+                .set("admin_note", adminNote);
+        if (!update(claim)) {
+            throw new BizException(ResultCode.SPECIAL_CERT_APPLICATION_REVIEWED);
+        }
     }
 
     private void cancelPendingMerchantApplications(Long userId, Long adminId) {
