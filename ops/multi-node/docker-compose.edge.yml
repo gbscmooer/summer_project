@@ -1,4 +1,6 @@
-# Edge node: Nginx (SPA) + Spring Cloud Gateway
+# Edge node (8 台方案): Caddy(TLS) + campus-web
+# Gateway 改挂内网 SLB 后端（App-A/B），本机不再跑 campus-gateway。
+# Web 通过 GATEWAY_UPSTREAM 反代到内网 SLB VIP；限流/登录特殊 location 仍在 nginx。
 x-logging: &default-logging
   driver: json-file
   options:
@@ -6,33 +8,6 @@ x-logging: &default-logging
     max-file: "5"
 
 services:
-  campus-gateway:
-    logging: *default-logging
-    read_only: true
-    tmpfs: [/tmp]
-    security_opt: [no-new-privileges:true]
-    cap_drop: [ALL]
-    build: ../../campus-trade/campus-gateway
-    image: campus-gateway:multi-node
-    container_name: campus-gateway
-    environment:
-      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR=${MW_HOST:?MW_HOST is required}:${NACOS_PORT:-8848}
-      - SPRING_CLOUD_NACOS_DISCOVERY_IP=${HOST_IP:?HOST_IP is required}
-      - SPRING_CLOUD_INETUTILS_PREFERRED_NETWORKS=${SPRING_CLOUD_INETUTILS_PREFERRED_NETWORKS:-10.0}
-      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
-      - JWT_EXPIRATION_MINUTES=${JWT_EXPIRATION_MINUTES:-120}
-      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN:?INTERNAL_API_TOKEN is required}
-      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-}
-      - JAVA_OPTS=${JAVA_OPTS_GATEWAY:--Xms256m -Xmx256m}
-    # 不映射宿主机端口：由 campus-web 反代到容器名 campus-gateway:8080
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "nc -z localhost 8080 || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 20s
-
   campus-web:
     logging: *default-logging
     read_only: true
@@ -46,9 +21,36 @@ services:
     container_name: campus-web
     environment:
       TRUSTED_PROXY_CIDR: ${TRUSTED_PROXY_CIDR:?TRUSTED_PROXY_CIDR is required}
+      # 集群：http://<内网SLB_VIP>:8080；3 台同机验证可改回 http://campus-gateway:8080
+      GATEWAY_UPSTREAM: ${GATEWAY_UPSTREAM:-http://campus-gateway:8080}
+    # 仅本机回环，供同机 Caddy 反代；公网只暴露 Caddy 80/443
     ports:
-      - "${WEB_BIND_ADDRESS:-0.0.0.0}:${WEB_PORT:-8080}:8080"
+      - "${WEB_BIND_ADDRESS:-127.0.0.1}:${WEB_PORT:-8080}:8080"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/ >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  caddy:
+    logging: *default-logging
+    image: caddy:2.9-alpine
+    container_name: campus-caddy
+    # host 网络：与 deploy/Caddyfile 一致，反代 127.0.0.1:8080；便于 ACME 与真实客户端 IP
+    network_mode: host
+    environment:
+      DOMAIN: ${DOMAIN:-summer.huangzixuan.asia}
+    volumes:
+      - ./Caddyfile.cluster:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
     depends_on:
-      campus-gateway:
+      campus-web:
         condition: service_healthy
     restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:
