@@ -269,11 +269,13 @@ cd ops/multi-node
    - `Seconds_Behind_Source=0`
    - 无复制错误
 
-4. 确认旧主已只读后，在 Data-Sub 执行：
+4. 确认旧主已只读后，在 Data-Sub 执行（`.env` 需有可达的 `MYSQL_PRIMARY_HOST`）：
 
    ```bash
    OLD_PRIMARY_FENCED=yes ./scripts/promote-mysql.sh
    ```
+
+   脚本会读取旧主 `@@GLOBAL.gtid_executed`，并用 `WAIT_FOR_EXECUTED_GTID_SET` 等到本从库**接收并应用**完整集合后才 `RESET`。仅 `Seconds_Behind_Source=0` 不够：该值只表示 SQL 已追上**已接收**的 relay，IO 仍可能落后于源库 binlog，此时 promote 会丢掉「已在旧主提交但尚未拉取」的事务。
 
 5. 新主开放写入后，**保持旧主只读（PERSIST 围栏不要撤）**，并将各 App `.env` 的 `MYSQL_HOST` 切换到新主私网 IP，滚动重启 App 节点。
 
