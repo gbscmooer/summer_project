@@ -30,11 +30,11 @@ case "$ROLE" in
   app-c)
     docker compose -f docker-compose.app-c.yml --env-file .env up -d
     ;;
-  data-primary)
-    docker compose -f docker-compose.data-primary.yml --env-file .env up -d
-    ;;
-  data-replica)
-    docker compose -f docker-compose.data-replica.yml --env-file .env up -d
+  data-primary|data-replica)
+    # shellcheck disable=SC1091
+    set -a; source .env; set +a
+    mkdir -p "${DATA_MYSQL_DIR:-/data/mysql}" "${DATA_REDIS_DIR:-/data/redis}"
+    docker compose -f "docker-compose.${ROLE}.yml" --env-file .env up -d
     ;;
   *)
     echo "role must be mw|edge|app|app-a|app-b|app-c|data-primary|data-replica"
