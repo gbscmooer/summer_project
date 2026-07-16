@@ -1,0 +1,128 @@
+# App-A (Node4): Gateway + User + Product
+# 内网 SLB 回源本机 :8080；Product 本机承担上传写流量
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  campus-gateway:
+    logging: *default-logging
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    build: ../../campus-trade/campus-gateway
+    image: campus-gateway:multi-node
+    container_name: campus-gateway
+    environment:
+      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR=${MW_HOST:?MW_HOST is required}:${NACOS_PORT:-8848}
+      - SPRING_CLOUD_NACOS_DISCOVERY_IP=${HOST_IP:?HOST_IP is required}
+      - SPRING_CLOUD_INETUTILS_PREFERRED_NETWORKS=${SPRING_CLOUD_INETUTILS_PREFERRED_NETWORKS:-172.17}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
+      - JWT_EXPIRATION_MINUTES=${JWT_EXPIRATION_MINUTES:-120}
+      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN:?INTERNAL_API_TOKEN is required}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-}
+      - JAVA_OPTS=${JAVA_OPTS_GATEWAY:--Xms256m -Xmx256m}
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 8080 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  campus-user:
+    logging: *default-logging
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    build: ../../campus-trade/campus-user
+    image: campus-user:multi-node
+    container_name: campus-user
+    environment:
+      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR=${MW_HOST:?MW_HOST is required}:${NACOS_PORT:-8848}
+      - SPRING_CLOUD_NACOS_DISCOVERY_IP=${HOST_IP:?HOST_IP is required}
+      - SPRING_CLOUD_INETUTILS_PREFERRED_NETWORKS=${SPRING_CLOUD_INETUTILS_PREFERRED_NETWORKS:-172.17}
+      - SPRING_DATASOURCE_URL=jdbc:mysql://${MYSQL_HOST:?MYSQL_HOST is required}:${MYSQL_PORT:-3306}/campus_trade?useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci&serverTimezone=Asia/Shanghai
+      - SPRING_DATASOURCE_USERNAME=campus
+      - SPRING_DATASOURCE_PASSWORD=${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
+      - JWT_EXPIRATION_MINUTES=${JWT_EXPIRATION_MINUTES:-120}
+      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN:?INTERNAL_API_TOKEN is required}
+      - RESEND_API_KEY=${RESEND_API_KEY:-}
+      - RESEND_FROM=${RESEND_FROM:-onboarding@resend.dev}
+      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://127.0.0.1:8080}
+      - JAVA_OPTS=${JAVA_OPTS_USER:--Xms256m -Xmx256m}
+    ports:
+      - "8081:8081"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 8081 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  product-images-init:
+    image: amazoncorretto:17-alpine@sha256:223ebda8690566648f5cc77a69d661ecf7c35a9f977fd7cbf0d19545491ad1c6
+    logging: *default-logging
+    user: "0:0"
+    entrypoint: ["/bin/chown", "-R", "10001:10001", "/data/product-images"]
+    network_mode: none
+    read_only: true
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    cap_add: [CHOWN]
+    volumes:
+      - ${PRODUCT_IMAGE_HOST_DIR:-/data/product-images}:/data/product-images
+    restart: "no"
+
+  campus-product:
+    logging: *default-logging
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    build: ../../campus-trade/campus-product
+    image: campus-product:multi-node
+    container_name: campus-product
+    environment:
+      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR=${MW_HOST:?MW_HOST is required}:${NACOS_PORT:-8848}
+      - SPRING_CLOUD_NACOS_DISCOVERY_IP=${HOST_IP:?HOST_IP is required}
+      - SPRING_CLOUD_INETUTILS_PREFERRED_NETWORKS=${SPRING_CLOUD_INETUTILS_PREFERRED_NETWORKS:-172.17}
+      - SPRING_DATASOURCE_URL=jdbc:mysql://${MYSQL_HOST:?MYSQL_HOST is required}:${MYSQL_PORT:-3306}/campus_trade?useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci&serverTimezone=Asia/Shanghai
+      - SPRING_DATASOURCE_USERNAME=campus
+      - SPRING_DATASOURCE_PASSWORD=${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}
+      - SPRING_DATA_REDIS_HOST=${REDIS_HOST:?REDIS_HOST is required}
+      - SPRING_DATA_REDIS_PORT=${REDIS_PORT:-6379}
+      - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+      - SPRING_ELASTICSEARCH_URIS=http://${ES_HOST:?ES_HOST is required}:${ES_PORT:-9200}
+      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN:?INTERNAL_API_TOKEN is required}
+      - AI_API_KEY=${AI_API_KEY:-}
+      - AI_BASE_URL=${AI_BASE_URL:-https://api.openai.com/v1}
+      - AI_MODEL=${AI_MODEL:-gpt-4.1-mini}
+      - AI_SUPPORTS_VISION=${AI_SUPPORTS_VISION:-true}
+      - AI_TIMEOUT_SECONDS=${AI_TIMEOUT_SECONDS:-60}
+      - AI_CONFIG_ENCRYPTION_KEY=${AI_CONFIG_ENCRYPTION_KEY:?AI_CONFIG_ENCRYPTION_KEY is required}
+      - PRODUCT_IMAGE_DIR=/data/product-images
+      - PRODUCT_REINDEX_ON_STARTUP=false
+      - JAVA_OPTS=${JAVA_OPTS_PRODUCT:--Xms512m -Xmx512m}
+    ports:
+      - "8082:8082"
+    volumes:
+      - ${PRODUCT_IMAGE_HOST_DIR:-/data/product-images}:/data/product-images
+    depends_on:
+      product-images-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 8082 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 25s
